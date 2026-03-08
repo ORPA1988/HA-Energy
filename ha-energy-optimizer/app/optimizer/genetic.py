@@ -104,12 +104,11 @@ class GeneticPlanner:
             population.sort(key=lambda c: c.fitness)
             best_fitness_history.append(population[0].fitness)
             
-            # Log convergence every 20 generations
-            if gen % 20 == 0:
-                improvement = best_fitness_history[0] - population[0].fitness if gen > 0 else 0.0
-                status = f"improved {improvement:.3f} EUR from start" if gen > 0 else "initial"
-                logger.debug("Generation %d: best fitness %.3f EUR (%s)",
-                           gen, population[0].fitness, status)
+            # Log convergence every 20 generations (skip gen 0, start at 20)
+            if gen > 0 and gen % 20 == 0:
+                improvement = best_fitness_history[0] - population[0].fitness
+                logger.debug("Generation %d: best fitness %.3f EUR (improved %.3f EUR from start)",
+                           gen, population[0].fitness, improvement)
             
             n_elite = max(1, int(POPULATION_SIZE * ELITE_FRACTION))
             next_gen = deepcopy(population[:n_elite])
