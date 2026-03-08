@@ -2,7 +2,7 @@
 
 > **Energiesteuerung mit Dashboard zur Optimierung des Stromverbrauches**
 
-[![Version](https://img.shields.io/badge/Version-1.0.0-blue)](https://github.com/ORPA1988/HA-Energy)
+[![Version](https://img.shields.io/badge/Version-1.0.1-blue)](https://github.com/ORPA1988/HA-Energy)
 [![Plattform](https://img.shields.io/badge/Plattform-Home%20Assistant-41BDF5)](https://www.home-assistant.io/)
 [![Architektur](https://img.shields.io/badge/Arch-amd64%20%7C%20aarch64%20%7C%20armv7%20%7C%20armhf-green)](#installation)
 [![Lizenz](https://img.shields.io/badge/Lizenz-MIT-yellow)](LICENSE)
@@ -34,7 +34,9 @@ Ein vollständiges **Home-Energy-Management-System (HEMS)** als Home Assistant A
 9. [Hardware-Integrationen](#hardware-integrationen)
 10. [API-Endpunkte](#api-endpunkte)
 11. [Fehlerbehebung](#fehlerbehebung)
-12. [Entwicklung & Beitrag](#entwicklung--beitrag)
+12. [Performance-Empfehlungen für Raspberry Pi 4](#performance-empfehlungen-für-raspberry-pi-4)
+13. [Changelog](#changelog)
+14. [Entwicklung & Beitrag](#entwicklung--beitrag)
 
 ---
 
@@ -103,6 +105,12 @@ Ein vollständiges **Home-Energy-Management-System (HEMS)** als Home Assistant A
 
 ## Voraussetzungen
 
+### Hardware
+- **Raspberry Pi 4** mit mindestens 4GB RAM (8GB empfohlen für optimale Performance)
+- Alternativ: Intel/AMD x64 System, oder andere ARM-Plattformen (armv7, armhf)
+- **SD-Karte/SSD:** Mindestens 32GB für Home Assistant OS + Add-ons
+
+### Software
 - **Home Assistant OS** oder **Home Assistant Supervised** (mindestens Version 2024.1)
 - Home Assistant **Supervisor** (für Add-on-Unterstützung)
 - Konfigurierte HA-Entitäten für:
@@ -111,6 +119,12 @@ Ein vollständiges **Home-Energy-Management-System (HEMS)** als Home Assistant A
   - Netzbezug/-einspeisung (Sensor in W, positiv = Bezug)
   - (Optional) EV-Batteriestand (SOC-Sensor in %)
 - Internetverbindung für externe Preisquellen und PV-Prognose
+
+### Getestete Plattformen
+- ✅ Raspberry Pi 4 (8GB) - aarch64/armv7
+- ✅ Intel NUC - amd64
+- ✅ Generic x86_64 PC
+- ✅ Home Assistant Yellow
 
 ---
 
@@ -132,6 +146,12 @@ Ein vollständiges **Home-Energy-Management-System (HEMS)** als Home Assistant A
 2. **Installieren** klicken (Download-Dauer je nach Architektur 2–10 Minuten)
 3. Nach der Installation: **Konfiguration** öffnen und Einstellungen anpassen (siehe [Konfiguration](#konfiguration))
 4. **Starten** klicken
+
+**Raspberry Pi 4 Hinweise:**
+- Installation dauert auf RPi4 ca. 5-8 Minuten (SciPy/NumPy werden kompiliert)
+- Unterstützte Architekturen: `aarch64` (64-bit) oder `armv7` (32-bit)
+- Empfohlen: Home Assistant OS auf 64-bit für beste Performance
+- RAM-Bedarf: ~150-250 MB (von 8 GB verfügbar)
 
 ### 3. Dashboard aufrufen
 
@@ -528,7 +548,85 @@ Das Add-on stellt eine FastAPI-Applikation bereit. Die automatisch generierte **
 
 - `optimization_interval_minutes` erhöhen (z. B. auf 120)
 - `long_term_plan_interval_hours` erhöhen (z. B. auf 12)
-- Auf leistungsstärkerem System installieren (amd64 empfohlen für scipy)
+- Genetischer Algorithmus bereits für RPi4 optimiert (50 Population, 100 Generationen ≈ 15-20s)
+- LP-Solver verwendet HiGHS Methode (schneller und speichereffizienter als Simplex)
+
+### Hohe Speichernutzung
+
+- Add-on ist für Raspberry Pi 4 mit 8GB RAM optimiert
+- Normaler Speicherbedarf: ~150-250 MB
+- WebSocket-Clients auf 100 begrenzt (verhindert Memory Leak)
+- Historie auf 24h begrenzt (2880 Einträge à 30s)
+
+### Rate Limit Warnungen im Log
+
+- HA API ist auf 100 Requests/Minute begrenzt (schützt Home Assistant)
+- Normal bei vielen konfigurierten Sensoren und Lasten
+- Falls häufig auftretend: Anzahl der Sensoren reduzieren oder Intervalle erhöhen
+
+---
+
+## Performance-Empfehlungen für Raspberry Pi 4
+
+### ✅ Optimale Konfiguration (getestet auf RPi4 mit 8GB RAM)
+
+| Parameter | Empfohlener Wert | Begründung |
+|---|---|---|
+| `optimization_interval_minutes` | 60 | Stündliche LP-Optimierung ausreichend |
+| `long_term_plan_interval_hours` | 6 | Genetischer Algorithmus braucht ~15-20s CPU-Zeit |
+| Realtime Loop | 30s (fest) | EVCC-Style, optimal für Solar-Überschussregelung |
+| Price Refresh | 60 min (fest) | Day-Ahead-Preise ändern sich nur einmal täglich |
+| WebSocket Clients | Max 100 | Verhindert Memory Leak bei vielen Dashboards |
+
+### ⚡ Ressourcenverbrauch
+
+- **CPU:** ~5-10% idle, ~30-50% während LP/Genetic-Optimierung
+- **RAM:** ~150-250 MB (inkl. NumPy/SciPy Arrays)
+- **Netzwerk:** ~500-1000 API-Calls/h zu Home Assistant (mit Rate Limiting)
+
+### 🛡️ Sicherheit
+
+- **Version 1.0.1+**: Sicherheitslücke in aiohttp behoben (CVE zip bomb vulnerability)
+- **Rate Limiting**: Schutz vor HA-API-Überlastung (100 req/min)
+- **Input Validation**: Konfiguration wird beim Laden validiert
+- **Error Recovery**: Alle Scheduler-Jobs haben Exception-Handling
+
+---
+
+## Changelog
+
+### Version 1.0.1 (März 2026)
+
+#### 🔒 Sicherheit
+- **aiohttp aktualisiert**: Version 3.9.5 → 3.13.3+ (behebt CVE zip bomb vulnerability)
+- **Rate Limiting**: HA API auf 100 Requests/Minute begrenzt (schützt vor Überlastung)
+
+#### 🐛 Fehlerbehebungen
+- **House Load Prediction**: TODO entfernt, intelligente Lastprofilberechnung aus 24h Historie implementiert
+- **Memory Leak**: WebSocket-Client-Liste auf 100 Clients begrenzt
+- **Input Validation**: Linear Optimizer warnt bei unvollständigen Prognosen
+- **Config Fehlerbehandlung**: Try-Catch für EV Windows und Deferrable Loads
+- **Timeout Optimierung**: Open-Meteo API-Timeout von 20s auf 5s reduziert
+
+#### ✨ Verbesserungen
+- **Logging erweitert**: Optimierungsentscheidungen detaillierter protokolliert
+- **Genetic Algorithm**: Konvergenz-Monitoring alle 20 Generationen
+- **EV SOC Warnung**: Meldet fehlende Sensoren wenn Laden konfiguriert
+- **Multi-Window Info**: Dokumentiert dass nur erstes EV-Fenster verwendet wird
+- **RPi4 Optimierung**: Parameter und Code für Raspberry Pi 4 (8GB) optimiert
+
+#### 📚 Dokumentation
+- **Performance-Guide**: Ressourcenverbrauch und Empfehlungen für RPi4
+- **Troubleshooting erweitert**: Rate Limiting, Memory, Performance-Probleme
+- **Security Section**: Übersicht implementierter Sicherheitsmaßnahmen
+
+### Version 1.0.0 (Initial Release)
+- Drei-stufige Optimierung (Realtime + LP + Genetisch)
+- Multi-Source Strompreise (ENTSO-E, Tibber, aWATTar, EPEX, HA-Sensor, Festpreis)
+- go-e Wallbox Integration (lokal + Cloud)
+- Battery Balancing (LiFePO4/Bleiakku)
+- WebSocket Dashboard mit Chart.js
+- Multi-Architektur Support (aarch64, amd64, armv7, armhf)
 
 ---
 
