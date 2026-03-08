@@ -98,9 +98,9 @@ class AppState:
             ]
         
         # Group history by hour of day and calculate average load
-        # Note: Using local time for hour grouping. Hours without data samples
-        # (including DST spring-forward missing hour) default to 500W fallback.
-        # DST fall-back duplicate hours are averaged together automatically.
+        # Note: History timestamps are local time (datetime.now() without tzinfo).
+        # All samples are grouped by hour (0-23), averaging across multiple days.
+        # Hours without samples default to 500W (e.g., DST spring-forward, or new deployment).
         hourly_loads = [[] for _ in range(24)]
         for entry in self._history:
             try:

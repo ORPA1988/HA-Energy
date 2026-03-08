@@ -43,6 +43,8 @@ class HAClient:
         # If at limit, wait until oldest request expires
         if len(self._request_times) >= self._rate_limit_max:
             oldest = self._request_times[0]
+            # Calculate time remaining until oldest request expires from the window
+            # Add buffer (RATE_LIMIT_BUFFER_SECONDS = 0.1s) to prevent timing precision issues
             sleep_time = self._rate_limit_window - (now - oldest) + self.RATE_LIMIT_BUFFER_SECONDS
             if sleep_time > 0:
                 logger.warning("Rate limit reached (%d req/%ds), sleeping %.1fs",
