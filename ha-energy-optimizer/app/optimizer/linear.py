@@ -202,6 +202,8 @@ class LinearOptimizer:
             b_ub = None
 
         # ---- Solve ----
+        # Using HiGHS method (Interior Point) - memory efficient for RPi4
+        # Alternative methods: 'simplex' (slower), 'revised simplex' (more memory)
         try:
             result = linprog(
                 c,
@@ -210,7 +212,7 @@ class LinearOptimizer:
                 A_eq=A_eq,
                 b_eq=b_eq,
                 bounds=bounds,
-                method="highs",
+                method="highs",  # Best for RPi4: fast and low memory
             )
         except Exception as e:
             logger.error("LP solver failed: %s", e)
