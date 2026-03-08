@@ -1,0 +1,67 @@
+"""Collect current energy system state from Home Assistant sensors."""
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+
+from config import get_config
+from ha_client import get_ha_client
+from models import CarState, EnergyState, EVChargeMode
+
+logger = logging.getLogger(__name__)
+
+
+class DataCollector:
+    """Reads live sensor data from HA and assembles an EnergyState snapshot."""
+
+    def __init__(self):
+        self._cfg = get_config()
+        self._ha = get_ha_client()
+
+    async def get_current_state(
+        self,
+        current_price_ct: float = 0.0,
+        current_price_net_ct: float = 0.0,
+        current_price_total_ct: float = 0.0,
+    ) -> EnergyState:
+        cfg = self._cfg
+        ha = self._ha
+
+        pv_w = await ha.get_state_value(cfg.pv_power_sensor, 0.0)
+        battery_soc = await ha.get_state_value(cfg.battery_soc_sensor, 50.0)
+        battery_power = await ha.get_state_value(cfg.battery_power_sensor, 0.0)
+        grid_power = await ha.get_state_value(cfg.grid_power_sensor, 0.0)
+
+        # House load: PV - grid_export - battery_charge (simplified energy balance)
+        # grid positive = import, negative = export
+        # battery positive = charging, negative = discharging
+        house_load = max(0.0, pv_w + max(0.0, grid_power) - max(0.0, battery_power))
+
+        # Solar surplus: what's available beyond house load and battery charging
+        surplus = max(0.0, pv_w - house_load - max(0.0, battery_power))
+
+        # EV from HA sensor (go-e data merged separately by devices/goe.py)
+        ev_soc = None
+        ev_soc_raw = await ha.get_state(cfg.ev_soc_sensor)
+        if ev_soc_raw:
+            try:
+                ev_soc = float(ev_soc_raw["state"])
+            except (ValueError, TypeError):
+                ev_soc = None
+
+        return EnergyState(
+            timestamp=datetime.now(),
+            pv_power_w=pv_w,
+            battery_soc_percent=battery_soc,
+            battery_power_w=battery_power,
+            battery_capacity_kwh=cfg.battery_capacity_kwh,
+            grid_power_w=grid_power,
+            house_load_w=house_load,
+            surplus_w=surplus,
+            ev_soc_percent=ev_soc,
+            ev_charge_mode=EVChargeMode(cfg.ev_charge_mode),
+            price_raw_ct_kwh=current_price_ct,
+            price_net_ct_kwh=current_price_net_ct,
+            price_total_ct_kwh=current_price_total_ct,
+            feed_in_ct_kwh=cfg.price_feed_in_ct_kwh,
+        )

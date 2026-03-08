@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HA Energy Optimizer</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --orange: #f97316;
+      --purple: #a855f7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+
+    /* Header */
+    .header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .header h1 { font-size: 1.1rem; font-weight: 700; color: var(--green); display: flex; align-items: center; gap: 8px; }
+    .header h1::before { content: "⚡"; }
+    .live-badge { background: var(--green); color: #000; font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 99px; }
+
+    /* Status Bar */
+    .status-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      padding: 12px 20px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+    }
+    .stat { text-align: center; }
+    .stat-value { font-size: 1.4rem; font-weight: 700; line-height: 1.1; }
+    .stat-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-value.green { color: var(--green); }
+    .stat-value.yellow { color: var(--yellow); }
+    .stat-value.red { color: var(--red); }
+    .stat-value.blue { color: var(--blue); }
+    .stat-value.orange { color: var(--orange); }
+
+    /* Main Grid */
+    .main { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 20px; max-width: 1400px; margin: 0 auto; }
+    @media (max-width: 768px) { .main { grid-template-columns: 1fr; } }
+    .full-width { grid-column: 1 / -1; }
+
+    /* Cards */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .card-title { font-size: 0.8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+
+    /* Power Flow */
+    .flow-diagram { display: flex; align-items: center; justify-content: center; gap: 0; flex-wrap: wrap; padding: 8px 0; }
+    .flow-node { text-align: center; min-width: 80px; }
+    .flow-icon { font-size: 2rem; display: block; }
+    .flow-label { font-size: 0.7rem; color: var(--muted); }
+    .flow-value { font-size: 0.9rem; font-weight: 700; }
+    .flow-arrow { font-size: 1.2rem; color: var(--muted); padding: 0 4px; align-self: center; }
+    .flow-arrow.active { color: var(--green); }
+
+    /* SOC Gauge */
+    .soc-container { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .gauge-wrap { text-align: center; }
+    .gauge { width: 80px; height: 80px; position: relative; }
+    .gauge canvas { position: absolute; top: 0; left: 0; }
+    .gauge-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+    .gauge-pct { font-size: 1.1rem; font-weight: 700; }
+    .gauge-sub { font-size: 0.6rem; color: var(--muted); }
+
+    /* EV Controls */
+    .mode-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .mode-btn {
+      padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: transparent; color: var(--text); cursor: pointer;
+      font-size: 0.8rem; transition: all 0.15s;
+    }
+    .mode-btn:hover { border-color: var(--blue); }
+    .mode-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
+
+    /* Strategy Table */
+    .strategy-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.8rem; }
+    .strategy-table th { color: var(--muted); text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+    .strategy-table td { padding: 6px 8px; border-bottom: 1px solid rgba(51,65,85,0.4); }
+    .strategy-table tr.recommended td { background: rgba(34,197,94,0.1); }
+    .badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: 600; }
+    .badge-green { background: rgba(34,197,94,0.2); color: var(--green); }
+    .badge-red { background: rgba(239,68,68,0.2); color: var(--red); }
+    .badge-blue { background: rgba(59,130,246,0.2); color: var(--blue); }
+
+    /* Load Table */
+    .load-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(51,65,85,0.4); }
+    .load-name { font-size: 0.85rem; }
+    .load-meta { font-size: 0.7rem; color: var(--muted); }
+    .toggle { width: 36px; height: 20px; border-radius: 99px; background: var(--border); border: none; cursor: pointer; position: relative; transition: background 0.2s; }
+    .toggle.on { background: var(--green); }
+    .toggle::after { content: ""; position: absolute; width: 16px; height: 16px; background: white; border-radius: 50%; top: 2px; left: 2px; transition: left 0.2s; }
+    .toggle.on::after { left: 18px; }
+
+    /* Balancing Card */
+    .balance-info { font-size: 0.85rem; color: var(--muted); margin-bottom: 10px; }
+    .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 0.8rem; }
+    .btn-primary { background: var(--blue); color: white; }
+    .btn-danger { background: var(--red); color: white; }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .btn + .btn { margin-left: 8px; }
+
+    /* Savings */
+    .savings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .savings-item { text-align: center; padding: 10px; background: rgba(34,197,94,0.1); border-radius: 8px; }
+    .savings-amount { font-size: 1.5rem; font-weight: 700; color: var(--green); }
+    .savings-label { font-size: 0.7rem; color: var(--muted); }
+
+    /* Connection indicator */
+    .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); display: inline-block; }
+    .conn-dot.connected { background: var(--green); }
+
+    /* Charts */
+    .chart-wrap { position: relative; height: 180px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Energy Optimizer <span class="live-badge">LIVE</span></h1>
+  <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--muted)">
+    <span class="conn-dot" id="conn-dot"></span>
+    <span id="conn-status">Verbinde...</span>
+    <span id="last-update"></span>
+  </div>
+</div>
+
+<!-- Status Bar -->
+<div class="status-bar">
+  <div class="stat">
+    <div class="stat-value green" id="pv-power">-- W</div>
+    <div class="stat-label">☀️ Solar</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value blue" id="bat-soc">--%</div>
+    <div class="stat-label">🔋 Akku</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value" id="grid-power">-- W</div>
+    <div class="stat-label">🏭 Netz</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value orange" id="ev-power">-- W</div>
+    <div class="stat-label">🚗 E-Auto</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value" id="price-ct">-- ct</div>
+    <div class="stat-label">💶 Preis/kWh</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value green" id="surplus-w">-- W</div>
+    <div class="stat-label">⚡ Überschuss</div>
+  </div>
+</div>
+
+<!-- Main Grid -->
+<div class="main">
+
+  <!-- Power Flow Diagram -->
+  <div class="card">
+    <div class="card-title">⚡ Energiefluss (Jetzt)</div>
+    <div class="flow-diagram">
+      <div class="flow-node">
+        <span class="flow-icon">☀️</span>
+        <span class="flow-value green" id="flow-pv">0 W</span>
+        <span class="flow-label">Solar</span>
+      </div>
+      <div class="flow-arrow active">→</div>
+      <div class="flow-node" style="background:rgba(51,65,85,0.4);border-radius:12px;padding:8px 12px;">
+        <span class="flow-icon">🏠</span>
+        <span class="flow-value" id="flow-home">0 W</span>
+        <span class="flow-label">Haus</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;padding:0 8px">
+        <div class="flow-arrow" id="flow-bat-arrow">⬆️ 🔋</div>
+        <div class="flow-arrow" id="flow-grid-arrow">⬆️ 🏭</div>
+        <div class="flow-arrow" id="flow-ev-arrow">⬆️ 🚗</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Battery Card -->
+  <div class="card">
+    <div class="card-title">🔋 Hausbatterie</div>
+    <div class="soc-container">
+      <div class="gauge-wrap">
+        <canvas id="bat-gauge" width="80" height="80"></canvas>
+        <div style="margin-top:4px;font-size:0.75rem;color:var(--muted)" id="bat-power-label">0 W</div>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:0.8rem;margin-bottom:6px">
+          <span style="color:var(--muted)">Ladezustand:</span>
+          <span id="bat-soc-detail" style="font-weight:700">--%</span>
+        </div>
+        <div style="font-size:0.8rem;margin-bottom:6px">
+          <span style="color:var(--muted)">Status:</span>
+          <span id="bal-status" style="font-weight:600">--</span>
+        </div>
+        <div style="font-size:0.8rem">
+          <span style="color:var(--muted)">Balancing:</span>
+          <span id="bal-state" style="color:var(--yellow)">Inaktiv</span>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px">
+          <button class="btn btn-secondary" onclick="startBalancing()">Balance Now</button>
+          <button class="btn btn-danger" id="stop-bal-btn" onclick="stopBalancing()" style="display:none">Stop</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EV Charging Card -->
+  <div class="card">
+    <div class="card-title">🚗 E-Auto Laden</div>
+    <div class="soc-container">
+      <div class="gauge-wrap">
+        <canvas id="ev-gauge" width="80" height="80"></canvas>
+        <div style="margin-top:4px;font-size:0.75rem;color:var(--muted)" id="ev-state-label">--</div>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:0.8rem;margin-bottom:4px">
+          <span style="color:var(--muted)">Ladeleistung:</span>
+          <span id="ev-charge-w" style="font-weight:700">-- W</span>
+        </div>
+        <div style="font-size:0.8rem;margin-bottom:4px">
+          <span style="color:var(--muted)">Strom:</span>
+          <span id="ev-current-a">-- A</span>
+        </div>
+        <div style="font-size:0.8rem;margin-bottom:4px">
+          <span style="color:var(--muted)">Session:</span>
+          <span id="ev-session-kwh">-- kWh</span>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:4px">Lademodus:</div>
+      <div class="mode-buttons">
+        <button class="mode-btn" onclick="setMode('solar')">☀️ Solar</button>
+        <button class="mode-btn" onclick="setMode('min_solar')">☀️+ Min</button>
+        <button class="mode-btn active" onclick="setMode('smart')">🧠 Smart</button>
+        <button class="mode-btn" onclick="setMode('fast')">⚡ Schnell</button>
+        <button class="mode-btn" onclick="setMode('off')">⏹ Aus</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EV Strategy Card -->
+  <div class="card">
+    <div class="card-title">🧠 Ladestrategie heute Nacht</div>
+    <div id="strategy-content">
+      <div style="color:var(--muted);font-size:0.8rem">Berechne Strategien...</div>
+    </div>
+  </div>
+
+  <!-- 48h Price + Schedule Chart -->
+  <div class="card full-width">
+    <div class="card-title">📈 Strompreis + Zeitplan (48h)</div>
+    <div class="chart-wrap">
+      <canvas id="price-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Battery Schedule Chart -->
+  <div class="card">
+    <div class="card-title">🔋 Akku-Planung (24h)</div>
+    <div class="chart-wrap">
+      <canvas id="bat-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Deferrable Loads -->
+  <div class="card">
+    <div class="card-title">⏰ Verschiebbare Lasten</div>
+    <div id="loads-list">
+      <div style="color:var(--muted);font-size:0.8rem">Laden...</div>
+    </div>
+  </div>
+
+  <!-- Savings -->
+  <div class="card full-width">
+    <div class="card-title">💰 Einsparungen</div>
+    <div class="savings-grid">
+      <div class="savings-item">
+        <div class="savings-amount" id="savings-today">-- €</div>
+        <div class="savings-label">Heute geschätzt</div>
+      </div>
+      <div class="savings-item">
+        <div class="savings-amount" id="savings-month">-- €</div>
+        <div class="savings-label">Diesen Monat (∅)</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// ============================================================================
+// WebSocket connection
+// ============================================================================
+let ws;
+let reconnectTimer;
+let priceChart, batChart;
+let batGaugeCtx, evGaugeCtx;
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  ws.onopen = () => {
+    document.getElementById('conn-dot').className = 'conn-dot connected';
+    document.getElementById('conn-status').textContent = 'Verbunden';
+    clearTimeout(reconnectTimer);
+    loadSchedule();
+    loadPrices();
+    loadStrategy();
+    loadLoads();
+  };
+
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'state') updateState(data);
+  };
+
+  ws.onclose = () => {
+    document.getElementById('conn-dot').className = 'conn-dot';
+    document.getElementById('conn-status').textContent = 'Getrennt';
+    reconnectTimer = setTimeout(connect, 5000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+// ============================================================================
+// State updates (realtime)
+// ============================================================================
+function updateState(d) {
+  document.getElementById('last-update').textContent = new Date().toLocaleTimeString('de-DE');
+
+  // Status bar
+  setText('pv-power', fmt(d.pv_w) + ' W');
+  setClass('pv-power', d.pv_w > 100 ? 'stat-value green' : 'stat-value muted');
+  setText('bat-soc', d.battery_soc + '%');
+  setText('grid-power', fmt(d.grid_w) + ' W');
+  setClass('grid-power', d.grid_w > 0 ? 'stat-value red' : 'stat-value green');
+  setText('ev-power', fmt(d.ev_power_w) + ' W');
+  setText('price-ct', (d.price_ct || 0).toFixed(1) + ' ct');
+  setClass('price-ct', d.price_ct < 15 ? 'stat-value green' : d.price_ct < 25 ? 'stat-value yellow' : 'stat-value red');
+  setText('surplus-w', fmt(d.surplus_w || 0) + ' W');
+
+  // Flow diagram
+  setText('flow-pv', fmt(d.pv_w) + ' W');
+  setText('flow-home', fmt(Math.abs(d.pv_w - d.grid_w - d.ev_power_w)) + ' W');
+  document.getElementById('flow-bat-arrow').textContent = d.battery_soc > 50 ? '↓ 🔋' : '↑ 🔋';
+  document.getElementById('flow-grid-arrow').textContent = d.grid_w > 0 ? '↓ 🏭' : '↑ 🏭';
+  document.getElementById('flow-ev-arrow').textContent = d.ev_power_w > 100 ? '🚗 ⚡' : '🚗 ○';
+
+  // Battery detail
+  setText('bat-soc-detail', d.battery_soc + '%');
+  setText('bal-state', d.is_balancing ? '🔄 Aktiv' : 'Inaktiv');
+  document.getElementById('stop-bal-btn').style.display = d.is_balancing ? 'inline-block' : 'none';
+
+  // EV detail
+  const carStates = {0: 'Kein Fahrzeug', 1: 'Lädt', 2: 'Fertig', 3: 'Bereit'};
+  setText('ev-state-label', carStates[d.ev_car_state] || '--');
+  setText('ev-charge-w', fmt(d.ev_power_w) + ' W');
+
+  // Draw gauges
+  drawGauge('bat-gauge', d.battery_soc, d.battery_soc < 20 ? '#ef4444' : d.battery_soc < 50 ? '#eab308' : '#22c55e');
+  if (d.ev_soc !== null) drawGauge('ev-gauge', d.ev_soc, '#3b82f6');
+}
+
+// ============================================================================
+// Chart: Prices + Schedule (48h)
+// ============================================================================
+async function loadPrices() {
+  try {
+    const [pricesR, scheduleR] = await Promise.all([
+      fetch('/api/prices').then(r => r.json()),
+      fetch('/api/schedule').then(r => r.json()),
+    ]);
+
+    const labels = pricesR.hours.map(h => new Date(h).getHours() + ':00');
+    const totalPrices = pricesR.total_ct;
+    const evLoad = scheduleR.slots ? scheduleR.slots.map(s => s.ev_charge_w / 1000) : [];
+    const batCharge = scheduleR.slots ? scheduleR.slots.map(s => s.battery_charge_w / 1000) : [];
+
+    const ctx = document.getElementById('price-chart').getContext('2d');
+    if (priceChart) priceChart.destroy();
+
+    priceChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels.slice(0, 48),
+        datasets: [
+          {
+            label: 'Preis (ct/kWh)',
+            data: totalPrices.slice(0, 48),
+            backgroundColor: totalPrices.slice(0, 48).map(p =>
+              p < 15 ? 'rgba(34,197,94,0.7)' : p < 25 ? 'rgba(234,179,8,0.7)' : 'rgba(239,68,68,0.7)'
+            ),
+            yAxisID: 'y',
+          },
+          {
+            label: 'E-Auto (kW)',
+            data: evLoad.slice(0, 48),
+            type: 'line',
+            borderColor: '#f97316',
+            backgroundColor: 'transparent',
+            yAxisID: 'y1',
+            tension: 0.3,
+          },
+          {
+            label: 'Akku laden (kW)',
+            data: batCharge.slice(0, 48),
+            type: 'line',
+            borderColor: '#3b82f6',
+            backgroundColor: 'transparent',
+            yAxisID: 'y1',
+            tension: 0.3,
+          },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+        scales: {
+          x: { ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }, grid: { color: 'rgba(51,65,85,0.5)' } },
+          y: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: 'rgba(51,65,85,0.5)' }, position: 'left', title: { display: true, text: 'ct/kWh', color: '#64748b', font: { size: 9 } } },
+          y1: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { display: false }, position: 'right', title: { display: true, text: 'kW', color: '#64748b', font: { size: 9 } } },
+        }
+      }
+    });
+  } catch (e) { console.warn('Price chart error:', e); }
+}
+
+// ============================================================================
+// Chart: Battery SOC (24h)
+// ============================================================================
+async function loadSchedule() {
+  try {
+    const r = await fetch('/api/schedule');
+    const schedule = await r.json();
+    if (!schedule.slots) return;
+
+    const labels = schedule.slots.map(s => new Date(s.hour).getHours() + ':00');
+    const batSoc = schedule.slots.map(s => s.battery_soc_end);
+    const evSoc = schedule.slots.map(s => s.ev_soc_end || null);
+    const costData = schedule.slots.map(s => s.cost_eur);
+
+    const ctx = document.getElementById('bat-chart').getContext('2d');
+    if (batChart) batChart.destroy();
+
+    batChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Akku SoC (%)',
+            data: batSoc,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59,130,246,0.1)',
+            fill: true,
+            tension: 0.3,
+            yAxisID: 'y',
+          },
+          {
+            label: 'E-Auto SoC (%)',
+            data: evSoc,
+            borderColor: '#f97316',
+            backgroundColor: 'transparent',
+            tension: 0.3,
+            yAxisID: 'y',
+          },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+        scales: {
+          x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: 'rgba(51,65,85,0.5)' } },
+          y: { min: 0, max: 100, ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: 'rgba(51,65,85,0.5)' }, title: { display: true, text: '%', color: '#64748b', font: { size: 9 } } },
+        }
+      }
+    });
+
+    // Update savings
+    const total = costData.reduce((a, b) => a + (b || 0), 0);
+    setText('savings-today', '€ ' + Math.max(0, -total).toFixed(2));
+    setText('savings-month', '€ ' + (Math.max(0, -total) * 30).toFixed(0));
+
+  } catch (e) { console.warn('Schedule error:', e); }
+}
+
+// ============================================================================
+// EV Strategy Table
+// ============================================================================
+async function loadStrategy() {
+  try {
+    const r = await fetch('/api/ev/strategy');
+    if (!r.ok) return;
+    const data = await r.json();
+
+    const names = {
+      grid_to_ev: 'Netz → E-Auto',
+      grid_battery_ev: 'Netz → Akku → E-Auto',
+      solar_ev: 'Solar → E-Auto',
+      combined: 'Kombiniert',
+      solar_battery_ev: 'Solar → Akku → E-Auto',
+    };
+
+    let html = '<table class="strategy-table"><thead><tr><th>Strategie</th><th>Kosten</th><th>Machbar</th><th>Ziel-SoC</th></tr></thead><tbody>';
+    for (const s of data.strategies) {
+      const isRec = s.strategy_type === data.recommended;
+      html += `<tr class="${isRec ? 'recommended' : ''}">
+        <td>${names[s.strategy_type] || s.name} ${isRec ? '<span class="badge badge-green">✓ Empfohlen</span>' : ''}</td>
+        <td>€ ${s.total_cost_eur.toFixed(3)}</td>
+        <td><span class="badge ${s.feasible ? 'badge-green' : 'badge-red'}">${s.feasible ? 'Ja' : 'Nein'}</span></td>
+        <td>${s.target_soc_at_deadline?.toFixed(0) || '--'}%</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('strategy-content').innerHTML = html;
+  } catch (e) {
+    document.getElementById('strategy-content').innerHTML = '<div style="color:var(--muted);font-size:0.8rem">Strategie nicht verfügbar</div>';
+  }
+}
+
+// ============================================================================
+// Deferrable Loads
+// ============================================================================
+async function loadLoads() {
+  try {
+    const r = await fetch('/api/schedule');
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data.slots || !data.slots[0]) return;
+
+    const loads = data.slots[0].deferrable_loads || {};
+    const keys = Object.keys(loads);
+
+    if (keys.length === 0) {
+      document.getElementById('loads-list').innerHTML = '<div style="color:var(--muted);font-size:0.8rem">Keine verschiebbaren Lasten konfiguriert</div>';
+      return;
+    }
+
+    let html = '';
+    for (const [entity, isOn] of Object.entries(loads)) {
+      const name = entity.replace('switch.', '').replace(/_/g, ' ');
+      html += `<div class="load-row">
+        <div>
+          <div class="load-name">${name}</div>
+          <div class="load-meta">Laut Optimierung: ${isOn ? 'Jetzt an' : 'Warten'}</div>
+        </div>
+        <button class="toggle ${isOn ? 'on' : ''}" onclick="toggleLoad('${entity}', this)" title="Manuell übersteuern"></button>
+      </div>`;
+    }
+    document.getElementById('loads-list').innerHTML = html;
+  } catch (e) {}
+}
+
+// ============================================================================
+// Controls
+// ============================================================================
+async function setMode(mode) {
+  await fetch('/api/ev/mode', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode})});
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+async function startBalancing() {
+  await fetch('/api/balance/start', {method:'POST'});
+  setText('bal-state', '🔄 Gestartet...');
+}
+
+async function stopBalancing() {
+  await fetch('/api/balance/stop', {method:'POST'});
+  setText('bal-state', 'Inaktiv');
+}
+
+function toggleLoad(entity, btn) {
+  btn.classList.toggle('on');
+}
+
+// ============================================================================
+// Gauge drawing (pure Canvas)
+// ============================================================================
+function drawGauge(canvasId, percent, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const size = canvas.width;
+  const cx = size / 2, cy = size / 2;
+  const r = size * 0.38;
+  const start = Math.PI * 0.75;
+  const end = Math.PI * 2.25;
+  const progress = start + (end - start) * (percent / 100);
+
+  ctx.clearRect(0, 0, size, size);
+
+  // Track
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, start, end);
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // Value
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, start, progress);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // Text
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = `bold ${size * 0.2}px system-ui`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(Math.round(percent) + '%', cx, cy);
+}
+
+// ============================================================================
+// Utils
+// ============================================================================
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+function setClass(id, cls) {
+  const el = document.getElementById(id);
+  if (el) el.className = cls;
+}
+function fmt(val) {
+  const v = Math.round(val || 0);
+  return v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v);
+}
+
+// ============================================================================
+// Periodic refresh of non-realtime data
+// ============================================================================
+setInterval(loadPrices, 60000);
+setInterval(loadSchedule, 300000);
+setInterval(loadStrategy, 900000);
+setInterval(loadLoads, 60000);
+
+// Initial draw of gauges
+drawGauge('bat-gauge', 50, '#22c55e');
+drawGauge('ev-gauge', 0, '#3b82f6');
+
+// Start
+connect();
+</script>
+
+</body>
+</html>

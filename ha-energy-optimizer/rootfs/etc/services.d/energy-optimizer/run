@@ -1,0 +1,19 @@
+#!/usr/bin/with-contenv bashio
+# ==============================================================================
+# HA Energy Optimizer - Service startup
+# ==============================================================================
+bashio::log.info "Starting HA Energy Optimizer..."
+
+# Export Home Assistant supervisor token
+export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN}"
+export HA_URL="http://supervisor/core"
+
+# Log add-on configuration summary
+bashio::log.info "PV sensor: $(bashio::config 'pv_power_sensor')"
+bashio::log.info "Battery capacity: $(bashio::config 'battery_capacity_kwh') kWh"
+bashio::log.info "Price source: $(bashio::config 'price_source')"
+bashio::log.info "go-e enabled: $(bashio::config 'goe_enabled')"
+bashio::log.info "Optimization goal: $(bashio::config 'optimization_goal')"
+
+# Start FastAPI server
+exec python3 /app/main.py

@@ -1,0 +1,204 @@
+name: "HA Energy Optimizer"
+version: "1.0.0"
+slug: "ha_energy_optimizer"
+description: "Unified home energy optimization: combines EVCC + EOS + EMHASS"
+url: "https://github.com/ORPA1988/HA-Energy"
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+init: false
+ingress: true
+ingress_port: 8080
+panel_icon: mdi:lightning-bolt-circle
+panel_title: "Energy Optimizer"
+homeassistant_api: true
+options:
+  # --- PV System ---
+  pv_power_sensor: "sensor.solar_power"
+  pv_forecast_kwp: 10.0
+  pv_orientation: 180
+  pv_tilt: 30
+  pv_latitude: 48.0
+  pv_longitude: 11.0
+  pv_efficiency: 0.18
+  # --- Home Battery ---
+  battery_soc_sensor: "sensor.battery_soc"
+  battery_power_sensor: "sensor.battery_power"
+  battery_capacity_kwh: 10.0
+  battery_charge_switch: "switch.battery_charge"
+  battery_discharge_switch: "switch.battery_discharge"
+  battery_max_charge_w: 3000
+  battery_max_discharge_w: 3000
+  battery_min_soc: 10
+  battery_reserve_soc: 20
+  battery_efficiency: 0.95
+  # --- Battery Balancing ---
+  battery_balancing_enabled: true
+  battery_balancing_mode: "auto"
+  battery_balancing_frequency: "monthly"
+  battery_balancing_custom_days: 30
+  battery_balancing_target_soc: 100
+  battery_balancing_hold_duration_h: 2
+  battery_balancing_preferred_time: "10:00"
+  battery_balancing_auto_trigger_soc_deviation: 5
+  battery_balancing_use_solar_only: true
+  # --- Grid ---
+  grid_power_sensor: "sensor.grid_power"
+  grid_max_import_w: 0
+  # --- Electricity Pricing ---
+  price_source: "entso-e"
+  entso_e_token: ""
+  entso_e_area: "10YDE-EON------1"
+  tibber_token: ""
+  awattar_country: "AT"
+  epex_spot_area: "DE-LU"
+  price_sensor_entity: ""
+  fixed_price_ct_kwh: 25.0
+  # --- Price Calculation ---
+  price_input_is_netto: true
+  price_vat_percent: 19.0
+  price_grid_fee_source: "fixed"
+  price_grid_fee_fixed_ct_kwh: 7.5
+  price_grid_fee_entity: ""
+  price_supplier_markup_ct_kwh: 2.0
+  price_other_taxes_ct_kwh: 0.0
+  price_feed_in_ct_kwh: 8.0
+  # --- go-e Charger ---
+  goe_enabled: false
+  goe_connection_type: "local"
+  goe_local_ip: ""
+  goe_cloud_serial: ""
+  goe_cloud_token: ""
+  goe_max_current_a: 16
+  goe_phases: 1
+  # --- EV Configuration ---
+  ev_soc_sensor: "sensor.ev_battery_soc"
+  ev_battery_capacity_kwh: 60.0
+  ev_charge_mode: "smart"
+  ev_min_charge_current_a: 6
+  ev_max_charge_current_a: 16
+  ev_allow_battery_to_charge_ev: true
+  ev_allow_grid_to_charge_ev: true
+  ev_combined_charge_threshold_ct: 15.0
+  # --- EV Charging Windows ---
+  ev_charging_windows:
+    - name: "Nacht"
+      available_from: "22:00"
+      available_until: "07:00"
+      target_soc_percent: 80
+      must_finish_by: "07:00"
+      priority: "cost"
+  # --- Deferrable Loads ---
+  deferrable_loads:
+    - name: "Washing Machine"
+      switch: "switch.washing_machine"
+      power_w: 2000
+      duration_h: 2.0
+      latest_end_h: 8
+      earliest_start_h: 22
+      min_soc_battery: 20
+      price_limit_ct_kwh: 20.0
+    - name: "Dishwasher"
+      switch: "switch.dishwasher"
+      power_w: 1800
+      duration_h: 1.5
+      latest_end_h: 8
+      earliest_start_h: 22
+      min_soc_battery: 20
+      price_limit_ct_kwh: 20.0
+  # --- Optimization ---
+  optimization_goal: "cost"
+  optimization_interval_minutes: 60
+  long_term_plan_interval_hours: 6
+  peak_shaving_limit_w: 0
+  # --- Notifications ---
+  notify_target: "notify.mobile_app"
+  notify_on_balancing: true
+  notify_on_cheap_window: true
+  notify_on_ev_charged: true
+schema:
+  pv_power_sensor: str
+  pv_forecast_kwp: float
+  pv_orientation: int
+  pv_tilt: int
+  pv_latitude: float
+  pv_longitude: float
+  pv_efficiency: float
+  battery_soc_sensor: str
+  battery_power_sensor: str
+  battery_capacity_kwh: float
+  battery_charge_switch: str
+  battery_discharge_switch: str
+  battery_max_charge_w: int
+  battery_max_discharge_w: int
+  battery_min_soc: int
+  battery_reserve_soc: int
+  battery_efficiency: float
+  battery_balancing_enabled: bool
+  battery_balancing_mode: list(auto|scheduled|manual)
+  battery_balancing_frequency: list(daily|weekly|monthly|custom)
+  battery_balancing_custom_days: int
+  battery_balancing_target_soc: int
+  battery_balancing_hold_duration_h: int
+  battery_balancing_preferred_time: str
+  battery_balancing_auto_trigger_soc_deviation: int
+  battery_balancing_use_solar_only: bool
+  grid_power_sensor: str
+  grid_max_import_w: int
+  price_source: list(entso-e|awattar|tibber|epex_spot|sensor|fixed)
+  entso_e_token: str
+  entso_e_area: str
+  tibber_token: str
+  awattar_country: list(AT|DE)
+  epex_spot_area: str
+  price_sensor_entity: str
+  fixed_price_ct_kwh: float
+  price_input_is_netto: bool
+  price_vat_percent: float
+  price_grid_fee_source: list(fixed|entity)
+  price_grid_fee_fixed_ct_kwh: float
+  price_grid_fee_entity: str
+  price_supplier_markup_ct_kwh: float
+  price_other_taxes_ct_kwh: float
+  price_feed_in_ct_kwh: float
+  goe_enabled: bool
+  goe_connection_type: list(local|cloud)
+  goe_local_ip: str
+  goe_cloud_serial: str
+  goe_cloud_token: str
+  goe_max_current_a: int
+  goe_phases: int
+  ev_soc_sensor: str
+  ev_battery_capacity_kwh: float
+  ev_charge_mode: list(solar|min_solar|fast|smart|off)
+  ev_min_charge_current_a: int
+  ev_max_charge_current_a: int
+  ev_allow_battery_to_charge_ev: bool
+  ev_allow_grid_to_charge_ev: bool
+  ev_combined_charge_threshold_ct: float
+  ev_charging_windows:
+    - name: str
+      available_from: str
+      available_until: str
+      target_soc_percent: int
+      must_finish_by: str
+      priority: list(cost|solar|balanced)
+  deferrable_loads:
+    - name: str
+      switch: str
+      power_w: int
+      duration_h: float
+      latest_end_h: int
+      earliest_start_h: int
+      min_soc_battery: int
+      price_limit_ct_kwh: float
+  optimization_goal: list(cost|self_consumption|balanced)
+  optimization_interval_minutes: int
+  long_term_plan_interval_hours: int
+  peak_shaving_limit_w: int
+  notify_target: str
+  notify_on_balancing: bool
+  notify_on_cheap_window: bool
+  notify_on_ev_charged: bool
