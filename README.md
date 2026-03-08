@@ -132,6 +132,7 @@ Ein vollständiges **Home-Energy-Management-System (HEMS)** als Home Assistant A
 
 ### 1. Repository als Add-on-Quelle hinzufügen
 
+
 1. In Home Assistant: **Einstellungen → Add-ons → Add-on Store**
 2. Oben rechts auf die **drei Punkte** klicken → **Repositories**
 3. URL eingeben:
@@ -139,6 +140,7 @@ Ein vollständiges **Home-Energy-Management-System (HEMS)** als Home Assistant A
    https://github.com/ORPA1988/HA-Energy
    ```
 4. **Hinzufügen** klicken und die Seite neu laden
+
 
 ### 2. Add-on installieren
 
