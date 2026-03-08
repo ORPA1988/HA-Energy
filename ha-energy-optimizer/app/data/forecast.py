@@ -68,6 +68,8 @@ class PVForecast:
             "timezone": "auto",
         }
 
+        # Open-Meteo API typically responds in 1-3 seconds
+        # 5s timeout prevents blocking on slow networks while avoiding excessive waits
         async with httpx.AsyncClient(timeout=5.0) as client:
             r = await client.get(url, params=params)
             r.raise_for_status()

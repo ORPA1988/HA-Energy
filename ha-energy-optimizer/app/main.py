@@ -86,7 +86,8 @@ class AppState:
         Uses last 7 days of history to compute hourly average load.
         Falls back to sensible defaults if insufficient data.
         """
-        if len(self._history) < 240:  # Need at least 2 hours of data (240 * 30s)
+        # Need at least 2 hours of data (240 samples at 30s intervals)
+        if len(self._history) < 240:
             # Fallback: typical household consumption pattern
             # Higher during day (600-800W), lower at night (300-400W)
             return [
@@ -97,6 +98,9 @@ class AppState:
             ]
         
         # Group history by hour of day and calculate average load
+        # Note: Using local time for hour grouping. During DST transitions (2 per year),
+        # spring-forward has 1 missing hour, fall-back has 1 duplicate hour.
+        # This is acceptable for load profiling (affects only 2 days annually).
         hourly_loads = [[] for _ in range(24)]
         for entry in self._history:
             try:
