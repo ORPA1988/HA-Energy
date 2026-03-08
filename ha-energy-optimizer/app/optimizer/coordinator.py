@@ -63,6 +63,9 @@ class Coordinator:
             ev_enabled = current_slot.ev_charge_w > 0
             deferrable_loads = current_slot.deferrable_loads
             savings_eur = lp_schedule.estimated_savings_eur if lp_schedule else 0.0
+            logger.info("LP schedule active: EV %dA (%.0fW), Loads: %s, Savings: €%.3f",
+                       ev_current_a, current_slot.ev_charge_w,
+                       {k: v for k, v in deferrable_loads.items() if v}, savings_eur)
 
         # Apply genetic plan: restrict battery discharge if EV charging planned
         if long_term:

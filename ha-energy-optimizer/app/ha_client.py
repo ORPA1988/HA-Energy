@@ -1,6 +1,7 @@
 """Home Assistant REST API client using Supervisor token."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Optional
@@ -23,6 +24,32 @@ class HAClient:
             "Content-Type": "application/json",
         }
         self._client: Optional[httpx.AsyncClient] = None
+        
+        # Rate limiting: max 100 requests per minute to protect HA instance
+        self._rate_limit_max = 100
+        self._rate_limit_window = 60.0  # seconds
+        self._request_times: list[float] = []
+
+    async def _check_rate_limit(self) -> None:
+        """Enforce rate limiting to protect HA from overload."""
+        now = datetime.now().timestamp()
+        
+        # Remove requests older than window
+        self._request_times = [t for t in self._request_times if now - t < self._rate_limit_window]
+        
+        # If at limit, wait until oldest request expires
+        if len(self._request_times) >= self._rate_limit_max:
+            oldest = self._request_times[0]
+            sleep_time = self._rate_limit_window - (now - oldest) + 0.1
+            if sleep_time > 0:
+                logger.warning("Rate limit reached (%d req/%ds), sleeping %.1fs",
+                             self._rate_limit_max, int(self._rate_limit_window), sleep_time)
+                await asyncio.sleep(sleep_time)
+                now = datetime.now().timestamp()
+                self._request_times = [t for t in self._request_times if now - t < self._rate_limit_window]
+        
+        # Record this request
+        self._request_times.append(now)
 
     async def start(self):
         self._client = httpx.AsyncClient(
@@ -44,6 +71,7 @@ class HAClient:
         if not self._client:
             return None
         try:
+            await self._check_rate_limit()
             r = await self._client.get(f"{self._base}/states/{entity_id}")
             r.raise_for_status()
             return r.json()
@@ -70,6 +98,7 @@ class HAClient:
         if not self._client:
             return False
         try:
+            await self._check_rate_limit()
             r = await self._client.post(
                 f"{self._base}/services/{domain}/{service}",
                 json=data,
@@ -133,6 +162,7 @@ class HAClient:
         if not self._client:
             return False
         try:
+            await self._check_rate_limit()
             r = await self._client.post(
                 f"{self._base}/states/{entity_id}",
                 json=payload,

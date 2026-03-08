@@ -48,6 +48,12 @@ class DataCollector:
                 ev_soc = float(ev_soc_raw["state"])
             except (ValueError, TypeError):
                 ev_soc = None
+        
+        # Warn if EV charging configured but sensor unavailable
+        if ev_soc is None and (cfg.goe_enabled or cfg.ev_charging_windows):
+            logger.warning("EV SOC sensor '%s' unavailable but EV charging is enabled. "
+                          "Optimization will use fallback SOC values.",
+                          cfg.ev_soc_sensor)
 
         return EnergyState(
             timestamp=datetime.now(),

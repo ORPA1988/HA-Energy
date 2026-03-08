@@ -59,6 +59,17 @@ class LinearOptimizer:
         cfg = self._cfg
         N = N_HOURS
 
+        # Validate inputs
+        if len(prices_ct) < N:
+            logger.warning("Price forecast has only %d hours, expected %d. Padding with fallback.", 
+                         len(prices_ct), N)
+        if len(pv_forecast_w) < N:
+            logger.warning("PV forecast has only %d hours, expected %d. Padding with zeros.", 
+                         len(pv_forecast_w), N)
+        if len(house_load_w) < N:
+            logger.warning("House load profile has only %d hours, expected %d. Padding with 500W.", 
+                         len(house_load_w), N)
+
         # Extend/pad inputs to 24h
         prices = self._pad(prices_ct, N, cfg.fixed_price_ct_kwh)
         pv = self._pad(pv_forecast_w, N, 0.0)

@@ -72,7 +72,52 @@ class AppState:
 
         # WebSocket connections
         self._ws_clients: list[WebSocket] = []
+        self._ws_client_limit: int = 100  # Prevent memory leak
         self._history: list[dict] = []  # Last 24h snapshots
+
+    # ------------------------------------------------------------------
+    # Helper methods
+    # ------------------------------------------------------------------
+
+    def _estimate_house_load_profile(self) -> list[float]:
+        """
+        Estimate 24h house load profile from recent history.
+        
+        Uses last 7 days of history to compute hourly average load.
+        Falls back to sensible defaults if insufficient data.
+        """
+        if len(self._history) < 240:  # Need at least 2 hours of data (240 * 30s)
+            # Fallback: typical household consumption pattern
+            # Higher during day (600-800W), lower at night (300-400W)
+            return [
+                400, 350, 350, 350, 400, 500,  # 00-05: Night (low)
+                600, 700, 750, 700, 650, 600,  # 06-11: Morning peak, then moderate
+                550, 600, 650, 700, 800, 850,  # 12-17: Afternoon rise
+                900, 850, 750, 650, 550, 450,  # 18-23: Evening peak, then decline
+            ]
+        
+        # Group history by hour of day and calculate average load
+        hourly_loads = [[] for _ in range(24)]
+        for entry in self._history:
+            try:
+                ts = datetime.fromisoformat(entry["ts"])
+                hour = ts.hour
+                # Approximate house load from history (grid + battery discharge - battery charge)
+                # This is a simplification; the actual calculation is in collector.py
+                house_w = entry.get("house_w", 500.0)  # May not be stored
+                hourly_loads[hour].append(house_w)
+            except (ValueError, KeyError):
+                continue
+        
+        # Calculate average for each hour, fallback to 500W if no data
+        profile = []
+        for hour_samples in hourly_loads:
+            if hour_samples:
+                profile.append(sum(hour_samples) / len(hour_samples))
+            else:
+                profile.append(500.0)
+        
+        return profile
 
     # ------------------------------------------------------------------
     # Scheduled jobs
@@ -152,14 +197,18 @@ class AppState:
             target_soc = 80
             departure_h = 7
             if self.cfg.ev_charging_windows:
+                # Note: Currently only first window is used
+                # Multi-window support requires LP/genetic algorithm enhancement
                 w = self.cfg.ev_charging_windows[0]
                 target_soc = w.target_soc_percent
                 departure_h = int(w.must_finish_by.split(":")[0])
+                if len(self.cfg.ev_charging_windows) > 1:
+                    logger.info("Multiple EV windows configured, using first: %s", w.name)
 
             self.current_schedule = self.lp.optimize(
                 prices_ct=prices.total_ct,
                 pv_forecast_w=pv.power_w,
-                house_load_w=[500.0] * 24,  # TODO: ML load prediction
+                house_load_w=self._estimate_house_load_profile(),
                 battery_soc=bat_soc,
                 ev_soc=ev_soc,
                 ev_target_soc=target_soc,
@@ -183,6 +232,7 @@ class AppState:
             ev_soc = state.ev_soc_percent if state else None
             target_soc = 80
             if self.cfg.ev_charging_windows:
+                # Note: Using first window's target SOC for genetic planning
                 target_soc = self.cfg.ev_charging_windows[0].target_soc_percent
 
             self.current_plan = self.genetic.optimize_48h(
@@ -210,6 +260,7 @@ class AppState:
         try:
             if not self.cfg.ev_charging_windows:
                 return
+            # Note: Currently evaluates first window only
             w = self.cfg.ev_charging_windows[0]
             now = datetime.now()
             start_h = int(w.available_from.split(":")[0])
@@ -300,6 +351,7 @@ class AppState:
             "bat_soc": state.battery_soc_percent,
             "grid_w": state.grid_power_w,
             "ev_w": state.ev_charge_power_w,
+            "house_w": state.house_load_w,  # Store for load profile estimation
             "price_ct": state.price_total_ct_kwh,
             "savings_eur": actions.estimated_savings_eur,
         })
@@ -464,6 +516,17 @@ async def get_history(hours: int = 24):
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
+    
+    # Enforce client limit to prevent memory leak
+    if len(app_state._ws_clients) >= app_state._ws_client_limit:
+        logger.warning("WebSocket client limit reached (%d), closing oldest connection", 
+                      app_state._ws_client_limit)
+        try:
+            oldest = app_state._ws_clients.pop(0)
+            await oldest.close()
+        except Exception:
+            pass
+    
     app_state._ws_clients.append(ws)
     try:
         # Send current state immediately on connect
