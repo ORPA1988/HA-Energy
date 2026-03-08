@@ -99,16 +99,16 @@ class AppState:
         
         # Group history by hour of day and calculate average load
         # Note: Using local time for hour grouping. During DST transitions (2 per year),
-        # spring-forward has 1 missing hour, fall-back has 1 duplicate hour.
-        # This is acceptable for load profiling (affects only 2 days annually).
+        # spring-forward has 1 missing hour (defaults to 500W), fall-back has 1 duplicate
+        # hour (both samples averaged together). Acceptable for load profiling.
         hourly_loads = [[] for _ in range(24)]
         for entry in self._history:
             try:
                 ts = datetime.fromisoformat(entry["ts"])
                 hour = ts.hour
-                # Approximate house load from history (grid + battery discharge - battery charge)
-                # This is a simplification; the actual calculation is in collector.py
-                house_w = entry.get("house_w", 500.0)  # May not be stored
+                # Retrieve pre-calculated house load from history
+                # (calculated by collector.py using energy balance equation)
+                house_w = entry.get("house_w", 500.0)  # Fallback for old entries
                 hourly_loads[hour].append(house_w)
             except (ValueError, KeyError):
                 continue
