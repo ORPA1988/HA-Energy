@@ -188,15 +188,23 @@ def load_config() -> Config:
 
     # EV charging windows
     if "ev_charging_windows" in opts:
-        cfg.ev_charging_windows = [
-            EVChargingWindow(**w) for w in opts["ev_charging_windows"]
-        ]
+        try:
+            cfg.ev_charging_windows = [
+                EVChargingWindow(**w) for w in opts["ev_charging_windows"]
+            ]
+        except Exception as e:
+            logger.error("Invalid EV charging window configuration: %s", e)
+            cfg.ev_charging_windows = []
 
     # Deferrable loads
     if "deferrable_loads" in opts:
-        cfg.deferrable_loads = [
-            DeferrableLoad(**dl) for dl in opts["deferrable_loads"]
-        ]
+        try:
+            cfg.deferrable_loads = [
+                DeferrableLoad(**dl) for dl in opts["deferrable_loads"]
+            ]
+        except Exception as e:
+            logger.error("Invalid deferrable load configuration: %s", e)
+            cfg.deferrable_loads = []
 
     logger.info("Configuration loaded from %s", OPTIONS_FILE)
     return cfg

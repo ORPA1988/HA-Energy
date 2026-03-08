@@ -14,12 +14,13 @@ from models import HourlySlot, LongTermPlan, TimeWindow
 
 logger = logging.getLogger(__name__)
 
+# Genetic algorithm parameters - tuned for Raspberry Pi 4 performance
 N_HOURS = 48
-POPULATION_SIZE = 50
-N_GENERATIONS = 100
-MUTATION_RATE = 0.05
-TOURNAMENT_SIZE = 5
-ELITE_FRACTION = 0.2
+POPULATION_SIZE = 50        # Small enough for RPi4 (50 * 100 = 5000 fitness evaluations)
+N_GENERATIONS = 100          # ~15-20 seconds total runtime on RPi4
+MUTATION_RATE = 0.05        # 5% gene mutation rate for exploration
+TOURNAMENT_SIZE = 5         # Tournament selection size
+ELITE_FRACTION = 0.2        # Keep top 20% (10 chromosomes) unchanged
 
 
 class Chromosome:
@@ -98,8 +99,17 @@ class GeneticPlanner:
             )
 
         # Evolve
+        best_fitness_history = []
         for gen in range(N_GENERATIONS):
             population.sort(key=lambda c: c.fitness)
+            best_fitness_history.append(population[0].fitness)
+            
+            # Log convergence every 20 generations (skip gen 0, start at 20)
+            if gen > 0 and gen % 20 == 0:
+                improvement = best_fitness_history[0] - population[0].fitness
+                logger.debug("Generation %d: best fitness %.3f EUR (improved %.3f EUR from start)",
+                           gen, population[0].fitness, improvement)
+            
             n_elite = max(1, int(POPULATION_SIZE * ELITE_FRACTION))
             next_gen = deepcopy(population[:n_elite])
 
@@ -119,7 +129,12 @@ class GeneticPlanner:
         plan = self._build_plan(best, pv, prices, battery_soc, ev_soc)
         self._last_plan = plan
 
-        logger.info("Genetic planner complete. Best fitness: %.3f EUR over 48h", best.fitness)
+        # Log final convergence stats
+        initial_best = best_fitness_history[0]
+        final_best = best.fitness
+        improvement = initial_best - final_best
+        logger.info("Genetic planner complete. Best fitness: %.3f EUR over 48h (improved %.3f EUR from initial)",
+                   best.fitness, improvement)
         return plan
 
     def _evaluate_fitness(
