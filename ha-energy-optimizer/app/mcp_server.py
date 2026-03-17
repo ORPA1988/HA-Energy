@@ -334,7 +334,7 @@ class MCPServer:
                 return await self._get_ha_logs(lines)
 
             elif name == "get_history":
-                hours = min(arguments.get("hours", 24), 24)
+                hours = max(1, min(arguments.get("hours", 24), 24))
                 data = await self._api_call("GET", f"/api/history?hours={hours}")
                 return json.dumps(data, indent=2, default=str)
 
@@ -418,7 +418,7 @@ class MCPServer:
                         "capabilities": {"tools": {}},
                         "serverInfo": {
                             "name": "ha-energy-optimizer",
-                            "version": "1.0.1",
+                            "version": "1.0.3",
                         },
                     },
                 })

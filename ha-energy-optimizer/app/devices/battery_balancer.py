@@ -118,7 +118,11 @@ class BatteryBalancer:
             return BalancingDecision(should_start=False, reason=reason)
 
         # Check preferred time window
-        preferred_hour = int(self._cfg.battery_balancing_preferred_time.split(":")[0])
+        try:
+            preferred_hour = int(self._cfg.battery_balancing_preferred_time.split(":")[0])
+            preferred_hour = max(0, min(23, preferred_hour))
+        except (ValueError, IndexError):
+            preferred_hour = 10  # fallback
         now_hour = datetime.now().hour
         if abs(now_hour - preferred_hour) > 2 and self._cfg.battery_balancing_mode == "scheduled":
             return BalancingDecision(

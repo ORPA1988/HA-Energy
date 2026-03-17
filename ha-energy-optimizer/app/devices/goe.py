@@ -133,6 +133,7 @@ class GoeCharger:
                 params={**self._cloud_params(), **params},
             )
         r.raise_for_status()
+        return True
 
     async def set_current(self, current_a: int) -> bool:
         """Set charging current in Amperes (0 or min_current..max_current)."""

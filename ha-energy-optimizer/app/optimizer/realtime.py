@@ -205,7 +205,10 @@ class RealtimeController:
         self.smart_enabled = lp_enabled
 
         # Determine mode
-        mode = EVChargeMode(cfg.ev_charge_mode)
+        try:
+            mode = EVChargeMode(cfg.ev_charge_mode)
+        except ValueError:
+            mode = EVChargeMode.SMART
 
         # Override mode if car not connected
         car_connected = True
@@ -266,7 +269,10 @@ class RealtimeController:
             if not ev_cfg:
                 continue
 
-            mode = EVChargeMode(ev_cfg.charge_mode)
+            try:
+                mode = EVChargeMode(ev_cfg.charge_mode)
+            except ValueError:
+                mode = EVChargeMode.SMART
             if mode == EVChargeMode.OFF:
                 if self._charging_states.get(name, False):
                     await wb.set_enabled(False)
