@@ -1350,6 +1350,7 @@
 const _bp = (() => {
   let p = location.pathname;
   if (p.endsWith('/')) p = p.slice(0, -1);
+  p = p.replace(/\/static\/index\.html$/, '');
   return p;
 })();
 
