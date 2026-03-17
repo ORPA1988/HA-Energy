@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -93,7 +93,7 @@ class AppState:
         # WebSocket connections
         self._ws_clients: list[WebSocket] = []
         self._ws_client_limit: int = 100  # Prevent memory leak
-        self._history: collections.deque[dict] = collections.deque(maxlen=2880)  # Last 24h at 30s intervals
+        self._history: collections.deque[dict] = collections.deque(maxlen=2880)  # Last 24h
 
     # ------------------------------------------------------------------
     # Helper methods
@@ -237,8 +237,8 @@ class AppState:
                         val = await self.ha.get_state(ev.soc_sensor)
                         if val is not None:
                             ev_soc_map[ev.name] = float(val)
-                    except Exception:
-                        pass
+                    except (ValueError, TypeError, KeyError) as e:
+                        logger.debug("Could not read EV SOC for %s: %s", ev.name, e)
 
             target_soc = 80
             departure_h = 7
@@ -250,7 +250,7 @@ class AppState:
                 try:
                     departure_h = int(w.must_finish_by.split(":")[0])
                 except (ValueError, IndexError):
-                    logger.warning("Invalid must_finish_by format '%s', using default 07:00", w.must_finish_by)
+                    logger.warning("Invalid must_finish_by '%s', using default 7", w.must_finish_by)
                     departure_h = 7
                 if len(self.cfg.ev_charging_windows) > 1:
                     logger.info("Multiple EV windows configured, using first: %s", w.name)
@@ -318,7 +318,7 @@ class AppState:
                 start_h = int(w.available_from.split(":")[0])
                 end_h = int(w.available_until.split(":")[0])
             except (ValueError, IndexError):
-                logger.warning("Invalid time format in EV window '%s', skipping", w.name)
+                logger.warning("Invalid time format in EV window, skipping strategy eval")
                 return
 
             window_start = now.replace(hour=start_h, minute=0, second=0)
@@ -410,6 +410,7 @@ class AppState:
             "price_ct": state.price_total_ct_kwh,
             "savings_eur": actions.estimated_savings_eur,
         })
+        # deque with maxlen=2880 auto-discards oldest entries
 
     # ------------------------------------------------------------------
     # WebSocket
@@ -433,8 +434,8 @@ class AppState:
                         "car_state": st.car_state.value,
                         "session_kwh": round(st.energy_kwh_session, 2),
                     })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to read wallbox status for '%s': %s", name, e)
 
         # Load decomposition summary
         decomp = None
@@ -442,8 +443,8 @@ class AppState:
             from data.load_decomposition import get_load_decomposer
             decomposer = get_load_decomposer()
             decomp = await decomposer.get_decomposition()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Load decomposition unavailable: %s", e)
 
         data = {
             "type": "state",
@@ -471,13 +472,14 @@ class AppState:
             }
         msg = json.dumps(data)
         dead = []
-        for ws in self._ws_clients:
+        for ws in list(self._ws_clients):  # Copy to avoid mutation during iteration
             try:
                 await ws.send_text(msg)
             except Exception:
                 dead.append(ws)
         for ws in dead:
-            self._ws_clients.remove(ws)
+            if ws in self._ws_clients:
+                self._ws_clients.remove(ws)
 
 
 # ---------------------------------------------------------------------------
@@ -495,22 +497,35 @@ async def lifespan(app: FastAPI):
     setup_jobs(app_state)
     scheduler.start()
 
+    # Validate config at startup
+    cfg = app_state.cfg
+    if cfg.battery_capacity_kwh <= 0:
+        logger.warning("battery_capacity_kwh is 0 — battery optimization disabled")
+    if cfg.battery_min_soc >= 100:
+        logger.error("battery_min_soc >= 100%% — battery can never discharge!")
+    if cfg.goe_enabled and not cfg.goe_local_ip and cfg.goe_connection_type == "local":
+        logger.warning("go-e enabled (local) but no IP configured")
+    if cfg.price_source == "entso-e" and not cfg.entso_e_token:
+        logger.warning("ENTSO-E selected but no token configured — will use fixed price")
+
     # Run initial optimizations
     await app_state.refresh_prices()
     await app_state.run_linear_optimization()
     await app_state.run_genetic_planning()
     await app_state.run_ev_strategy()
 
-    yield
-
-    # Shutdown
-    scheduler.shutdown()
-    await app_state.ha.stop()
+    try:
+        yield
+    finally:
+        # Shutdown
+        scheduler.shutdown(wait=False)
+        await app_state.ha.stop()
+        logger.info("HA Energy Optimizer stopped")
 
 
 app = FastAPI(
     title="HA Energy Optimizer",
-    version="1.0.2",
+    version="1.0.3",
     lifespan=lifespan,
 )
 
@@ -593,13 +608,22 @@ async def set_ev_mode(body: dict):
     return {"status": "ok", "mode": mode}
 
 
+def _log_task_exception(task: asyncio.Task) -> None:
+    """Callback to log unhandled exceptions from fire-and-forget tasks."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc:
+        logger.error("Background task %s failed: %s", task.get_name(), exc, exc_info=exc)
+
+
 @app.post("/api/optimize")
 async def trigger_optimization():
     """Trigger immediate re-optimization."""
-    task_lp = asyncio.create_task(app_state.run_linear_optimization())
-    task_ev = asyncio.create_task(app_state.run_ev_strategy())
-    task_lp.add_done_callback(lambda t: t.exception() if not t.cancelled() and t.exception() else None)
-    task_ev.add_done_callback(lambda t: t.exception() if not t.cancelled() and t.exception() else None)
+    t1 = asyncio.create_task(app_state.run_linear_optimization(), name="lp_optimize")
+    t2 = asyncio.create_task(app_state.run_ev_strategy(), name="ev_strategy")
+    t1.add_done_callback(_log_task_exception)
+    t2.add_done_callback(_log_task_exception)
     return {"status": "triggered"}
 
 
@@ -633,10 +657,9 @@ async def stop_balancing():
 
 
 @app.get("/api/history")
-async def get_history(hours: int = 24):
+async def get_history(hours: int = Query(24, ge=1, le=168)):
     cutoff_count = hours * 120  # 30s intervals → 120 per hour
-    history_list = list(app_state._history)
-    return {"history": history_list[-cutoff_count:]}
+    return {"history": list(app_state._history)[-cutoff_count:]}
 
 
 # ---------------------------------------------------------------------------
@@ -747,6 +770,9 @@ async def get_ha_entities(domain: str = ""):
 @app.get("/api/ha/entity/{entity_id:path}")
 async def get_ha_entity_state(entity_id: str):
     """Get current state of a specific HA entity."""
+    import re
+    if not re.match(r"^[a-z_]+\.[a-z0-9_]+$", entity_id):
+        return JSONResponse({"error": "Invalid entity_id format"}, status_code=400)
     state = await app_state.ha.get_state(entity_id)
     if not state:
         return JSONResponse({"error": "Entity not found"}, status_code=404)
@@ -947,8 +973,8 @@ async def websocket_endpoint(ws: WebSocket):
         try:
             oldest = app_state._ws_clients.pop(0)
             await oldest.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Error closing oldest WebSocket: %s", e)
     
     app_state._ws_clients.append(ws)
     try:

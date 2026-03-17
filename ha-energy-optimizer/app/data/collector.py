@@ -1,6 +1,7 @@
 """Collect current energy system state from Home Assistant sensors."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 
@@ -34,10 +35,13 @@ class DataCollector:
         cfg = self._cfg
         ha = self._ha
 
-        pv_w = await ha.get_state_value(cfg.pv_power_sensor, 0.0)
-        battery_soc = await ha.get_state_value(cfg.battery_soc_sensor, 50.0)
-        battery_power = await ha.get_state_value(cfg.battery_power_sensor, 0.0)
-        grid_power = await ha.get_state_value(cfg.grid_power_sensor, 0.0)
+        # Fetch all sensor values in parallel
+        pv_w, battery_soc, battery_power, grid_power = await asyncio.gather(
+            ha.get_state_value(cfg.pv_power_sensor, 0.0),
+            ha.get_state_value(cfg.battery_soc_sensor, 50.0),
+            ha.get_state_value(cfg.battery_power_sensor, 0.0),
+            ha.get_state_value(cfg.grid_power_sensor, 0.0),
+        )
 
         # Use load decomposition if any loads are marked for subtraction
         has_subtractable = any(dl.subtract_from_total for dl in cfg.deferrable_loads)

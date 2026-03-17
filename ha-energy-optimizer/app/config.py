@@ -274,7 +274,17 @@ def load_config() -> Config:
             logger.error("Invalid deferrable load configuration: %s", e)
             cfg.deferrable_loads = []
 
-    logger.info("Configuration loaded from %s", OPTIONS_FILE)
+    # Validate critical value ranges
+    cfg.battery_min_soc = max(0, min(100, cfg.battery_min_soc))
+    cfg.battery_reserve_soc = max(0, min(100, cfg.battery_reserve_soc))
+    cfg.price_vat_percent = max(0.0, min(100.0, cfg.price_vat_percent))
+    cfg.battery_efficiency = max(0.1, min(1.0, cfg.battery_efficiency))
+    cfg.goe_max_current_a = max(6, min(32, cfg.goe_max_current_a))
+    cfg.goe_phases = max(1, min(3, cfg.goe_phases))
+    cfg.ev_min_charge_current_a = max(0, min(32, cfg.ev_min_charge_current_a))
+    cfg.ev_max_charge_current_a = max(cfg.ev_min_charge_current_a, min(32, cfg.ev_max_charge_current_a))
+
+    logger.info("Configuration loaded successfully")
     return cfg
 
 

@@ -109,7 +109,7 @@ class LinearOptimizer:
         house = self._pad(house_load_w, N, 500.0)
         feed_in = cfg.price_feed_in_ct_kwh
 
-        bat_cap_wh = cfg.battery_capacity_kwh * 1000.0
+        bat_cap_wh = max(1.0, cfg.battery_capacity_kwh * 1000.0)  # Guard div/0
         bat_min_soc = cfg.battery_min_soc / 100.0
         bat_init_soc = battery_soc / 100.0
         bat_eff = cfg.battery_efficiency
@@ -286,12 +286,12 @@ class LinearOptimizer:
             for ei, ev in enumerate(ev_params):
                 ev_ch = max(0.0, x[ev_start + ei * N + t])
                 total_ev_ch += ev_ch
-                ev_socs[ei] += ev_ch / ev["cap_wh"]
+                ev_socs[ei] += ev_ch / max(1.0, ev["cap_wh"])
                 ev_socs[ei] = min(1.0, ev_socs[ei])
                 ev_slot_data.append(EVSlotData(
                     name=ev["name"],
                     charge_w=ev_ch,
-                    current_a=int(ev_ch / (ev["phases"] * 230)) if ev_ch > 0 else 0,
+                    current_a=int(ev_ch / (max(1, ev["phases"]) * 230)) if ev_ch > 0 else 0,
                     soc_end=ev_socs[ei] * 100.0,
                 ))
 
@@ -310,7 +310,7 @@ class LinearOptimizer:
                 battery_charge_w=ch,
                 battery_discharge_w=dis,
                 ev_charge_w=total_ev_ch,
-                ev_current_a=int(total_ev_ch / (primary_phases * 230)) if total_ev_ch > 0 else 0,
+                ev_current_a=int(total_ev_ch / (max(1, primary_phases) * 230)) if total_ev_ch > 0 else 0,
                 grid_import_w=imp,
                 grid_export_w=exp,
                 battery_soc_end=bat_soc * 100.0,

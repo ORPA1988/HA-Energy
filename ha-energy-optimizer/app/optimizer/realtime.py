@@ -124,14 +124,14 @@ class RealtimeController:
         if mode == EVChargeMode.FAST:
             return max_a
 
+        phases = max(1, phases)  # Guard against div/0
+
         if mode == EVChargeMode.MIN_SOLAR:
             # Always charge at minimum; boost with surplus
-            phases = max(1, phases)
             surplus_current = int(surplus_w / (phases * 230))
             return min(max_a, min_a + max(0, surplus_current - min_a))
 
         if mode == EVChargeMode.SOLAR:
-            phases = max(1, phases)
             surplus_current = int(surplus_w / (phases * 230))
             start_threshold = cfg.ev_surplus_start_threshold_w or _DEFAULT_SURPLUS_START_W
             stop_threshold = cfg.ev_surplus_stop_threshold_w or _DEFAULT_SURPLUS_STOP_W
