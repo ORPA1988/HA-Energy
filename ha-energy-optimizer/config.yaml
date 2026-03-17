@@ -1,5 +1,5 @@
 name: "HA Energy Optimizer"
-version: "0.1.0"
+version: "0.1.1"
 slug: "ha_energy_optimizer"
 description: "Unified home energy optimization: combines EVCC + EOS + EMHASS concepts into one intelligent platform with 3-layer optimization, live dashboard and MCP server"
 url: "https://github.com/ORPA1988/HA-Energy"
