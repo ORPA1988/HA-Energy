@@ -7,6 +7,20 @@
 [![Architektur](https://img.shields.io/badge/Arch-amd64%20%7C%20aarch64%20%7C%20armv7%20%7C%20armhf-green)](#installation)
 [![Lizenz](https://img.shields.io/badge/Lizenz-MIT-yellow)](LICENSE)
 
+## Installation in Home Assistant (1-Klick)
+
+[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FORPA1988%2FHA-Energy)
+
+**Oder manuell:**
+1. Home Assistant -> **Einstellungen** -> **Add-ons** -> **Add-on Store** (unten rechts)
+2. Oben rechts: **&#8942;** -> **Repositories** -> URL einfügen: `https://github.com/ORPA1988/HA-Energy`
+3. Seite neu laden -> **HA Energy Optimizer** installieren -> **Starten**
+4. Das Dashboard öffnet sich automatisch im HA-Seitenmenü
+
+> **Tipp:** Beim ersten Start `read_only: true` setzen um das Setup gefahrlos zu testen!
+
+---
+
 Ein vollständiges **Home-Energy-Management-System (HEMS)** als Home Assistant Add-on. Es vereint die besten Konzepte aus [EVCC](https://evcc.io/), [EOS](https://github.com/josepowera/eos) und [EMHASS](https://github.com/davidusb-geek/emhass) in einer einzigen intelligenten Plattform – mit dreistufiger Optimierung, Live-Dashboard und umfassenden Hardware-Integrationen.
 
 ---
