@@ -24,6 +24,33 @@ class EVChargingWindow:
 
 
 @dataclass
+class EVConfig:
+    """Configuration for a single EV/wallbox pair."""
+    name: str = "EV 1"
+    wallbox_type: str = "goe"  # "goe", "ha_entity", "ocpp"
+    soc_sensor: str = ""
+    battery_capacity_kwh: float = 60.0
+    min_charge_current_a: int = 6
+    max_charge_current_a: int = 16
+    phases: int = 1
+    charge_mode: str = "smart"  # solar/min_solar/fast/smart/off
+    # HA entity wallbox fields
+    switch_entity: str = ""
+    power_sensor: str = ""
+    current_number: str = ""
+    session_sensor: str = ""
+    car_state_sensor: str = ""
+    # OCPP fields
+    ocpp_entity_prefix: str = ""
+    # go-e fields (uses global goe_* config if this is the primary EV)
+    use_global_goe: bool = True
+    # Charging windows specific to this EV
+    charging_windows: list[EVChargingWindow] = field(default_factory=list)
+    target_soc: int = 80
+    allow_grid_charging: bool = True
+
+
+@dataclass
 class DeferrableLoad:
     name: str
     switch: str
@@ -122,6 +149,9 @@ class Config:
     # EV Charging Windows
     ev_charging_windows: list[EVChargingWindow] = field(default_factory=list)
 
+    # Multi-EV configurations
+    ev_configs: list[EVConfig] = field(default_factory=list)
+
     # Deferrable Loads
     deferrable_loads: list[DeferrableLoad] = field(default_factory=list)
 
@@ -215,6 +245,14 @@ def load_config() -> Config:
             logger.error("Invalid EV charging window configuration: %s", e)
             cfg.ev_charging_windows = []
 
+    # EV configurations (multi-EV)
+    if "ev_configs" in opts:
+        try:
+            cfg.ev_configs = [EVConfig(**ev) for ev in opts["ev_configs"]]
+        except Exception as e:
+            logger.error("Invalid EV config: %s", e)
+            cfg.ev_configs = []
+
     # Deferrable loads
     if "deferrable_loads" in opts:
         try:
@@ -273,6 +311,12 @@ def update_config(updates: dict) -> Config:
                 cfg.deferrable_loads = [DeferrableLoad(**dl) for dl in value]
             except Exception as e:
                 logger.error("Invalid deferrable load update: %s", e)
+            continue
+        if key == "ev_configs" and isinstance(value, list):
+            try:
+                cfg.ev_configs = [EVConfig(**ev) for ev in value]
+            except Exception as e:
+                logger.error("Invalid EV config update: %s", e)
             continue
         if key == "ev_charging_windows" and isinstance(value, list):
             try:

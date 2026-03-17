@@ -140,7 +140,7 @@ class AppState:
             )
             self.current_state = state
 
-            # Merge go-e data
+            # Merge wallbox data (go-e native or generic wallbox)
             goe_status = await self.goe.get_status()
             if goe_status:
                 state.ev_car_state = goe_status.car_state
@@ -148,6 +148,17 @@ class AppState:
                 state.ev_session_kwh = goe_status.energy_kwh_session
                 state.ev_charge_current_a = goe_status.current_a
                 await self.goe.publish_to_ha(goe_status)
+            else:
+                # Try generic wallbox
+                wb = self.realtime._get_wallbox()
+                if wb:
+                    wb_status = await wb.get_status()
+                    if wb_status:
+                        state.ev_charge_power_w = wb_status.power_w
+                        state.ev_session_kwh = wb_status.energy_kwh_session
+                        state.ev_charge_current_a = wb_status.current_a
+                        if hasattr(wb, 'publish_to_ha'):
+                            await wb.publish_to_ha(wb_status)
 
             # Balancing tick
             await self.balancer.tick(state.battery_soc_percent)
@@ -680,6 +691,63 @@ async def delete_ev(index: int):
     if index < 0 or index >= len(cfg.ev_charging_windows):
         return JSONResponse({"error": "Invalid index"}, status_code=404)
     cfg.ev_charging_windows.pop(index)
+    save_config(cfg)
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# EV/Wallbox Configuration API (Multi-EV)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/config/ev-configs")
+async def get_ev_configs():
+    """List all configured EV/wallbox pairs."""
+    cfg = get_config()
+    evs = []
+    for i, ev in enumerate(cfg.ev_configs):
+        evs.append({
+            "index": i,
+            **{k: getattr(ev, k) for k in ev.__dataclass_fields__},
+        })
+    return {"ev_configs": evs}
+
+
+@app.post("/api/config/ev-configs")
+async def add_ev_config(body: dict):
+    """Add a new EV/wallbox configuration."""
+    cfg = get_config()
+    from config import EVConfig
+    try:
+        ev = EVConfig(**body)
+        cfg.ev_configs.append(ev)
+        save_config(cfg)
+        return {"status": "ok", "index": len(cfg.ev_configs) - 1}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.put("/api/config/ev-configs/{index}")
+async def update_ev_config(index: int, body: dict):
+    """Update an EV/wallbox configuration by index."""
+    cfg = get_config()
+    if index < 0 or index >= len(cfg.ev_configs):
+        return JSONResponse({"error": "Invalid index"}, status_code=404)
+    from config import EVConfig
+    try:
+        cfg.ev_configs[index] = EVConfig(**body)
+        save_config(cfg)
+        return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.delete("/api/config/ev-configs/{index}")
+async def delete_ev_config(index: int):
+    """Delete an EV/wallbox configuration by index."""
+    cfg = get_config()
+    if index < 0 or index >= len(cfg.ev_configs):
+        return JSONResponse({"error": "Invalid index"}, status_code=404)
+    cfg.ev_configs.pop(index)
     save_config(cfg)
     return {"status": "ok"}
 

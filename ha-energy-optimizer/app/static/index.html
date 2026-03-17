@@ -580,6 +580,121 @@
     </div>
   </div>
 
+  <!-- Multi-EV Wallbox Configurations -->
+  <div class="card full-width">
+    <div class="card-title" style="justify-content:space-between">
+      Wallbox-Konfigurationen (Multi-EV)
+      <button class="btn btn-primary" onclick="showAddEVConfigForm()">+ Wallbox hinzuf&uuml;gen</button>
+    </div>
+    <div id="ev-config-manager">
+      <div style="color:var(--muted);font-size:0.8rem">Lade...</div>
+    </div>
+  </div>
+
+  <!-- Add/Edit EV Config Modal -->
+  <div class="card full-width" id="ev-config-form-card" style="display:none">
+    <div class="card-title">Wallbox konfigurieren</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="evc-name" placeholder="z.B. Tesla Model 3">
+      </div>
+      <div class="form-group">
+        <label>Wallbox-Typ</label>
+        <select id="evc-type" onchange="toggleEVCTypeSections()">
+          <option value="goe">go-e Charger</option>
+          <option value="ha_entity">HA-Entit&auml;t (generisch)</option>
+          <option value="ocpp">OCPP</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>SOC-Sensor</label>
+        <div class="entity-picker">
+          <input type="text" id="evc-soc-sensor" placeholder="sensor.ev_battery_soc" oninput="entitySearch(this, 'sensor')">
+          <div class="entity-dropdown" id="evc-soc-sensor-dropdown"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Batteriekapazit&auml;t (kWh)</label>
+        <input type="number" id="evc-capacity" value="60" step="0.1">
+      </div>
+      <div class="form-group">
+        <label>Max. Ladestrom (A)</label>
+        <input type="number" id="evc-max-current" value="16">
+      </div>
+      <div class="form-group">
+        <label>Phasen</label>
+        <select id="evc-phases">
+          <option value="1">1-phasig</option>
+          <option value="3">3-phasig</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Lademodus</label>
+        <select id="evc-mode">
+          <option value="smart">Smart (LP-optimiert)</option>
+          <option value="solar">Nur Solar</option>
+          <option value="min_solar">Min + Solar</option>
+          <option value="fast">Schnellladen</option>
+          <option value="off">Aus</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Ziel-SOC (%)</label>
+        <input type="number" id="evc-target-soc" min="10" max="100" value="80">
+      </div>
+    </div>
+    <!-- HA Entity specific fields -->
+    <div id="evc-ha-section" style="display:none;margin-top:12px">
+      <div class="config-section-title">HA-Entit&auml;ten</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Switch-Entit&auml;t</label>
+          <div class="entity-picker">
+            <input type="text" id="evc-switch" placeholder="switch.wallbox" oninput="entitySearch(this, 'switch')">
+            <div class="entity-dropdown" id="evc-switch-dropdown"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Leistungs-Sensor</label>
+          <div class="entity-picker">
+            <input type="text" id="evc-power-sensor" placeholder="sensor.wallbox_power" oninput="entitySearch(this, 'sensor')">
+            <div class="entity-dropdown" id="evc-power-sensor-dropdown"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Strom-Number</label>
+          <div class="entity-picker">
+            <input type="text" id="evc-current-number" placeholder="number.wallbox_current" oninput="entitySearch(this, 'number')">
+            <div class="entity-dropdown" id="evc-current-number-dropdown"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Fahrzeugstatus-Sensor</label>
+          <div class="entity-picker">
+            <input type="text" id="evc-car-state" placeholder="sensor.wallbox_car_state" oninput="entitySearch(this, 'sensor')">
+            <div class="entity-dropdown" id="evc-car-state-dropdown"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- OCPP specific fields -->
+    <div id="evc-ocpp-section" style="display:none;margin-top:12px">
+      <div class="config-section-title">OCPP-Konfiguration</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Entity Prefix</label>
+          <input type="text" id="evc-ocpp-prefix" placeholder="z.B. ocpp_wallbox">
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="saveEVConfig2()">Speichern</button>
+      <button class="btn btn-secondary" onclick="cancelEVConfigForm()">Abbrechen</button>
+    </div>
+    <input type="hidden" id="evc-edit-index" value="-1">
+  </div>
+
   <!-- Add/Edit EV Window Modal -->
   <div class="card full-width" id="ev-form-card" style="display:none">
     <div class="card-title">Ladefenster konfigurieren</div>
@@ -1245,7 +1360,7 @@ function switchTab(tabName) {
 
   // Load data for specific tabs
   if (tabName === 'loads') { loadLoadsManager(); loadDecomposition(); }
-  if (tabName === 'ev') { loadEVManager(); loadEVConfig(); }
+  if (tabName === 'ev') { loadEVManager(); loadEVConfig(); loadEVConfigManager(); }
   if (tabName === 'prices') { loadPriceConfig(); loadPriceDetailChart(); }
   if (tabName === 'config') { loadAllConfig(); }
 }
@@ -1565,6 +1680,144 @@ async function saveEVConfig() {
     if (r.ok) showToast('Wallbox-Einstellungen gespeichert');
     else showToast('Fehler beim Speichern', true);
   } catch (e) { showToast('Netzwerkfehler', true); }
+}
+
+// ============================================================================
+// Multi-EV Wallbox Config Manager
+// ============================================================================
+const wbTypeNames = { goe: 'go-e Charger', ha_entity: 'HA-Entity', ocpp: 'OCPP' };
+
+async function loadEVConfigManager() {
+  try {
+    const r = await fetch('/api/config/ev-configs');
+    const data = await r.json();
+    const evs = data.ev_configs || [];
+
+    if (evs.length === 0) {
+      document.getElementById('ev-config-manager').innerHTML =
+        '<div style="color:var(--muted);font-size:0.85rem">Keine Wallboxen konfiguriert. Klicke "+ Wallbox hinzuf\u00fcgen".</div>';
+      return;
+    }
+
+    let html = '';
+    for (const ev of evs) {
+      html += `<div class="item-card">
+        <div class="item-card-header">
+          <span class="item-card-title">${ev.name}</span>
+          <div class="item-card-actions">
+            <button class="btn-icon" onclick="editEVConfig2(${ev.index})">Bearbeiten</button>
+            <button class="btn-icon danger" onclick="deleteEVConfig2(${ev.index})">L\u00f6schen</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.8rem;color:var(--muted)">
+          <span>Typ: ${wbTypeNames[ev.wallbox_type] || ev.wallbox_type}</span>
+          <span>Kapazit\u00e4t: ${ev.battery_capacity_kwh} kWh</span>
+          <span>Max: ${ev.max_charge_current_a}A / ${ev.phases}P</span>
+          <span>Modus: ${ev.charge_mode}</span>
+          <span>Ziel-SOC: ${ev.target_soc}%</span>
+          ${ev.soc_sensor ? '<span>SOC: ' + ev.soc_sensor + '</span>' : ''}
+        </div>
+      </div>`;
+    }
+    document.getElementById('ev-config-manager').innerHTML = html;
+  } catch (e) { console.warn('EV config manager error:', e); }
+}
+
+function toggleEVCTypeSections() {
+  const type = document.getElementById('evc-type').value;
+  document.getElementById('evc-ha-section').style.display = type === 'ha_entity' ? 'block' : 'none';
+  document.getElementById('evc-ocpp-section').style.display = type === 'ocpp' ? 'block' : 'none';
+}
+
+function showAddEVConfigForm() {
+  document.getElementById('ev-config-form-card').style.display = 'block';
+  document.getElementById('evc-edit-index').value = '-1';
+  document.getElementById('evc-name').value = '';
+  document.getElementById('evc-type').value = 'ha_entity';
+  document.getElementById('evc-soc-sensor').value = '';
+  document.getElementById('evc-capacity').value = '60';
+  document.getElementById('evc-max-current').value = '16';
+  document.getElementById('evc-phases').value = '1';
+  document.getElementById('evc-mode').value = 'smart';
+  document.getElementById('evc-target-soc').value = '80';
+  document.getElementById('evc-switch').value = '';
+  document.getElementById('evc-power-sensor').value = '';
+  document.getElementById('evc-current-number').value = '';
+  document.getElementById('evc-car-state').value = '';
+  document.getElementById('evc-ocpp-prefix').value = '';
+  toggleEVCTypeSections();
+}
+
+async function editEVConfig2(index) {
+  try {
+    const r = await fetch('/api/config/ev-configs');
+    const data = await r.json();
+    const ev = (data.ev_configs || []).find(e => e.index === index);
+    if (!ev) return;
+
+    document.getElementById('ev-config-form-card').style.display = 'block';
+    document.getElementById('evc-edit-index').value = index;
+    document.getElementById('evc-name').value = ev.name || '';
+    document.getElementById('evc-type').value = ev.wallbox_type || 'ha_entity';
+    document.getElementById('evc-soc-sensor').value = ev.soc_sensor || '';
+    document.getElementById('evc-capacity').value = ev.battery_capacity_kwh || 60;
+    document.getElementById('evc-max-current').value = ev.max_charge_current_a || 16;
+    document.getElementById('evc-phases').value = ev.phases || 1;
+    document.getElementById('evc-mode').value = ev.charge_mode || 'smart';
+    document.getElementById('evc-target-soc').value = ev.target_soc || 80;
+    document.getElementById('evc-switch').value = ev.switch_entity || '';
+    document.getElementById('evc-power-sensor').value = ev.power_sensor || '';
+    document.getElementById('evc-current-number').value = ev.current_number || '';
+    document.getElementById('evc-car-state').value = ev.car_state_sensor || '';
+    document.getElementById('evc-ocpp-prefix').value = ev.ocpp_entity_prefix || '';
+    toggleEVCTypeSections();
+  } catch (e) { showToast('Fehler beim Laden', true); }
+}
+
+async function saveEVConfig2() {
+  const idx = parseInt(document.getElementById('evc-edit-index').value);
+  const body = {
+    name: document.getElementById('evc-name').value,
+    wallbox_type: document.getElementById('evc-type').value,
+    soc_sensor: document.getElementById('evc-soc-sensor').value,
+    battery_capacity_kwh: parseFloat(document.getElementById('evc-capacity').value),
+    max_charge_current_a: parseInt(document.getElementById('evc-max-current').value),
+    phases: parseInt(document.getElementById('evc-phases').value),
+    charge_mode: document.getElementById('evc-mode').value,
+    target_soc: parseInt(document.getElementById('evc-target-soc').value),
+    switch_entity: document.getElementById('evc-switch').value,
+    power_sensor: document.getElementById('evc-power-sensor').value,
+    current_number: document.getElementById('evc-current-number').value,
+    car_state_sensor: document.getElementById('evc-car-state').value,
+    ocpp_entity_prefix: document.getElementById('evc-ocpp-prefix').value,
+  };
+
+  try {
+    const url = idx >= 0 ? `/api/config/ev-configs/${idx}` : '/api/config/ev-configs';
+    const method = idx >= 0 ? 'PUT' : 'POST';
+    const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) {
+      showToast('Wallbox-Konfiguration gespeichert');
+      cancelEVConfigForm();
+      loadEVConfigManager();
+    } else {
+      const err = await r.json();
+      showToast('Fehler: ' + (err.error || 'Unbekannt'), true);
+    }
+  } catch (e) { showToast('Netzwerkfehler', true); }
+}
+
+async function deleteEVConfig2(index) {
+  if (!confirm('Wallbox-Konfiguration wirklich l\u00f6schen?')) return;
+  try {
+    await fetch(`/api/config/ev-configs/${index}`, { method: 'DELETE' });
+    showToast('Wallbox-Konfiguration gel\u00f6scht');
+    loadEVConfigManager();
+  } catch (e) { showToast('Fehler', true); }
+}
+
+function cancelEVConfigForm() {
+  document.getElementById('ev-config-form-card').style.display = 'none';
 }
 
 // ============================================================================

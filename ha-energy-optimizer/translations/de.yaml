@@ -80,6 +80,9 @@ configuration:
   ev_charge_mode:
     name: E-Auto Lademodus
     description: "Standard-Ladestrategie (solar/min_solar/fast/smart/off)"
+  ev_configs:
+    name: E-Auto/Wallbox-Konfigurationen
+    description: "Liste aller konfigurierten E-Autos und Wallboxen"
   optimization_goal:
     name: Optimierungsziel
     description: "Wof\u00fcr optimiert werden soll: Kosten, Eigenverbrauch oder ausgewogen"
