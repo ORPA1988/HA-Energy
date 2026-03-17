@@ -27,6 +27,9 @@ options:
   pv_latitude: 48.0
   pv_longitude: 11.0
   pv_efficiency: 0.18
+  pv_forecast_source: "auto"
+  solcast_entity: ""
+  solcast_estimate_type: "pv_estimate"
   # --- Home Battery ---
   battery_soc_sensor: "sensor.battery_soc"
   battery_power_sensor: "sensor.battery_power"
@@ -139,6 +142,9 @@ schema:
   pv_latitude: float
   pv_longitude: float
   pv_efficiency: float
+  pv_forecast_source: list(auto|solcast|open_meteo)
+  solcast_entity: str
+  solcast_estimate_type: list(pv_estimate|pv_estimate10|pv_estimate90)
   battery_soc_sensor: str
   battery_power_sensor: str
   battery_capacity_kwh: float

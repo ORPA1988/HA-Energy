@@ -21,6 +21,15 @@ configuration:
   pv_efficiency:
     name: PV Efficiency
     description: "Solar panel efficiency factor (0.0 - 1.0, typical: 0.18)"
+  pv_forecast_source:
+    name: PV Forecast Source
+    description: "Where to get PV power forecasts: auto (Solcast first, Open-Meteo fallback), solcast, or open_meteo"
+  solcast_entity:
+    name: Solcast Entity
+    description: "Home Assistant Solcast integration entity (e.g. sensor.solcast_pv_forecast_forecast_today). Leave empty to use Open-Meteo."
+  solcast_estimate_type:
+    name: Solcast Estimate Type
+    description: "Which Solcast estimate to use: pv_estimate (50%), pv_estimate10 (conservative), pv_estimate90 (optimistic)"
   # --- Home Battery ---
   battery_soc_sensor:
     name: Battery SOC Sensor

@@ -21,6 +21,15 @@ configuration:
   pv_efficiency:
     name: PV-Effizienz
     description: "Wirkungsgrad der Solarmodule (0.0 - 1.0, typisch: 0.18)"
+  pv_forecast_source:
+    name: PV-Prognosequelle
+    description: "Woher die PV-Prognose bezogen wird: auto (Solcast zuerst, Open-Meteo Fallback), solcast oder open_meteo"
+  solcast_entity:
+    name: Solcast-Entität
+    description: "Home Assistant Solcast-Integrations-Entität (z.B. sensor.solcast_pv_forecast_forecast_today). Leer lassen für Open-Meteo."
+  solcast_estimate_type:
+    name: Solcast-Schätzungstyp
+    description: "Welche Solcast-Schätzung verwendet wird: pv_estimate (50%), pv_estimate10 (konservativ), pv_estimate90 (optimistisch)"
   # --- Hausbatterie ---
   battery_soc_sensor:
     name: Batterie-SOC-Sensor

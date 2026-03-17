@@ -75,6 +75,9 @@ class Config:
     pv_latitude: float = 48.0
     pv_longitude: float = 11.0
     pv_efficiency: float = 0.18
+    pv_forecast_source: str = "auto"  # "auto" | "solcast" | "open_meteo"
+    solcast_entity: str = ""  # e.g. "sensor.solcast_pv_forecast_forecast_today"
+    solcast_estimate_type: str = "pv_estimate"  # "pv_estimate" | "pv_estimate10" | "pv_estimate90"
 
     # Battery
     battery_soc_sensor: str = "sensor.battery_soc"
@@ -210,6 +213,7 @@ def load_config() -> Config:
     simple_fields = [
         "pv_power_sensor", "pv_forecast_kwp", "pv_orientation", "pv_tilt",
         "pv_latitude", "pv_longitude", "pv_efficiency",
+        "pv_forecast_source", "solcast_entity", "solcast_estimate_type",
         "battery_soc_sensor", "battery_power_sensor", "battery_capacity_kwh",
         "battery_charge_switch", "battery_discharge_switch",
         "battery_max_charge_w", "battery_max_discharge_w",
