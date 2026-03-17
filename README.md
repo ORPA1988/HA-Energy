@@ -8,7 +8,6 @@
 [![Lizenz](https://img.shields.io/badge/Lizenz-MIT-yellow)](LICENSE)
 
 ---
-# HA Energy Optimizer
 
 > Intelligentes Home-Energy-Management-System (HEMS) als Home Assistant Add-on.
 > Kombiniert die besten Konzepte aus EVCC, EOS und EMHASS in einer einheitlichen Plattform mit dreistufiger Optimierung und Live-Dashboard.
