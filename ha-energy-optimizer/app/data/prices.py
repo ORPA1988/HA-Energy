@@ -244,7 +244,9 @@ class PriceFetcher:
         prices_ct = []
         for entry in data.get("data", []):
             # marketprice in EUR/MWh → ct/kWh
-            prices_ct.append(entry["marketprice"] / 10.0)
+            mp = entry.get("marketprice")
+            if mp is not None:
+                prices_ct.append(float(mp) / 10.0)
 
         if not prices_ct:
             return await self._fetch_fixed()
@@ -294,7 +296,9 @@ class PriceFetcher:
         for day in ["today", "tomorrow"]:
             for entry in price_info.get(day, []):
                 # Tibber gives EUR/kWh → ct/kWh
-                prices_ct.append(entry["total"] * 100.0)
+                total = entry.get("total")
+                if total is not None:
+                    prices_ct.append(float(total) * 100.0)
 
         if not prices_ct:
             return await self._fetch_fixed()
