@@ -7,7 +7,7 @@ from typing import Optional
 from config import get_config
 from data.collector import DataCollector
 from devices.goe import get_goe_charger
-from devices.wallbox import WallboxInterface, HAEntityWallbox, WallboxCarState
+from devices.wallbox import WallboxInterface, HAEntityWallbox, OCPPWallbox, WallboxCarState
 from ha_client import get_ha_client
 from models import CarState, EnergyState, EVChargeMode, GoeStatus
 
@@ -38,9 +38,12 @@ class RealtimeController:
         self._ha = get_ha_client()
         self._goe = get_goe_charger()
         self._wallbox: Optional[WallboxInterface] = None
+        self._wallboxes: dict[str, WallboxInterface] = {}  # Multi-EV: name → wallbox
         self._collector = DataCollector()
         self._last_current_a: int = 0
+        self._last_currents: dict[str, int] = {}  # Multi-EV: name → last current
         self._charging_active: bool = False
+        self._charging_states: dict[str, bool] = {}  # Multi-EV: name → active
         # Smart mode: injected by coordinator
         self.smart_current_a: int = 0
         self.smart_enabled: bool = False
@@ -59,6 +62,32 @@ class RealtimeController:
                 phases=self._cfg.goe_phases,
             )
         return self._wallbox
+
+    def _get_wallboxes(self) -> dict[str, WallboxInterface]:
+        """Build wallbox instances from ev_configs (lazy init)."""
+        if self._wallboxes:
+            return self._wallboxes
+        for ev in self._cfg.ev_configs:
+            if ev.wallbox_type == "goe" and ev.use_global_goe:
+                continue  # Uses legacy go-e path
+            if ev.wallbox_type == "ha_entity" and ev.switch_entity:
+                self._wallboxes[ev.name] = HAEntityWallbox(
+                    name=ev.name,
+                    switch_entity=ev.switch_entity,
+                    power_sensor=ev.power_sensor,
+                    current_number=ev.current_number,
+                    car_state_sensor=ev.car_state_sensor,
+                    max_current_a=ev.max_charge_current_a,
+                    phases=ev.phases,
+                )
+            elif ev.wallbox_type == "ocpp" and ev.ocpp_entity_prefix:
+                self._wallboxes[ev.name] = OCPPWallbox(
+                    name=ev.name,
+                    entity_prefix=ev.ocpp_entity_prefix,
+                    max_current_a=ev.max_charge_current_a,
+                    phases=ev.phases,
+                )
+        return self._wallboxes
 
     def compute_surplus(self, pv_w: float, house_load_w: float, battery_power_w: float) -> float:
         """
@@ -215,6 +244,65 @@ class RealtimeController:
             "ev_charge_current_a", target_a, "A",
             {"mode": mode.value, "surplus_w": round(state.surplus_w, 0)},
         )
+
+        # Multi-EV: control additional wallboxes from ev_configs
+        wallboxes = self._get_wallboxes()
+        if wallboxes:
+            await self._run_multi_ev(state, wallboxes)
+
+    async def _run_multi_ev(self, state: EnergyState, wallboxes: dict[str, WallboxInterface]) -> None:
+        """Control additional wallboxes from ev_configs using LP schedule data."""
+        for name, wb in wallboxes.items():
+            ev_cfg = next((e for e in self._cfg.ev_configs if e.name == name), None)
+            if not ev_cfg:
+                continue
+
+            mode = EVChargeMode(ev_cfg.charge_mode)
+            if mode == EVChargeMode.OFF:
+                if self._charging_states.get(name, False):
+                    await wb.set_enabled(False)
+                    self._charging_states[name] = False
+                continue
+
+            # Read EV SOC from sensor if available
+            ev_soc = None
+            if ev_cfg.soc_sensor:
+                soc_raw = await self._ha.get_state(ev_cfg.soc_sensor)
+                if soc_raw:
+                    try:
+                        ev_soc = float(soc_raw["state"])
+                    except (ValueError, TypeError):
+                        pass
+
+            target_a = self.get_ev_setpoint(
+                surplus_w=state.surplus_w,
+                mode=mode,
+                ev_soc=ev_soc,
+                target_soc=ev_cfg.target_soc,
+                phases=ev_cfg.phases,
+            )
+
+            was_active = self._charging_states.get(name, False)
+            if target_a == 0 and was_active:
+                await wb.set_enabled(False)
+                self._charging_states[name] = False
+                logger.debug("EV '%s' charging stopped", name)
+            elif target_a > 0:
+                if not was_active:
+                    await wb.set_enabled(True)
+                    self._charging_states[name] = True
+                last = self._last_currents.get(name, 0)
+                if target_a != last:
+                    await wb.set_current(target_a)
+                    self._last_currents[name] = target_a
+                    logger.debug("EV '%s' current: %dA → %dA", name, last, target_a)
+
+            # Publish per-EV sensor
+            prefix = name.lower().replace(" ", "_").replace("-", "_")
+            await self._ha.publish_sensor(
+                f"{prefix}_charge_current_a", target_a, "A",
+                {"mode": mode.value},
+            )
 
 
 # Global singleton
