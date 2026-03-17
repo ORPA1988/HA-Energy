@@ -156,6 +156,10 @@ class Config:
     # Deferrable Loads
     deferrable_loads: list[DeferrableLoad] = field(default_factory=list)
 
+    # EV surplus thresholds (hysteresis to prevent flapping)
+    ev_surplus_start_threshold_w: int = 1400  # ~6A at 230V, start solar charging
+    ev_surplus_stop_threshold_w: int = 1000   # stop solar charging below this
+
     # Operation mode
     read_only: bool = True  # Default: safe mode on first start, no switching/control
 
@@ -231,6 +235,7 @@ def load_config() -> Config:
         "ev_min_charge_current_a", "ev_max_charge_current_a",
         "ev_allow_battery_to_charge_ev", "ev_allow_grid_to_charge_ev",
         "ev_combined_charge_threshold_ct",
+        "ev_surplus_start_threshold_w", "ev_surplus_stop_threshold_w",
         "read_only",
         "optimizer_backend", "optimization_goal", "optimization_interval_minutes",
         "long_term_plan_interval_hours", "peak_shaving_limit_w",

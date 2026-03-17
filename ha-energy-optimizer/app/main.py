@@ -524,6 +524,21 @@ if static_dir.exists():
 # API endpoints
 # ---------------------------------------------------------------------------
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker HEALTHCHECK and monitoring."""
+    state = app_state.current_state
+    return {
+        "status": "ok",
+        "has_state": state is not None,
+        "has_schedule": app_state.current_schedule is not None,
+        "has_plan": app_state.current_plan is not None,
+        "read_only": app_state.cfg.read_only,
+        "uptime_samples": len(app_state._history),
+        "ws_clients": len(app_state._ws_clients),
+    }
+
+
 @app.get("/")
 async def dashboard():
     index_file = static_dir / "index.html"

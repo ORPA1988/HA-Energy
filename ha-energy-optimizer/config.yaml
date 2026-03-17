@@ -90,6 +90,8 @@ options:
   ev_allow_battery_to_charge_ev: true
   ev_allow_grid_to_charge_ev: true
   ev_combined_charge_threshold_ct: 15.0
+  ev_surplus_start_threshold_w: 1400
+  ev_surplus_stop_threshold_w: 1000
   # --- EV Charging Windows ---
   ev_charging_windows:
     - name: "Nacht"
@@ -193,6 +195,8 @@ schema:
   ev_allow_battery_to_charge_ev: bool
   ev_allow_grid_to_charge_ev: bool
   ev_combined_charge_threshold_ct: float
+  ev_surplus_start_threshold_w: int
+  ev_surplus_stop_threshold_w: int
   ev_charging_windows:
     - name: str
       available_from: str

@@ -111,17 +111,23 @@ class HAEntityWallbox(WallboxInterface):
             if self._session_sensor:
                 session_kwh = await self._ha.get_state_value(self._session_sensor, 0.0)
 
-            # Determine car state
+            # Determine car state — match against known keywords in multiple languages
+            # Uses substring matching for broader compatibility with different wallbox integrations
+            _CHARGING_KEYWORDS = ("charging", "laden", "chargement", "caricamento")
+            _READY_KEYWORDS = ("connected", "plugged", "ready", "verbunden", "bereit",
+                               "preparing", "suspended", "waiting", "wartend")
+            _DONE_KEYWORDS = ("complete", "done", "fertig", "finishing", "finished", "full", "voll")
+
             car_state = WallboxCarState.NONE
             if self._car_state_sensor:
                 state_data = await self._ha.get_state(self._car_state_sensor)
                 if state_data:
-                    raw = state_data.get("state", "").lower()
-                    if raw in ("charging", "laden"):
+                    raw = state_data.get("state", "").lower().strip()
+                    if any(kw in raw for kw in _CHARGING_KEYWORDS):
                         car_state = WallboxCarState.CHARGING
-                    elif raw in ("connected", "plugged", "ready", "verbunden", "bereit"):
+                    elif any(kw in raw for kw in _READY_KEYWORDS):
                         car_state = WallboxCarState.READY
-                    elif raw in ("complete", "done", "fertig"):
+                    elif any(kw in raw for kw in _DONE_KEYWORDS):
                         car_state = WallboxCarState.DONE
             elif power_w > 50:
                 car_state = WallboxCarState.CHARGING

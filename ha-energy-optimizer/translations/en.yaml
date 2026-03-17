@@ -188,6 +188,12 @@ configuration:
   ev_combined_charge_threshold_ct:
     name: Combined Charge Threshold (ct/kWh)
     description: "Use grid+solar combined charging when price is below this threshold"
+  ev_surplus_start_threshold_w:
+    name: Surplus Start Threshold (W)
+    description: "Minimum solar surplus to start EV charging in solar mode (hysteresis)"
+  ev_surplus_stop_threshold_w:
+    name: Surplus Stop Threshold (W)
+    description: "Stop EV solar charging when surplus drops below this value"
   ev_charging_windows:
     name: EV Charging Windows
     description: "List of time windows when EV charging is allowed"

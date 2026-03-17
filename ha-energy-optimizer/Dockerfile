@@ -43,3 +43,7 @@ EXPOSE 8080
 # Ensure service scripts are executable
 RUN chmod +x /etc/services.d/energy-optimizer/run \
     && chmod +x /etc/services.d/energy-optimizer/finish
+
+# Health check for container monitoring
+HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
+    CMD wget -q -O /dev/null http://localhost:8080/health || exit 1

@@ -188,6 +188,12 @@ configuration:
   ev_combined_charge_threshold_ct:
     name: Kombiniert-Laden Schwelle (ct/kWh)
     description: "Netz+Solar kombiniert laden wenn Preis unter diesem Schwellwert"
+  ev_surplus_start_threshold_w:
+    name: Überschuss-Startschwelle (W)
+    description: "Minimaler Solarüberschuss zum Starten des E-Auto-Ladens im Solarmodus (Hysterese)"
+  ev_surplus_stop_threshold_w:
+    name: Überschuss-Stoppschwelle (W)
+    description: "E-Auto-Solarladen stoppen wenn Überschuss unter diesen Wert fällt"
   ev_charging_windows:
     name: E-Auto Ladefenster
     description: "Liste der Zeitfenster in denen das E-Auto geladen werden darf"
