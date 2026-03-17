@@ -140,7 +140,7 @@ class AppState:
             )
             self.current_state = state
 
-            # Merge go-e data
+            # Merge wallbox data (go-e native or generic wallbox)
             goe_status = await self.goe.get_status()
             if goe_status:
                 state.ev_car_state = goe_status.car_state
@@ -148,6 +148,17 @@ class AppState:
                 state.ev_session_kwh = goe_status.energy_kwh_session
                 state.ev_charge_current_a = goe_status.current_a
                 await self.goe.publish_to_ha(goe_status)
+            else:
+                # Try generic wallbox
+                wb = self.realtime._get_wallbox()
+                if wb:
+                    wb_status = await wb.get_status()
+                    if wb_status:
+                        state.ev_charge_power_w = wb_status.power_w
+                        state.ev_session_kwh = wb_status.energy_kwh_session
+                        state.ev_charge_current_a = wb_status.current_a
+                        if hasattr(wb, 'publish_to_ha'):
+                            await wb.publish_to_ha(wb_status)
 
             # Balancing tick
             await self.balancer.tick(state.battery_soc_percent)
