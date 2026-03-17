@@ -8,323 +8,387 @@
 [![Lizenz](https://img.shields.io/badge/Lizenz-MIT-yellow)](LICENSE)
 
 ---
+# HA Energy Optimizer
 
-## Schnellstart
+> Intelligentes Home-Energy-Management-System (HEMS) als Home Assistant Add-on.
+> Kombiniert die besten Konzepte aus EVCC, EOS und EMHASS in einer einheitlichen Plattform mit dreistufiger Optimierung und Live-Dashboard.
 
-[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FORPA1988%2FHA-Energy)
-
-**Oder manuell:**
-1. Home Assistant -> **Einstellungen** -> **Add-ons** -> **Add-on Store**
-2. Oben rechts: **&#8942;** -> **Repositories** -> URL einfuegen: `https://github.com/ORPA1988/HA-Energy`
-3. Seite neu laden -> **HA Energy Optimizer** installieren -> **Starten**
-4. Das Dashboard oeffnet sich automatisch im HA-Seitenmenü
-
-> **Tipp:** Beim ersten Start ist `read_only: true` und `operation_mode: stopped` voreingestellt — das Setup kann gefahrlos getestet werden!
-
----
-
-## Was ist HA Energy Optimizer?
-
-Ein vollstaendiges **Home-Energy-Management-System (HEMS)** als Home Assistant Add-on. Es vereint die besten Konzepte aus [EVCC](https://evcc.io/), [EOS](https://github.com/josepowera/eos) und [EMHASS](https://github.com/davidusb-geek/emhass) in einer einzigen intelligenten Plattform — mit dreistufiger Optimierung, Live-Dashboard und umfassenden Hardware-Integrationen.
+**Version 0.2.0** · [Changelog](#changelog) · [Installation](#installation) · [Konfiguration](#konfiguration)
 
 ---
 
 ## Inhaltsverzeichnis
 
-1. [Funktionsuebersicht](#funktionsuebersicht)
-2. [Systemarchitektur](#systemarchitektur)
-3. [Voraussetzungen](#voraussetzungen)
-4. [Installation](#installation)
-5. [Konfiguration](#konfiguration)
-   - [PV-Anlage](#pv-anlage)
-   - [Hausbatterie](#hausbatterie)
-   - [Batterie-Balancing](#batterie-balancing)
-   - [Stromnetz](#stromnetz)
-   - [Strompreise](#strompreise)
-   - [go-e Wallbox](#go-e-wallbox)
-   - [Elektrofahrzeug (EV)](#elektrofahrzeug-ev)
-   - [Steuerbare Lasten](#steuerbare-lasten)
-   - [Betriebsmodus](#betriebsmodus)
-   - [Optimierung](#optimierung)
-   - [Benachrichtigungen](#benachrichtigungen)
-6. [Dashboard](#dashboard)
-7. [Optimierungsstrategien](#optimierungsstrategien)
-8. [Strompreisquellen](#strompreisquellen)
-9. [Hardware-Integrationen](#hardware-integrationen)
-10. [API-Endpunkte](#api-endpunkte)
-11. [Read-Only Modus (Test-Modus)](#read-only-modus-test-modus)
-12. [MCP-Server (KI-Integration)](#mcp-server-ki-integration)
-13. [Weitere Installationsmethoden](#weitere-installationsmethoden)
-14. [Fehlerbehebung](#fehlerbehebung)
-15. [Performance-Empfehlungen fuer Raspberry Pi 4](#performance-empfehlungen-fuer-raspberry-pi-4)
-16. [Entwicklung & Beitrag](#entwicklung--beitrag)
-17. [Changelog](#changelog)
+- [Features](#features)
+- [Systemarchitektur](#systemarchitektur)
+- [Voraussetzungen](#voraussetzungen)
+- [Installation](#installation)
+- [Konfiguration](#konfiguration)
+  - [PV-Anlage](#pv-anlage)
+  - [Hausbatterie](#hausbatterie)
+  - [Batterie-Balancing](#batterie-balancing)
+  - [Netz](#netz)
+  - [Strompreise](#strompreise)
+  - [go-e Wallbox](#go-e-wallbox)
+  - [E-Auto / EV-Laden](#e-auto--ev-laden)
+  - [Ladefenster](#ladefenster)
+  - [Steuerbare Verbraucher](#steuerbare-verbraucher)
+  - [Betriebsmodus](#betriebsmodus)
+  - [Optimierung](#optimierung)
+  - [Benachrichtigungen](#benachrichtigungen)
+- [Dashboard](#dashboard)
+- [Optimierungsstrategie](#optimierungsstrategie)
+- [Strompreisquellen](#strompreisquellen)
+- [Hardware-Integrationen](#hardware-integrationen)
+- [API-Endpunkte](#api-endpunkte)
+- [Read-Only-Modus](#read-only-modus)
+- [MCP-Server (KI-Integration)](#mcp-server-ki-integration)
+- [Fehlerbehebung](#fehlerbehebung)
+- [Performance-Tipps (Raspberry Pi)](#performance-tipps-raspberry-pi)
+- [Entwicklung und Mitarbeit](#entwicklung-und-mitarbeit)
+- [Changelog](#changelog)
+- [Lizenz](#lizenz)
 
 ---
 
-## Funktionsuebersicht
+## Features
 
-| Funktion | Beschreibung |
-|---|---|
-| **PV-Eigenverbrauch** | Maximiert den Eigenverbrauch der Solaranlage durch intelligente Last- und Batteriesteuerung |
-| **Batteriesteuerung** | Optimales Laden/Entladen der Hausbatterie basierend auf Preisen, Prognosen und Verbrauch |
-| **EV-Ladeoptimierung** | EVCC-artige Echtzeit-Regelung der Wallbox — solar, guenstig oder schnell |
-| **Dreistufige Optimierung** | Realtime (30 s), Stundenbasis (LP-Solver) und 48-h-Planung (genetischer Algorithmus) |
-| **Dynamische Strompreise** | ENTSO-E, Tibber, aWATTar, EPEX Spot, EPEX-Entity, HA-Sensor oder Festpreis |
-| **PV-Prognose** | 48-h-Ertragsprognose via Open-Meteo (kostenlos) oder Solcast |
-| **Batterie-Balancing** | Automatische oder geplante Volllade-Zyklen zur Zellausgleichung |
-| **Multi-Wallbox** | Unterstuetzung mehrerer Wallboxen (go-e lokal/Cloud, HA-Entity, OCPP) |
-| **EMHASS-Backend** | Optionaler EMHASS-LP-Solver als Alternative zum eingebauten Optimizer |
-| **Live-Dashboard** | Echtzeit-Visualisierung aller Energiefluesse, Preise und Zeitplaene via WebSocket |
-| **Lastzerlegung** | Visualisierung der Grundlast vs. steuerbare Lasten im Dashboard |
-| **Benachrichtigungen** | Push-Nachrichten bei guenstigen Ladezeiten, Balancing-Ereignissen und vollem EV |
-| **HA-Integration** | Native Integration mit Ingress-Panel, Supervisor-API und allen HA-Entitaeten |
-| **Read-Only Modus** | Sicheres Testen des Setups ohne aktive Schalt- und Regelvorgaenge |
-| **MCP-Server** | KI-gestuetzte Konfiguration und Analyse via Claude Code, Cursor oder andere MCP-Clients |
+- **PV-Eigenverbrauchsmaximierung** – Intelligente Steuerung von Lasten und Batterie, um möglichst viel Solarstrom selbst zu nutzen
+- **Batterie-Management** – Optimale Lade-/Entladeplanung mit SOC-Überwachung und automatischem Balancing
+- **EV-Ladeoptimierung** – EVCC-ähnliche Echtzeit-Stromregelung für Wallboxen mit Smart-, PV- und Schnelllade-Modus
+- **Dreistufige Optimierung** – Realtime (30 s), stündlich (LP-Solver) und 48-h-Planung (genetischer Algorithmus)
+- **Dynamische Strompreise** – ENTSO-E, Tibber, aWATTar, EPEX Spot, HA-Sensor oder Festpreis
+- **PV-Prognose** – Via Open-Meteo (kostenlos) oder Solcast (genauer)
+- **Batterie-Balancing** – Automatische oder geplante Volllade-Zyklen zur Kalibrierung
+- **Multi-Wallbox-Support** – go-e (lokal/Cloud), HA-Entity, OCPP
+- **Live-Dashboard** – WebSocket-basiert mit Chart.js-Visualisierung
+- **Read-Only-Testmodus** – Sicheres Ausprobieren ohne aktive Gerätesteuerung
+- **MCP-Server** – 17 Tools für KI-gestützte Konfiguration (Claude Code, Cursor etc.)
+- **Steuerbare Verbraucher** – Waschmaschine, Spülmaschine u.a. in günstige Zeitfenster verschieben
 
 ---
 
 ## Systemarchitektur
 
 ```
-+----------------------------------------------------------------+
-|                    HA Energy Optimizer                          |
-|                                                                |
-|  +--------------+  +--------------+  +----------------------+  |
-|  | Datenbeschaf-|  | Optimierungs-|  |    Hardware-          |  |
-|  |   fung       |  |   Engines    |  |    Integrationen      |  |
-|  |              |  |              |  |                       |  |
-|  | - collector  |  | - realtime   |  | - go-e Wallbox        |  |
-|  |   (HA Sensor-|  |   (30s, EVCC)|  |   (lokal + Cloud)     |  |
-|  |    Abfrage)  |  | - linear     |  | - HA-Entity Wallbox   |  |
-|  | - prices     |  |   (stuendl.  |  | - OCPP Wallbox        |  |
-|  |   (7 Quellen)|  |    LP-Solver)|  | - battery_balancer    |  |
-|  | - forecast   |  | - genetic    |  |   (LiFePO4/Blei)     |  |
-|  |   (Open-Meteo|  |   (48h Plan) |  +----------------------+  |
-|  |    + Solcast) |  | - emhass     |                            |
-|  +--------------+  |   (optional) |  +----------------------+  |
-|                    | - coordinator|  |   Web-Dashboard        |  |
-|  +--------------+  +--------------+  |   (Chart.js +          |  |
-|  |   Home Assistant REST API     |   |    WebSocket)          |  |
-|  |   (Supervisor Token Auth)     |   +----------------------+  |
-|  +-------------------------------+                             |
-+----------------------------------------------------------------+
+┌─────────────────────────────────────────────────────┐
+│                  HA Energy Optimizer                 │
+│                                                     │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────────┐ │
+│  │  Daten   │  │ Optimizer│  │     Geräte        │ │
+│  │          │  │          │  │                   │ │
+│  │collector │  │ realtime │  │ goe.py            │ │
+│  │prices    │  │ linear   │  │ wallbox.py        │ │
+│  │forecast  │  │ genetic  │  │ battery_balancer  │ │
+│  │load_dec. │  │ ev_strat.│  │                   │ │
+│  │          │  │ coord.   │  │                   │ │
+│  └────┬─────┘  └────┬─────┘  └────────┬──────────┘ │
+│       │              │                 │            │
+│  ┌────┴──────────────┴─────────────────┴──────────┐ │
+│  │              ha_client.py (REST API)            │ │
+│  └────────────────────┬───────────────────────────┘ │
+│                       │                             │
+│  ┌────────────────────┴───────────────────────────┐ │
+│  │         scheduler.py + main.py                 │ │
+│  └────────────────────┬───────────────────────────┘ │
+│                       │                             │
+│  ┌──────────┐  ┌──────┴─────┐  ┌────────────────┐  │
+│  │Dashboard │  │  REST API  │  │  MCP-Server     │  │
+│  │(Web-GUI) │  │  :8080     │  │  (KI-Tools)     │  │
+│  └──────────┘  └────────────┘  └────────────────┘  │
+└─────────────────────────────────────────────────────┘
+           │
+    ┌──────┴──────┐
+    │Home Assistant│
+    │   REST API   │
+    └─────────────┘
 ```
 
-### Komponenten im Ueberblick
+### Modul-Übersicht
 
-| Modul | Datei | Funktion |
-|---|---|---|
-| **Datenerfassung** | `data/collector.py` | Liest HA-Sensoren alle 30 s und berechnet abgeleitete Groessen |
-| **Preisabfrage** | `data/prices.py` | Holt 48-h-Preisvorhersage aus konfigurierbarer Quelle |
-| **PV-Prognose** | `data/forecast.py` | Berechnet stuendliche Erzeugung via Open-Meteo oder Solcast |
-| **Lastzerlegung** | `data/load_decomposition.py` | Berechnet Grundlast vs. steuerbare Lasten |
-| **Echtzeit-Regler** | `optimizer/realtime.py` | Stellt Ladestrom der Wallbox sekundengenau nach |
-| **LP-Optimierer** | `optimizer/linear.py` | Minimiert Energiekosten fuer die naechsten 24 h |
-| **EMHASS-Backend** | `optimizer/emhass_backend.py` | Optionaler EMHASS-LP-Solver |
-| **Genetischer Planer** | `optimizer/genetic.py` | Erstellt strategischen 48-h-Plan via genetischem Algorithmus |
-| **EV-Strategie** | `optimizer/ev_strategy.py` | Ermittelt optimale Ladefenster fuer das EV |
-| **Koordinator** | `optimizer/coordinator.py` | Fusioniert alle drei Optimierer zu finalen Steuerbefehlen |
-| **HA-Client** | `app/ha_client.py` | Async-HTTP-Client fuer Home Assistant REST API |
-| **go-e Integration** | `devices/goe.py` | Lokale und Cloud-API der go-e Wallbox |
-| **Wallbox-Abstraktion** | `devices/wallbox.py` | Einheitliche Schnittstelle fuer verschiedene Wallbox-Typen |
-| **Batterie-Balancing** | `devices/battery_balancer.py` | Steuerung der Volllade-Zyklen |
-| **MCP-Server** | `app/mcp_server.py` | KI-Integration (Claude Code, Cursor) |
-| **Web-Dashboard** | `app/static/index.html` | Echtzeit-Dashboard mit Chart.js und WebSocket |
+| Modul | Datei | Beschreibung |
+|-------|-------|-------------|
+| **Daten-Collector** | `data/collector.py` | Sammelt HA-Sensorwerte alle 30 Sekunden |
+| **Strompreise** | `data/prices.py` | 48-h-Preisprognose aus 7 verschiedenen Quellen |
+| **PV-Prognose** | `data/forecast.py` | PV-Erzeugungsprognose via Open-Meteo oder Solcast |
+| **Lastzerlegung** | `data/load_decomposition.py` | Trennt Grundlast von steuerbaren Verbrauchern |
+| **Realtime-Controller** | `optimizer/realtime.py` | Wallbox-Stromregelung alle 30 Sekunden |
+| **LP-Solver** | `optimizer/linear.py` | Stündliche Kostenminimierung (24 h) |
+| **Genetischer Planer** | `optimizer/genetic.py` | 48-h-Strategieplanung |
+| **EV-Strategie** | `optimizer/ev_strategy.py` | Lademodus-Logik für Elektrofahrzeuge |
+| **Coordinator** | `optimizer/coordinator.py` | Orchestriert alle Optimierungsebenen |
+| **EMHASS-Backend** | `optimizer/emhass_backend.py` | Optionaler EMHASS-Optimizer als Drop-in |
+| **go-e Integration** | `devices/goe.py` | go-e Wallbox (lokal + Cloud API) |
+| **Wallbox-Abstraktion** | `devices/wallbox.py` | Einheitliche Schnittstelle für alle Wallbox-Typen |
+| **Batterie-Balancer** | `devices/battery_balancer.py` | Volllade-Zyklen zur Batterie-Kalibrierung |
+| **HA-Client** | `app/ha_client.py` | Home Assistant REST API Client |
+| **MCP-Server** | `app/mcp_server.py` | KI-Integrations-Schnittstelle (17 Tools) |
+| **Scheduler** | `app/scheduler.py` | Zeitplanung aller Optimierungs-Zyklen |
+| **Dashboard** | `app/static/index.html` | Live-Web-Dashboard mit Chart.js |
 
 ---
 
 ## Voraussetzungen
 
 ### Hardware
-- **Raspberry Pi 4** mit mindestens 4 GB RAM (8 GB empfohlen)
-- Alternativ: Intel/AMD x64 System oder andere ARM-Plattformen (armv7, armhf)
-- **SD-Karte/SSD:** Mindestens 32 GB fuer Home Assistant OS + Add-ons
+
+- **Minimum:** Raspberry Pi 4 mit 4 GB RAM
+- **Empfohlen:** Raspberry Pi 4 mit 8 GB RAM oder Intel/AMD x64-System
+- **Architekturen:** amd64, aarch64, armv7, armhf
 
 ### Software
-- **Home Assistant OS** oder **Home Assistant Supervised** (mindestens Version 2024.1)
-- Home Assistant **Supervisor** (fuer Add-on-Unterstuetzung)
-- Konfigurierte HA-Entitaeten fuer:
-  - PV-Erzeugung (Sensor in Watt)
-  - Hausbatterie (SOC-Sensor in %, Leistungssensor in W)
-  - Netzbezug/-einspeisung (Sensor in W, positiv = Bezug)
-  - (Optional) EV-Batteriestand (SOC-Sensor in %)
-- Internetverbindung fuer externe Preisquellen und PV-Prognose
+
+- Home Assistant OS oder Supervised (Version 2024.1 oder neuer)
+- Home Assistant Supervisor
+- Konfigurierte HA-Entitäten für:
+  - PV-Erzeugung (Sensor, z. B. `sensor.inverter_pv_power`)
+  - Batterie-SOC und -Leistung
+  - Netz-Leistung (Import/Export)
+  - Optional: EV-Batteriestand, Wallbox-Entitäten
 
 ### Getestete Plattformen
-- Raspberry Pi 4 (8 GB) — aarch64/armv7
-- Intel NUC — amd64
-- Generic x86_64 PC
-- Home Assistant Yellow
+
+- Raspberry Pi 4 (4 GB / 8 GB) mit Home Assistant OS
+- Intel NUC / x86-Mini-PC mit Home Assistant Supervised
+- Deye/Sunsynk Hybrid-Wechselrichter
+- go-eCharger HOME+ (lokal und Cloud)
 
 ---
 
 ## Installation
 
-### 1. Repository als Add-on-Quelle hinzufuegen
+### Methode 1: Über den Add-on-Store (empfohlen)
 
-1. In Home Assistant: **Einstellungen -> Add-ons -> Add-on Store**
-2. Oben rechts auf die **drei Punkte** klicken -> **Repositories**
-3. URL eingeben:
+1. Öffne Home Assistant → **Einstellungen** → **Add-ons** → **Add-on-Store**
+2. Klicke auf das **⋮-Menü** (oben rechts) → **Repositories**
+3. Füge folgende URL hinzu:
    ```
    https://github.com/ORPA1988/HA-Energy
    ```
-4. **Hinzufuegen** klicken und die Seite neu laden
+4. Klicke auf **Hinzufügen** und schließe den Dialog
+5. Suche nach **HA Energy Optimizer** und klicke auf **Installieren**
+6. Nach der Installation: Tab **Konfiguration** öffnen und Werte anpassen
+7. Add-on starten
 
-### 2. Add-on installieren
+### Methode 2: Manuelle Installation
 
-1. Im Add-on Store nach **"HA Energy Optimizer"** suchen
-2. **Installieren** klicken (Download-Dauer je nach Architektur 2-10 Minuten)
-3. Nach der Installation: **Konfiguration** oeffnen und Einstellungen anpassen (siehe [Konfiguration](#konfiguration))
-4. **Starten** klicken
+1. Repository klonen:
+   ```bash
+   cd /addons
+   git clone https://github.com/ORPA1988/HA-Energy.git
+   ```
+2. Home Assistant → **Einstellungen** → **Add-ons** → **Add-on-Store** → Aktualisieren
+3. **HA Energy Optimizer** erscheint unter „Lokale Add-ons"
 
-**Raspberry Pi 4 Hinweise:**
-- Installation dauert auf RPi4 ca. 5-8 Minuten (SciPy/NumPy werden kompiliert)
-- Unterstuetzte Architekturen: `aarch64` (64-bit) oder `armv7` (32-bit)
-- Empfohlen: Home Assistant OS auf 64-bit fuer beste Performance
+### Sichere Standardwerte
 
-### 3. Dashboard aufrufen
+Das Add-on startet mit sicheren Defaults:
+- `read_only: true` – Keine aktive Gerätesteuerung
+- `operation_mode: stopped` – Optimierung läuft nicht automatisch
 
-Nach dem Start ist das Dashboard verfuegbar unter:
-- **Home Assistant Ingress:** Seitenleiste -> **Energy Optimizer**
-- **Direktaufruf:** `http://<HA-IP>:8080`
+So kannst du alles in Ruhe konfigurieren und testen, bevor du das System scharf schaltest.
 
 ---
 
 ## Konfiguration
 
-Die Konfiguration erfolgt ueber die Add-on-Oberflaeche in Home Assistant (mit Entity-Picker und bedingten Feldern). Alle Optionen koennen auch direkt in der YAML-Konfigurationsdatei bearbeitet werden.
+Die Konfiguration erfolgt über den Tab **Konfiguration** im Add-on oder als YAML. Nachfolgend alle Sektionen mit Erklärungen.
 
 ### PV-Anlage
 
-| Option | Standard | Beschreibung |
-|---|---|---|
-| `pv_power_sensor` | `sensor.solar_power` | HA-Entitaet fuer aktuelle PV-Leistung (W) |
-| `pv_forecast_kwp` | `10.0` | Installierte PV-Spitzenleistung in kWp |
-| `pv_orientation` | `180` | Ausrichtung in Grad (0=N, 90=O, 180=S, 270=W) |
-| `pv_tilt` | `30` | Neigungswinkel der Module in Grad |
-| `pv_latitude` | `48.0` | Breitengrad des Standorts |
-| `pv_longitude` | `11.0` | Laengengrad des Standorts |
-| `pv_efficiency` | `0.18` | Wirkungsgrad der Module (0.0-1.0) |
-| `pv_forecast_source` | `auto` | Prognosequelle: `auto`, `solcast`, `open_meteo` |
-| `solcast_entity` | `""` | HA-Entitaet fuer Solcast-Prognose (wenn `solcast` gewaehlt) |
-| `solcast_estimate_type` | `pv_estimate` | Solcast-Schaetztyp: `pv_estimate`, `pv_estimate10`, `pv_estimate90` |
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `pv_power_sensor` | string | `""` | HA-Entität für aktuelle PV-Leistung (W) |
+| `pv_forecast_kwp` | float | `10.0` | Installierte PV-Leistung in kWp |
+| `pv_orientation` | int | `180` | Azimut in Grad (180 = Süd) |
+| `pv_tilt` | int | `30` | Neigungswinkel in Grad |
+| `pv_latitude` | float | `48.21` | Breitengrad des Standorts |
+| `pv_longitude` | float | `16.37` | Längengrad des Standorts |
+| `pv_efficiency` | float | `0.18` | Modulwirkungsgrad (0.15–0.22 typisch) |
+| `pv_forecast_source` | string | `"auto"` | Prognosequelle: `auto`, `solcast`, `openmeteo` |
+| `solcast_entity` | string | `""` | HA-Entität für Solcast-Prognose |
+| `solcast_estimate_type` | string | `"pv_estimate"` | Solcast-Schätztyp |
+
+**Beispiel:**
+```yaml
+pv_power_sensor: "sensor.inverter_pv_power"
+pv_forecast_kwp: 10.0
+pv_orientation: 180
+pv_tilt: 30
+pv_latitude: 48.229195
+pv_longitude: 13.827813
+pv_efficiency: 0.18
+pv_forecast_source: "solcast"
+solcast_entity: "sensor.solcast_pv_forecast_prognose_aktuelle_stunde"
+```
 
 ### Hausbatterie
 
-| Option | Standard | Beschreibung |
-|---|---|---|
-| `battery_soc_sensor` | `sensor.battery_soc` | HA-Entitaet fuer Batterieladezustand (%) |
-| `battery_power_sensor` | `sensor.battery_power` | HA-Entitaet fuer Batterieleistung (W, positiv = Laden) |
-| `battery_capacity_kwh` | `10.0` | Nutzbare Kapazitaet der Batterie in kWh |
-| `battery_charge_switch` | `switch.battery_charge` | HA-Schalter zum Aktivieren des Ladens |
-| `battery_discharge_switch` | `switch.battery_discharge` | HA-Schalter zum Aktivieren des Entladens |
-| `battery_max_charge_w` | `3000` | Maximale Ladeleistung in Watt |
-| `battery_max_discharge_w` | `3000` | Maximale Entladeleistung in Watt |
-| `battery_min_soc` | `10` | Minimaler SOC — Entladen wird darunter gestoppt (%) |
-| `battery_reserve_soc` | `20` | Reserve-SOC fuer Notfall (%) |
-| `battery_efficiency` | `0.95` | Round-trip-Wirkungsgrad der Batterie (0.0-1.0) |
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `battery_soc_sensor` | string | `""` | SOC-Sensor (Ladestand in %) |
+| `battery_power_sensor` | string | `""` | Batterie-Leistungssensor (W) |
+| `battery_capacity_kwh` | float | `10.0` | Speicherkapazität in kWh |
+| `battery_charge_switch` | string | `""` | Switch zum Aktivieren der Netzladung |
+| `battery_discharge_switch` | string | `""` | Switch zum Aktivieren der Entladung |
+| `battery_max_charge_w` | int | `5000` | Maximale Ladeleistung in W |
+| `battery_max_discharge_w` | int | `5000` | Maximale Entladeleistung in W |
+| `battery_min_soc` | int | `10` | Minimaler SOC in % (Tiefentladeschutz) |
+| `battery_reserve_soc` | int | `15` | Reserve-SOC in % für Notfälle |
+| `battery_efficiency` | float | `0.95` | Lade-/Entladewirkungsgrad |
+
+**Beispiel (Deye/Sunsynk 25.5 kWh):**
+```yaml
+battery_soc_sensor: "sensor.inverter_battery"
+battery_power_sensor: "sensor.inverter_battery_power"
+battery_capacity_kwh: 25.5
+battery_charge_switch: "switch.inverter_battery_grid_charging"
+battery_discharge_switch: "switch.inverter"
+battery_max_charge_w: 6000
+battery_max_discharge_w: 6000
+battery_min_soc: 10
+battery_reserve_soc: 15
+battery_efficiency: 0.95
+```
 
 ### Batterie-Balancing
 
-Regelmaessige Volllade-Zyklen gleichen die Zellspannungen aus und erhoehen die Lebensdauer von LiFePO4- und Bleibatterien.
+Regelmäßige Volllade-Zyklen kalibrieren den SOC-Sensor und verlängern die Batterielebensdauer.
 
-| Option | Standard | Beschreibung |
-|---|---|---|
-| `battery_balancing_enabled` | `true` | Batterie-Balancing aktivieren/deaktivieren |
-| `battery_balancing_mode` | `auto` | Modus: `auto` (bei Abweichung), `scheduled` (Zeitplan), `manual` |
-| `battery_balancing_frequency` | `monthly` | Haeufigkeit bei `scheduled`: `daily`, `weekly`, `monthly`, `custom` |
-| `battery_balancing_custom_days` | `30` | Anzahl Tage bei `custom`-Haeufigkeit |
-| `battery_balancing_target_soc` | `100` | Ziel-SOC fuer den Balancing-Zyklus (%) |
-| `battery_balancing_hold_duration_h` | `2` | Haltezeit bei Ziel-SOC in Stunden |
-| `battery_balancing_preferred_time` | `10:00` | Bevorzugte Startzeit (HH:MM) |
-| `battery_balancing_auto_trigger_soc_deviation` | `5` | SOC-Abweichung in % fuer Auto-Ausloesung |
-| `battery_balancing_use_solar_only` | `true` | Nur Solarenergie fuer Balancing verwenden |
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `battery_balancing_enabled` | bool | `false` | Balancing aktivieren |
+| `battery_balancing_mode` | string | `"auto"` | `auto` oder `scheduled` |
+| `battery_balancing_frequency` | string | `"monthly"` | `weekly`, `monthly`, `custom` |
+| `battery_balancing_custom_days` | int | `30` | Intervall in Tagen (bei `custom`) |
+| `battery_balancing_target_soc` | int | `100` | Ziel-SOC für Balancing |
+| `battery_balancing_hold_duration_h` | int | `2` | Haltezeit bei 100 % in Stunden |
+| `battery_balancing_preferred_time` | string | `"10:00"` | Bevorzugte Startzeit |
+| `battery_balancing_auto_trigger_soc_deviation` | int | `5` | SOC-Abweichung für Auto-Trigger (%) |
+| `battery_balancing_use_solar_only` | bool | `true` | Nur mit Solarstrom balancen |
 
-### Stromnetz
+**Beispiel:**
+```yaml
+battery_balancing_enabled: true
+battery_balancing_mode: "auto"
+battery_balancing_frequency: "monthly"
+battery_balancing_target_soc: 100
+battery_balancing_hold_duration_h: 2
+battery_balancing_preferred_time: "10:00"
+battery_balancing_use_solar_only: true
+```
 
-| Option | Standard | Beschreibung |
-|---|---|---|
-| `grid_power_sensor` | `sensor.grid_power` | HA-Entitaet fuer Netzleistung (W, positiv = Bezug) |
-| `grid_max_import_w` | `0` | Maximaler Netzbezug in W (0 = unbegrenzt) |
-| `total_power_sensor` | `""` | HA-Entitaet fuer Gesamt-Hausverbrauch (W, optional) |
+### Netz
+
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `grid_power_sensor` | string | `""` | Netzleistungssensor (W, positiv = Import) |
+| `grid_max_import_w` | int | `0` | Max. Netzbezug in W (0 = unbegrenzt) |
+| `total_power_sensor` | string | `""` | Optional: Gesamtverbrauchssensor |
 
 ### Strompreise
 
-#### Preisquelle
+Das System unterstützt 7 verschiedene Preisquellen. Die Konfiguration hängt von der gewählten Quelle ab.
 
-| Option | Standard | Beschreibung |
-|---|---|---|
-| `price_source` | `entso-e` | Quelle: `entso-e`, `awattar`, `tibber`, `epex_spot`, `epex_entity`, `sensor`, `fixed` |
-| `entso_e_token` | `""` | API-Token fuer ENTSO-E Transparency Platform |
-| `entso_e_area` | `10YDE-EON------1` | Marktgebiet (z. B. DE: `10YDE-EON------1`, AT: `10YAT-APG------L`) |
-| `tibber_token` | `""` | API-Token fuer Tibber |
-| `awattar_country` | `AT` | Land fuer aWATTar: `AT` oder `DE` |
-| `epex_spot_area` | `DE-LU` | Marktgebiet fuer EPEX SPOT |
-| `epex_import_entity` | `""` | HA-Entitaet fuer EPEX-Import-Preis (bei `epex_entity`) |
-| `epex_export_entity` | `""` | HA-Entitaet fuer EPEX-Export-Preis (bei `epex_entity`) |
-| `epex_unit` | `ct/kWh` | Einheit der EPEX-Entitaet: `ct/kWh`, `EUR/MWh`, `EUR/kWh` |
-| `price_sensor_entity` | `""` | HA-Entitaet fuer Strompreis bei `sensor`-Quelle |
-| `fixed_price_ct_kwh` | `25.0` | Festpreis in ct/kWh bei `fixed`-Quelle |
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `price_source` | string | `"fixed"` | Preisquelle (siehe unten) |
+| `fixed_price_ct_kwh` | float | `25.0` | Festpreis in ct/kWh (Fallback) |
 
-#### Preisberechnung
+**Preisquellen:**
 
-| Option | Standard | Beschreibung |
-|---|---|---|
-| `price_input_is_netto` | `true` | `true` wenn der API-Preis Netto (ohne MwSt.) ist |
-| `price_vat_percent` | `19.0` | Mehrwertsteuersatz in % |
-| `price_grid_fee_source` | `fixed` | Netzentgeltquelle: `fixed` oder `entity` |
-| `price_grid_fee_fixed_ct_kwh` | `7.5` | Netzentgelt in ct/kWh (bei `fixed`) |
-| `price_grid_fee_entity` | `""` | HA-Entitaet fuer dynamisches Netzentgelt (bei `entity`) |
-| `price_supplier_markup_ct_kwh` | `2.0` | Versorgeraufschlag in ct/kWh |
-| `price_other_taxes_ct_kwh` | `0.0` | Weitere Abgaben/Steuern in ct/kWh |
-| `price_feed_in_ct_kwh` | `8.0` | Einspeiseverguetung in ct/kWh |
+| Quelle | `price_source`-Wert | Zusätzliche Felder | Authentifizierung |
+|--------|---------------------|-------------------|-------------------|
+| ENTSO-E | `"entso-e"` | `entso_e_token`, `entso_e_area` | API-Token nötig |
+| Tibber | `"tibber"` | `tibber_token` | API-Token nötig |
+| aWATTar | `"awattar"` | `awattar_country` (`AT`/`DE`) | Keine (frei) |
+| EPEX Spot (SMARD) | `"epex_spot"` | `epex_spot_area` | Keine (frei) |
+| EPEX HA-Entity | `"epex_entity"` | `epex_import_entity`, `epex_unit` | HA-Integration |
+| HA-Sensor | `"sensor"` | `price_sensor_entity` | HA-Integration |
+| Festpreis | `"fixed"` | `fixed_price_ct_kwh` | Keine |
 
-**Preisformel:**
+#### Preisberechnung (Netto/Brutto)
+
+Für österreichische und deutsche Nutzer gibt es eine integrierte Preisberechnung:
+
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `price_input_is_netto` | bool | `true` | Sind die Eingabepreise netto? |
+| `price_vat_percent` | float | `20.0` | Mehrwertsteuersatz in % |
+| `price_grid_fee_source` | string | `"fixed"` | `fixed` oder `entity` |
+| `price_grid_fee_fixed_ct_kwh` | float | `7.6` | Netzentgelt in ct/kWh |
+| `price_grid_fee_entity` | string | `""` | HA-Entität für dynamisches Netzentgelt |
+| `price_supplier_markup_ct_kwh` | float | `1.2` | Aufschlag des Versorgers in ct/kWh |
+| `price_other_taxes_ct_kwh` | float | `0.0` | Sonstige Abgaben in ct/kWh |
+| `price_feed_in_ct_kwh` | float | `8.0` | Einspeisevergütung in ct/kWh |
+
+**Formel:**
 ```
-Gesamtpreis = (API-Preis x (1 + MwSt/100)) + Netzentgelt + Versorgeraufschlag + Sonstige Abgaben
+Netto     = Marktpreis (ct/kWh)
+Brutto    = Netto × (1 + MwSt/100)
+Gesamt    = Brutto + Netzentgelt + Versorger-Aufschlag + sonstige Abgaben
+```
+
+**Beispiel (Österreich, EPEX Spot):**
+```yaml
+price_source: "epex_entity"
+epex_import_entity: "sensor.epex_spot_data_market_price"
+epex_unit: "EUR/kWh"
+price_input_is_netto: true
+price_vat_percent: 20.0
+price_grid_fee_fixed_ct_kwh: 7.6
+price_supplier_markup_ct_kwh: 1.2
+price_feed_in_ct_kwh: 8.0
 ```
 
 ### go-e Wallbox
 
-| Option | Standard | Beschreibung |
-|---|---|---|
-| `goe_enabled` | `false` | go-e Wallbox-Integration aktivieren |
-| `goe_connection_type` | `local` | Verbindungstyp: `local` (HTTP API v2) oder `cloud` |
-| `goe_local_ip` | `""` | IP-Adresse der Wallbox im lokalen Netz |
-| `goe_cloud_serial` | `""` | Seriennummer der Wallbox fuer Cloud-API |
-| `goe_cloud_token` | `""` | API-Token fuer Cloud-Zugang |
-| `goe_max_current_a` | `16` | Maximaler Ladestrom in Ampere (6-32 A) |
-| `goe_phases` | `1` | Anzahl der Phasen (1 oder 3) |
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `goe_enabled` | bool | `false` | go-e Integration aktivieren |
+| `goe_connection_type` | string | `"local"` | `local` oder `cloud` |
+| `goe_local_ip` | string | `""` | IP-Adresse der Wallbox (bei `local`) |
+| `goe_cloud_serial` | string | `""` | Seriennummer (bei `cloud`) |
+| `goe_cloud_token` | string | `""` | API-Token (bei `cloud`) |
+| `goe_max_current_a` | int | `16` | Max. Ladestrom in Ampere |
+| `goe_phases` | int | `3` | Anzahl der Phasen (1 oder 3) |
 
-### Elektrofahrzeug (EV)
+**Beispiel (lokal):**
+```yaml
+goe_enabled: true
+goe_connection_type: "local"
+goe_local_ip: "192.168.0.91"
+goe_max_current_a: 16
+goe_phases: 1
+```
 
-| Option | Standard | Beschreibung |
-|---|---|---|
-| `ev_soc_sensor` | `sensor.ev_battery_soc` | HA-Entitaet fuer EV-Batterieladezustand (%) |
-| `ev_battery_capacity_kwh` | `60.0` | Batteriekapazitaet des EV in kWh |
-| `ev_charge_mode` | `smart` | Lademodus: `solar`, `min_solar`, `fast`, `smart`, `off` |
-| `ev_min_charge_current_a` | `6` | Mindest-Ladestrom in A |
-| `ev_max_charge_current_a` | `16` | Maximaler Ladestrom in A |
-| `ev_allow_battery_to_charge_ev` | `true` | Hausbatterie darf EV laden |
-| `ev_allow_grid_to_charge_ev` | `true` | Netz darf EV laden |
-| `ev_combined_charge_threshold_ct` | `15.0` | Preisschwelle in ct/kWh fuer kombinierten Solar+Netz-Lademodus |
-| `ev_surplus_start_threshold_w` | `1400` | PV-Ueberschuss in W ab dem Solar-Laden startet |
-| `ev_surplus_stop_threshold_w` | `1000` | PV-Ueberschuss in W unter dem Solar-Laden stoppt |
+### E-Auto / EV-Laden
 
-**Lademodi:**
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `ev_soc_sensor` | string | `""` | SOC-Sensor des E-Autos (%) |
+| `ev_battery_capacity_kwh` | float | `60.0` | Akkukapazität des E-Autos in kWh |
+| `ev_charge_mode` | string | `"smart"` | Lademodus: `smart`, `pv_only`, `fast`, `off` |
+| `ev_min_charge_current_a` | int | `6` | Min. Ladestrom in Ampere |
+| `ev_max_charge_current_a` | int | `16` | Max. Ladestrom in Ampere |
+| `ev_allow_battery_to_charge_ev` | bool | `true` | Hausbatterie darf EV laden |
+| `ev_allow_grid_to_charge_ev` | bool | `true` | Netzstrom darf EV laden |
+| `ev_combined_charge_threshold_ct` | float | `15.0` | Preisgrenze für Netz+PV-Laden (ct/kWh) |
+| `ev_surplus_start_threshold_w` | int | `1400` | PV-Überschuss zum Starten (W) |
+| `ev_surplus_stop_threshold_w` | int | `1000` | PV-Überschuss zum Stoppen (W) |
 
-| Modus | Beschreibung |
-|---|---|
-| `solar` | Nur Ueberschusssolar — Laden nur wenn genug PV-Ueberschuss vorhanden |
-| `min_solar` | Mindestladung + Solar — laedt immer mit Minimum, Ueberschuss wird addiert |
-| `fast` | Schnelladen — laedt sofort mit maximaler Leistung |
-| `smart` | Intelligentes Laden — nutzt Preisoptimierung und Ladefenster |
+**Lademodi erklärt:**
+
+| Modus | Verhalten |
+|-------|-----------|
+| `smart` | Kombiniert PV-Überschuss + günstige Netzpreise, um rechtzeitig voll zu werden |
+| `pv_only` | Lädt ausschließlich mit PV-Überschuss |
+| `fast` | Lädt sofort mit maximalem Strom |
 | `off` | Laden deaktiviert |
 
-#### EV-Ladefenster
+### Ladefenster
 
-Ladefenster definieren, wann und wie das EV geladen werden soll:
+Definiere Zeitfenster, in denen das E-Auto geladen werden soll:
 
 ```yaml
 ev_charging_windows:
@@ -333,593 +397,381 @@ ev_charging_windows:
     available_until: "07:00"
     target_soc_percent: 80
     must_finish_by: "07:00"
-    priority: "cost"           # cost | solar | balanced
+    priority: "cost"          # "cost" oder "speed"
 ```
 
-Mehrere Ladefenster sind moeglich (z. B. Nacht fuer guenstige Zeiten, Mittag fuer Solarueberschuss).
+Mehrere Fenster sind möglich, z. B. ein Nacht-Fenster und ein Mittags-PV-Fenster.
 
-### Steuerbare Lasten
+### Steuerbare Verbraucher
 
-Haushaltsgeraete koennen zeitlich verschoben werden, um guenstige Strom- oder Solarzeiten zu nutzen:
+Verschiebe energieintensive Geräte in günstige Zeitfenster:
 
 ```yaml
 deferrable_loads:
   - name: "Waschmaschine"
-    switch: "switch.washing_machine"
     power_w: 2000
-    duration_h: 2.0
-    latest_end_h: 8
-    earliest_start_h: 22
-    min_soc_battery: 20
-    price_limit_ct_kwh: 20.0
-  - name: "Dishwasher"
-    switch: "switch.dishwasher"
+    duration_h: 2
+    earliest_start: "06:00"
+    latest_end: "22:00"
+    max_cost_ct_kwh: 20.0
+  - name: "Spülmaschine"
     power_w: 1800
     duration_h: 1.5
-    latest_end_h: 8
-    earliest_start_h: 22
-    min_soc_battery: 20
-    price_limit_ct_kwh: 20.0
+    earliest_start: "12:00"
+    latest_end: "06:00"
+    max_cost_ct_kwh: 18.0
 ```
-
-| Parameter | Beschreibung |
-|---|---|
-| `name` | Bezeichnung der Last |
-| `switch` | HA-Schalter-Entitaet |
-| `power_w` | Durchschnittliche Leistungsaufnahme in W |
-| `duration_h` | Benoetigte Laufzeit in Stunden |
-| `latest_end_h` | Spaeteste Endzeit (Stunde des Tages, 0-23) |
-| `earliest_start_h` | Frueheste Startzeit (Stunde des Tages, 0-23) |
-| `min_soc_battery` | Mindest-Batterie-SOC, damit die Last gestartet wird (%) |
-| `price_limit_ct_kwh` | Last wird nur gestartet wenn Preis unter diesem Wert liegt |
 
 ### Betriebsmodus
 
-| Option | Standard | Beschreibung |
-|---|---|---|
-| `read_only` | `true` | Read-Only Modus — keine aktiven Schaltbefehle |
-| `operation_mode` | `stopped` | Betriebsmodus: `stopped` (keine Optimierung) oder `running` (Vollbetrieb) |
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `read_only` | bool | `true` | `true` = nur lesen, keine Steuerung |
+| `operation_mode` | string | `"stopped"` | `stopped`, `monitoring`, `optimizing` |
+
+**Modi erklärt:**
+
+| Modus | Verhalten |
+|-------|-----------|
+| `stopped` | Alles aus, kein Monitoring |
+| `monitoring` | Daten werden gesammelt und angezeigt, keine Steuerung |
+| `optimizing` | Volle Optimierung mit aktiver Gerätesteuerung |
 
 ### Optimierung
 
-| Option | Standard | Beschreibung |
-|---|---|---|
-| `optimizer_backend` | `builtin` | Optimizer-Backend: `builtin` (SciPy LP) oder `emhass` (EMHASS) |
-| `optimization_goal` | `cost` | Optimierungsziel: `cost`, `self_consumption`, `balanced` |
-| `optimization_interval_minutes` | `60` | Intervall des LP-Optimierers in Minuten |
-| `long_term_plan_interval_hours` | `6` | Intervall des genetischen Planers in Stunden |
-| `peak_shaving_limit_w` | `0` | Spitzenlastbegrenzung in W (0 = deaktiviert) |
-
-**Optimierungsziele:**
-
-| Ziel | Beschreibung |
-|---|---|
-| `cost` | Minimiert Stromkosten — laedt guenstig, entlaedt teuer |
-| `self_consumption` | Maximiert Eigenverbrauch — Solarstrom wird priorisiert |
-| `balanced` | Ausgewogen zwischen Kosten und Eigenverbrauch |
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `optimizer_backend` | string | `"builtin"` | `builtin` oder `emhass` |
+| `optimization_goal` | string | `"cost"` | `cost` (Kosten) oder `self_consumption` (Eigenverbrauch) |
+| `optimization_interval_minutes` | int | `60` | LP-Solver-Intervall in Minuten |
+| `long_term_plan_interval_hours` | int | `6` | Genetischer Planer Intervall in Stunden |
+| `peak_shaving_limit_w` | int | `0` | Lastspitzenbegrenzung in W (0 = deaktiviert) |
 
 ### Benachrichtigungen
 
-| Option | Standard | Beschreibung |
-|---|---|---|
-| `notify_target` | `notify.mobile_app` | HA-Benachrichtigungs-Dienst |
-| `notify_on_balancing` | `true` | Benachrichtigung bei Batterie-Balancing |
-| `notify_on_cheap_window` | `true` | Benachrichtigung bei guenstigen Ladefenstern |
-| `notify_on_ev_charged` | `true` | Benachrichtigung wenn EV vollgeladen |
+| Parameter | Typ | Default | Beschreibung |
+|-----------|-----|---------|-------------|
+| `notify_target` | string | `"notify.mobile_app"` | HA-Benachrichtigungsziel |
+| `notify_on_balancing` | bool | `true` | Benachrichtigung bei Batterie-Balancing |
+| `notify_on_cheap_window` | bool | `true` | Benachrichtigung bei günstigen Preisfenstern |
+| `notify_on_ev_charged` | bool | `true` | Benachrichtigung wenn E-Auto fertig geladen |
 
 ---
 
 ## Dashboard
 
-Das integrierte Web-Dashboard ist ueber den HA-Ingress erreichbar und zeigt in Echtzeit:
+Das Add-on bietet ein Live-Dashboard unter **Port 8080**, erreichbar über die Sidebar in Home Assistant.
 
-### Statusleiste (oben)
-- **PV-Leistung** — aktuelle Solarproduktion in W/kW
-- **Batterie-SOC** — Ladezustand der Hausbatterie in %
-- **Netzleistung** — aktueller Netzbezug (+) oder Einspeisung (-) in W
-- **EV-SOC** — Ladezustand des Elektrofahrzeugs in %
-- **Strompreis** — aktueller Preis in ct/kWh
+Das Dashboard zeigt:
+- Aktuelle PV-Erzeugung, Batterie-SOC und Netzleistung in Echtzeit
+- 48-h-Strompreisverlauf mit farbcodierten günstigen/teuren Zeitfenstern
+- PV-Prognose für die nächsten 48 Stunden
+- Wallbox-Status und Ladestrom aller angeschlossenen EV-Ladepunkte
+- Optimierungsentscheidungen und geplante Aktionen
+- Lastzerlegung: Grundlast vs. steuerbare Verbraucher
 
-### Charts
-- **Energiefluss** — Zeitverlauf aller Energiestroeme (PV, Batterie, Netz, EV)
-- **Batteriestatus** — SOC-Verlauf und Lade-/Entladezyklen
-- **Preisprognose** — 48-h-Strompreisvorhersage mit guenstigsten Fenstern
-- **24-h-Zeitplan** — geplante Schaltzeiten fuer Batterie, EV und Lasten
-- **Lastzerlegung** — Grundlast vs. steuerbare Lasten
-
-### Systemstatus
-- Aktives Optimierungsziel und Betriebsmodus
-- Letzter Lauf der Optimierer (Echtzeit, LP, genetisch)
-- Verbindungsstatus zur Wallbox
-- Config-Validierung mit Fehlern/Warnungen
+Die Daten werden per WebSocket in Echtzeit aktualisiert (kein manuelles Neuladen nötig).
 
 ---
 
-## Optimierungsstrategien
+## Optimierungsstrategie
 
-### 1. Echtzeit-Regler (alle 30 Sekunden)
+Das System nutzt drei Optimierungsebenen, die zusammenarbeiten:
 
-Steuert den Ladestrom der Wallbox direkt basierend auf dem aktuellen Solarueberschuss:
+### Ebene 1: Realtime-Controller (alle 30 Sekunden)
 
-```
-Solarueberschuss = PV-Leistung - Hausverbrauch - Batterieladen
-Ladestrom = Ueberschuss / (Spannung x Phasen)
-```
+- Regelt den Wallbox-Ladestrom basierend auf aktuellem PV-Überschuss
+- Reagiert auf schnelle Änderungen (Wolken, Verbraucher schalten sich ein/aus)
+- Hält die Netz-Einspeisung und den Netzbezug minimal
 
-- Passt den Ladestrom stufenlos zwischen `ev_min_charge_current_a` und `ev_max_charge_current_a` an
-- Beruecksichtigt Batterie-Reserve und Netzlimit
-- Reagiert in Sekunden auf Wolken oder Lastwechsel
-- Hysterese ueber `ev_surplus_start_threshold_w` und `ev_surplus_stop_threshold_w`
+### Ebene 2: LP-Solver (stündlich)
 
-### 2. Linearer Optimierer — LP-Solver (stuendlich)
+- Lineare Programmierung für die nächsten 24 Stunden
+- Minimiert Stromkosten unter Berücksichtigung aller Constraints
+- Entscheidet: Batterie laden/entladen, EV laden, Verbraucher starten/verschieben
+- Berücksichtigt Strompreise, PV-Prognose und Verbrauchsmuster
 
-Loest ein lineares Programm fuer die naechsten 24 Stunden:
+### Ebene 3: Genetischer Planer (alle 6 Stunden)
 
-**Entscheidungsvariablen (pro Stunde):**
-- Batterie-Ladeleistung / -Entladeleistung
-- EV-Ladeleistung
-- Schaltbefehle fuer steuerbare Lasten
-- Netzbezug / -einspeisung
+- 48-h-Strategieplanung mit genetischem Algorithmus
+- Findet optimale Zeitpunkte für Batterie-Zyklen und EV-Laden
+- Berücksichtigt Unsicherheiten in PV-Prognose und Preisen
+- Gibt strategische Vorgaben an LP-Solver und Realtime-Controller
 
-**Zielfunktion:**
-```
-Minimiere: Summe(Netzbezug_h x Preis_h) - Summe(Einspeisung_h x Einspeiseverguetung)
-```
+### Coordinator
 
-**Nebenbedingungen:**
-- Energiebilanz pro Stunde (Erzeugung = Verbrauch + Speicherung)
-- Batterie-SOC-Grenzen (min/max)
-- EV-Ziel-SOC bis Abfahrtszeit
-- Laufzeiten der steuerbaren Lasten
-- Netzbezugslimit
-
-**Backend:** Wahlweise `builtin` (SciPy linprog/HiGHS) oder `emhass` (EMHASS-Solver).
-
-### 3. Genetischer Planer (alle 6 Stunden)
-
-Erstellt einen strategischen 48-h-Plan mit einem evolutionaeren Algorithmus:
-
-| Parameter | Wert |
-|---|---|
-| Populationsgroesse | 50 Chromosomen |
-| Generationen | 100 |
-| Selektion | Turnier-Selektion |
-| Gene pro Stunde | Batterie-Modus, EV-Laden, Lastanteil |
-
-Das Ergebnis ist ein `LongTermPlan` mit empfohlenen Reserve-SOC-Werten, der den LP-Solver und den Echtzeit-Regler mit strategischer Weitsicht versorgt.
-
-### 4. Koordinator
-
-Fusioniert alle drei Ebenen zu finalen Steuerbefehlen mit folgender Prioritaetsreihenfolge:
-
-```
-Echtzeit-Regler > LP-Zeitplan > Genetischer Plan
-```
+Der Coordinator (`optimizer/coordinator.py`) orchestriert alle drei Ebenen und löst Konflikte zwischen den Empfehlungen auf.
 
 ---
 
 ## Strompreisquellen
 
-| Quelle | Beschreibung | API-Key erforderlich |
-|---|---|---|
-| **ENTSO-E** | Europaeische Transparenzplattform, Day-Ahead-Preise | Ja (kostenlos) |
-| **Tibber** | Tibber-Kunden-API, Echtzeit-Boersenpreise | Ja (Tibber-Konto) |
-| **aWATTar** | Oesterreich und Deutschland, stuendliche EPEX-Preise | Nein |
-| **EPEX SPOT** | Europaeische Stromboerse, Day-Ahead | Nein |
-| **EPEX-Entity** | Direkte HA-Entitaet fuer EPEX-Import/Export-Preise | Nein |
-| **HA-Sensor** | Beliebige HA-Entitaet als Preisquelle | Nein |
-| **Festpreis** | Statischer Preis in ct/kWh | Nein |
+### ENTSO-E Transparency Platform
+- Europaweite Day-Ahead-Preise
+- Benötigt kostenlosen API-Token von [transparency.entsoe.eu](https://transparency.entsoe.eu/)
+- Preise in EUR/MWh, werden automatisch in ct/kWh umgerechnet
 
-### ENTSO-E API-Key beantragen
+### Tibber
+- Benötigt Tibber-Account und API-Token
+- GraphQL-API liefert Preise in EUR/kWh
+- Unterstützt heute + morgen Preise
 
-1. Registrierung auf [transparency.entsoe.eu](https://transparency.entsoe.eu)
-2. Nach Login: **Mein Konto -> Web API Security Token**
-3. Token in die Add-on-Konfiguration unter `entso_e_token` eintragen
+### aWATTar
+- Kostenlos, keine Registrierung nötig
+- Verfügbar für Österreich und Deutschland
+- Preise in EUR/MWh
 
-### Marktgebiete (ENTSO-E / EPEX)
+### EPEX Spot (über SMARD.de)
+- Kostenlos, keine Registrierung nötig
+- Unterstützt DE-LU, AT, CH
+- Viertelstündliche Auflösung, wird zu Stundenwerten aggregiert
 
-| Land | ENTSO-E Code |
-|---|---|
-| Deutschland | `10YDE-EON------1` |
-| Oesterreich | `10YAT-APG------L` |
-| Schweiz | `10YCH-SWISSGRIDZ` |
-| Frankreich | `10YFR-RTE------C` |
+### EPEX HA-Entity
+- Liest Preise direkt aus einer HA-Integration (z. B. EPEX Spot Integration, Nordpool)
+- Unterstützt verschiedene Attribut-Formate: `data`, `today`/`tomorrow`, `raw_today`/`raw_tomorrow`
+- Automatische Einheitenkonvertierung (EUR/MWh, EUR/kWh, ct/kWh)
+
+### HA-Sensor
+- Beliebiger HA-Sensor als Preisquelle
+- Kein Forecast, aktueller Preis wird für 48 h angenommen
+
+### Festpreis
+- Statischer Preis als Fallback
+- Wird auch bei Fehlern der anderen Quellen automatisch verwendet
 
 ---
 
 ## Hardware-Integrationen
 
-### Wallboxen
+### go-e Wallbox
 
-Das System unterstuetzt mehrere Wallbox-Typen ueber eine einheitliche Abstraktion:
+Unterstützt den go-eCharger HOME+ über zwei Verbindungsmodi:
 
-**go-e Charger** (HOME, HW-11, HW-22):
-- **Lokale HTTP API v2** (empfohlen, Latenz < 100 ms)
-- **Cloud API** (Fallback, hoehere Latenz)
+- **Lokal:** Direkte HTTP-Kommunikation im LAN (schneller, zuverlässiger)
+- **Cloud:** Über die go-e Cloud-API (Serial + Token nötig)
 
-**HA-Entity Wallbox:**
-- Steuerung ueber beliebige HA-Schalter und -Sensoren
+Funktionen: Ladestrom setzen, Laden starten/stoppen, Status abfragen, Phasenumschaltung.
 
-**OCPP Wallbox:**
-- Steuerung ueber OCPP-Protokoll
+### HA-Entity-Wallbox
 
-**Gesteuerte Parameter:**
-- Laden aktivieren/deaktivieren
-- Ladestrom (6-32 A)
-- Phasenumschaltung (1-phasig/3-phasig)
+Jede Wallbox, die über Home Assistant steuerbar ist, kann eingebunden werden. Konfiguriere die entsprechenden HA-Entitäten für Stromstärke, Laden ein/aus etc.
 
-**Gelesene Werte:**
-- Fahrzeugstatus (nicht angeschlossen, wartend, laedt, vollgeladen)
-- Aktuelle Ladeenergie der Session in kWh
-- Temperatur und Phasenstroeme
+### OCPP-Wallbox
 
-### Batterie-Balancing
+Wallboxen mit OCPP-Protokoll können über die HA-OCPP-Integration angebunden werden.
 
-Unterstuetzte Batterie-Chemien:
-- **LiFePO4** (Lithium-Eisenphosphat) — weit verbreitet in Heimspeichern
-- **Bleiakku** (AGM, Gel, nass)
+### Wechselrichter / Batterie
+
+Das System steuert die Hausbatterie über HA-Switches:
+- `battery_charge_switch` – Netzladung aktivieren/deaktivieren
+- `battery_discharge_switch` – Entladung aktivieren/deaktivieren
+
+Getestet mit Deye/Sunsynk Hybrid-Wechselrichtern, funktioniert aber mit jedem System, das über HA-Entitäten steuerbar ist.
 
 ---
 
 ## API-Endpunkte
 
-Das Add-on stellt eine FastAPI-Applikation bereit. Die Swagger-Dokumentation ist unter `http://<HA-IP>:8080/docs` erreichbar.
+Das Add-on stellt eine REST API auf Port 8080 bereit:
 
 | Endpunkt | Methode | Beschreibung |
-|---|---|---|
-| `/` | GET | Web-Dashboard |
-| `/api/state` | GET | Aktueller Energiezustand (JSON) |
-| `/api/schedule` | GET | Aktueller 24-h-Zeitplan (JSON) |
-| `/api/plan` | GET | Aktueller 48-h-Langzeitplan (JSON) |
-| `/api/prices` | GET | Aktuelle Strompreise (JSON) |
-| `/api/forecast` | GET | PV-Prognose (JSON) |
-| `/api/mode` | GET/POST | Betriebsmodus lesen/setzen |
-| `/ws` | WebSocket | Echtzeit-Updates fuer das Dashboard |
+|----------|---------|-------------|
+| `/api/status` | GET | Aktueller Systemstatus |
+| `/api/prices` | GET | 48-h-Strompreise |
+| `/api/forecast` | GET | PV-Prognose |
+| `/api/battery` | GET | Batterie-Status |
+| `/api/ev/mode` | POST | EV-Lademodus setzen |
+| `/api/config` | GET/POST | Konfiguration lesen/schreiben |
+| `/api/optimizer` | GET | Optimierungsstatus und -plan |
 
 ---
 
-## Read-Only Modus (Test-Modus)
+## Read-Only-Modus
 
-Der Read-Only Modus erlaubt es, das gesamte System zu testen, ohne dass aktive Steuerungsvorgaenge ausgefuehrt werden.
+Mit `read_only: true` läuft das gesamte System, ohne aktiv Geräte zu steuern:
 
-### Was passiert im Read-Only Modus?
+- Alle Daten werden gesammelt und angezeigt
+- Alle Optimierungsberechnungen laufen durch
+- Dashboard zeigt, was das System tun *würde*
+- Kein Switch, kein Strom, kein Gerät wird tatsächlich gesteuert
 
-| Funktion | Read-Only | Aktiv |
-|---|---|---|
-| Sensoren lesen (PV, Batterie, Netz) | Ja | Ja |
-| Strompreise abrufen | Ja | Ja |
-| PV-Prognose berechnen | Ja | Ja |
-| LP-Optimierung berechnen | Ja | Ja |
-| Genetischer Algorithmus | Ja | Ja |
-| Dashboard / WebSocket | Ja | Ja |
-| EV-Ladesteuerung (Wallbox) | Nein | Ja |
-| Steuerbare Lasten schalten | Nein | Ja |
-| Batterie-Balancing starten | Nein | Ja |
-| HA-Entitaeten schreiben | Nein | Ja |
-
-### Aktivierung
-
-**Option 1: Dashboard** — Klicke auf den Modus-Indikator in der Statusleiste (AKTIV/READ-ONLY)
-
-**Option 2: API**
-```bash
-# Aktivieren
-curl -X POST http://<IP>:8080/api/mode -H "Content-Type: application/json" -d '{"read_only": true}'
-
-# Status pruefen
-curl http://<IP>:8080/api/mode
-```
-
-**Option 3: Konfiguration**
-```yaml
-read_only: true
-operation_mode: stopped
-```
-
-### Empfohlene Ersteinrichtung
-
-1. Bei Erstinstallation: `read_only: true` und `operation_mode: stopped` (Standardwerte)
-2. Alle Sensoren in den Einstellungen konfigurieren
-3. Konfiguration pruefen — alle Fehler/Warnungen beheben
-4. Dashboard beobachten: PV, Batterie, Preise sollten korrekte Werte zeigen
-5. LP-Schedule und EV-Strategie pruefen
-6. Wenn alles korrekt: `operation_mode: running` setzen, dann `read_only: false`
+So kannst du das System tagelang beobachten und prüfen, ob die Entscheidungen sinnvoll sind, bevor du `read_only: false` setzt.
 
 ---
 
 ## MCP-Server (KI-Integration)
 
-Der integrierte MCP-Server erlaubt es, das Energy-Management-System direkt aus Claude Code, Cursor oder anderen MCP-kompatiblen KI-Tools zu steuern und zu analysieren.
+Das Add-on enthält einen MCP-Server (Model Context Protocol) mit 17 Tools, der KI-Assistenten wie Claude Code oder Cursor direkten Zugriff auf das System gibt.
 
-### Verfuegbare Tools
+Funktionen über MCP:
+- Konfiguration lesen und ändern
+- Systemstatus und Sensorwerte abfragen
+- Strompreise und PV-Prognose abrufen
+- Optimierungsentscheidungen nachvollziehen
+- Fehlerdiagnose und Log-Analyse
 
-| Tool | Beschreibung |
-|---|---|
-| `get_state` | Aktueller Energiesystem-Status (PV, Batterie, Netz, EV, Preise) |
-| `get_schedule` | 24h LP-Optimierungsplan |
-| `get_plan` | 48h Genetischer Algorithmus Plan |
-| `get_prices` | 48h Strompreise aller Quellen |
-| `get_config` | Aktuelle Konfiguration |
-| `update_config` | Konfiguration live aendern |
-| `validate_config` | Konfiguration pruefen (Fehler/Warnungen) |
-| `get_logs` | Anwendungslogs lesen und filtern |
-| `get_ha_logs` | Home Assistant Systemlogs |
-| `get_history` | Historische Energiedaten (30s-Snapshots) |
-| `get_ev_strategy` | EV-Ladestrategie-Bewertung |
-| `trigger_optimization` | Sofortige Neuoptimierung |
-| `set_ev_mode` | EV-Lademodus setzen (solar/smart/fast/off) |
-| `set_read_only` | Read-Only Modus ein/ausschalten |
-| `get_ha_entity` | Einzelne HA-Entitaet lesen |
-| `list_ha_entities` | HA-Entitaeten nach Domain auflisten |
-| `get_load_decomposition` | Lastzerlegung (Grundlast vs. steuerbar) |
-
-### Einrichtung in Claude Code
-
-In `~/.claude/settings.json` (oder Projekt-Settings):
-
-```json
-{
-  "mcpServers": {
-    "ha-energy": {
-      "command": "python3",
-      "args": ["/path/to/ha-energy-optimizer/app/mcp_server.py", "--url", "http://<HA-IP>:8080"],
-      "env": {}
-    }
-  }
-}
-```
-
-### Einrichtung in Cursor
-
-In `.cursor/mcp.json`:
-```json
-{
-  "mcpServers": {
-    "ha-energy": {
-      "command": "python3",
-      "args": ["/path/to/ha-energy-optimizer/app/mcp_server.py", "--url", "http://<HA-IP>:8080"]
-    }
-  }
-}
-```
-
-### Verwendungsbeispiele
-
-- *"Zeige mir den aktuellen PV-Ertrag und Batteriestand"*
-- *"Wie sieht der Optimierungsplan fuer heute aus?"*
-- *"Stelle den EV-Lademodus auf Solar-only"*
-- *"Validiere die aktuelle Konfiguration"*
-- *"Zeige mir die letzten Fehler im Log"*
-
----
-
-## Weitere Installationsmethoden
-
-### Lokale Installation (fuer Entwickler)
-
-```bash
-git clone https://github.com/ORPA1988/HA-Energy.git
-cp -r HA-Energy/ha-energy-optimizer /addons/ha-energy-optimizer
-# In HA: Einstellungen -> Add-ons -> Lokale Add-ons -> Neu laden
-```
-
-### Docker (ohne HA Add-on)
-
-```bash
-cd HA-Energy/ha-energy-optimizer
-docker build -t ha-energy-optimizer .
-docker run -d \
-  --name energy-optimizer \
-  -p 8080:8080 \
-  -e HA_URL=http://<HA-IP>:8123 \
-  -e SUPERVISOR_TOKEN=<long-lived-access-token> \
-  -v /opt/energy-data:/data \
-  ha-energy-optimizer
-```
-
-> **Hinweis**: Ohne HA Supervisor muss ein [Long-Lived Access Token](https://www.home-assistant.io/docs/authentication/#your-account-profile) als `SUPERVISOR_TOKEN` uebergeben werden.
-
-### Docker Compose
-
-```yaml
-version: '3.8'
-services:
-  energy-optimizer:
-    build: ./ha-energy-optimizer
-    ports:
-      - "8080:8080"
-    environment:
-      - HA_URL=http://homeassistant:8123
-      - SUPERVISOR_TOKEN=${HA_TOKEN}
-    volumes:
-      - energy-data:/data
-    restart: unless-stopped
-
-volumes:
-  energy-data:
-```
-
-### Netzwerk & Ports
-
-| Port | Protokoll | Beschreibung |
-|---|---|---|
-| 8080 | HTTP | Web-Dashboard + REST-API |
-| 8080 | WebSocket | Live-Updates (`/ws`) |
-
-### Unterstuetzte Architekturen
-
-| Architektur | Status | Empfohlen fuer |
-|---|---|---|
-| amd64 | Getestet | NUC / Server |
-| aarch64 | Getestet | Raspberry Pi 4/5 |
-| armv7 | Getestet | Aeltere RPi |
-| armhf | Eingeschraenkt | Wenig RAM |
+Der MCP-Server wird automatisch mit dem Add-on gestartet.
 
 ---
 
 ## Fehlerbehebung
 
 ### Add-on startet nicht
+- Prüfe die Logs: **Einstellungen** → **Add-ons** → **HA Energy Optimizer** → Tab **Protokoll**
+- Stelle sicher, dass Home Assistant Version ≥ 2024.1 ist
+- Prüfe, ob die konfigurierten Entitäten existieren
 
-1. **Logs pruefen:** Einstellungen -> Add-ons -> HA Energy Optimizer -> **Log**
-2. **Konfiguration validieren:** Alle Pflichtfelder (Sensoren, Preisquelle) muessen ausgefuellt sein
-3. **HA-Entitaeten pruefen:** Die angegebenen Sensor-Entitaeten muessen in HA existieren
+### Keine Strompreise
+- Überprüfe die `price_source`-Konfiguration
+- Bei ENTSO-E/Tibber: Token gültig?
+- Bei EPEX-Entity: Existiert die Entität? Prüfe mit **Entwicklerwerkzeuge** → **Zustände**
+- Das System fällt automatisch auf den Festpreis zurück
 
-### PV-Prognose liefert keine Daten
+### Wallbox reagiert nicht
+- Prüfe `goe_enabled: true`
+- Bei lokaler Verbindung: Ist die IP erreichbar? (`ping 192.168.0.91`)
+- Prüfe, ob `read_only: false` gesetzt ist
+- Prüfe, ob `operation_mode: "optimizing"` gesetzt ist
 
-- Koordinaten (`pv_latitude`, `pv_longitude`) muessen korrekt sein
-- Bei `pv_forecast_source: solcast`: Solcast-Entitaet pruefen
-- Internetverbindung pruefen (Open-Meteo API muss erreichbar sein)
+### Dashboard zeigt keine Daten
+- Warte 1–2 Minuten nach dem Start (Daten-Collector braucht erste Werte)
+- Prüfe, ob die Sensor-Entitäten korrekte Werte liefern
+- Browser-Konsole auf Fehler prüfen (F12)
 
-### Wallbox wird nicht gesteuert
-
-1. `goe_enabled: true` setzen
-2. IP-Adresse der Wallbox pruefen (`goe_local_ip`)
-3. Wallbox-API v2 aktivieren (in go-e App)
-4. Firewall zwischen HA und Wallbox pruefen
-
-### Strompreise werden nicht geladen
-
-- Bei ENTSO-E: API-Token korrekt? Marktgebiet stimmt?
-- Bei Tibber: Token gueltig? Rate-Limits beachten
-- Bei EPEX-Entity: Sensor-Entitaet und Einheit pruefen
-- Fallback: `price_source: fixed` mit `fixed_price_ct_kwh` setzen
-
-### Optimierung laeuft langsam
-
-- `optimization_interval_minutes` erhoehen (z. B. auf 120)
-- `long_term_plan_interval_hours` erhoehen (z. B. auf 12)
-- Genetischer Algorithmus ist fuer RPi4 optimiert (50 Population, 100 Generationen ~ 15-20 s)
-
-### Hohe Speichernutzung
-
-- Normaler Speicherbedarf: ~150-250 MB
-- WebSocket-Clients auf 100 begrenzt
-- Historie auf 24 h begrenzt (2880 Eintraege)
+### Batterie-Balancing startet nicht
+- Prüfe, ob `battery_balancing_enabled: true` gesetzt ist
+- Bei `use_solar_only: true`: Genug PV-Leistung vorhanden?
+- Prüfe den Balancing-Zeitplan im Dashboard
 
 ---
 
-## Performance-Empfehlungen fuer Raspberry Pi 4
+## Performance-Tipps (Raspberry Pi)
 
-### Optimale Konfiguration (getestet auf RPi4 mit 8 GB RAM)
-
-| Parameter | Empfohlener Wert | Begruendung |
-|---|---|---|
-| `optimization_interval_minutes` | 60 | Stuendliche LP-Optimierung ausreichend |
-| `long_term_plan_interval_hours` | 6 | Genetischer Algorithmus braucht ~15-20 s CPU-Zeit |
-| Realtime Loop | 30 s (fest) | EVCC-Style, optimal fuer Solar-Ueberschussregelung |
-| Price Refresh | 60 min (fest) | Day-Ahead-Preise aendern sich nur einmal taeglich |
-| WebSocket Clients | Max 100 | Verhindert Memory Leak bei vielen Dashboards |
-
-### Ressourcenverbrauch
-
-- **CPU:** ~5-10 % idle, ~30-50 % waehrend LP/Genetic-Optimierung
-- **RAM:** ~150-250 MB (inkl. NumPy/SciPy Arrays)
-- **Netzwerk:** ~500-1000 API-Calls/h zu Home Assistant (mit Rate Limiting)
+- `optimization_interval_minutes: 60` (nicht niedriger als 30 setzen)
+- `long_term_plan_interval_hours: 6` (Standard beibehalten)
+- Genetischen Algorithmus nicht gleichzeitig mit anderen rechenintensiven Add-ons laufen lassen
+- Bei Speicherproblemen: Swap-Partition auf USB-SSD auslagern
 
 ---
 
-## Entwicklung & Beitrag
-
-### Lokale Entwicklungsumgebung
-
-```bash
-git clone https://github.com/ORPA1988/HA-Energy.git
-cd HA-Energy/ha-energy-optimizer
-
-pip install -r app/requirements.txt
-
-HA_TOKEN=<token> HA_BASE_URL=http://<ha-ip>:8123 python3 app/main.py
-```
-
-### Docker-Build
-
-```bash
-cd ha-energy-optimizer
-docker build --build-arg BUILD_ARCH=amd64 -t ha-energy-optimizer:dev .
-docker run -p 8080:8080 \
-  -e SUPERVISOR_TOKEN=<token> \
-  -e HA_BASE_URL=http://<ha-ip>:8123 \
-  ha-energy-optimizer:dev
-```
+## Entwicklung und Mitarbeit
 
 ### Projektstruktur
 
 ```
-ha-energy-optimizer/
-├── Dockerfile              # Multi-stage Container-Build
-├── config.yaml             # HA Add-on Manifest & Konfigurationsschema
-├── build.yaml              # Multi-Architektur Build-Konfiguration
-├── CHANGELOG.md            # Versionshistorie
-└── app/
-    ├── main.py             # FastAPI Applikation & WebSocket
-    ├── config.py           # Konfigurationsmanagement
-    ├── models.py           # Pydantic Datenmodelle
-    ├── ha_client.py        # Home Assistant REST API Client
-    ├── scheduler.py        # APScheduler Job-Verwaltung
-    ├── mcp_server.py       # MCP-Server (Claude Code / Cursor)
-    ├── requirements.txt    # Python-Abhaengigkeiten
-    ├── static/
-    │   └── index.html      # Web-Dashboard (Chart.js + WebSocket)
-    ├── optimizer/
-    │   ├── realtime.py     # 30s EV-Steuerung (EVCC-Stil)
-    │   ├── linear.py       # 24h Kostenoptimierung (scipy.linprog)
-    │   ├── genetic.py      # 48h Energieplanung (genetischer Algorithmus)
-    │   ├── ev_strategy.py  # EV-Ladestrategie
-    │   ├── coordinator.py  # Optimizer-Koordination
-    │   └── emhass_backend.py  # Optionaler EMHASS-LP-Solver
-    ├── data/
-    │   ├── collector.py    # HA-Sensor-Erfassung
-    │   ├── prices.py       # Strompreisabfrage
-    │   ├── forecast.py     # PV-Ertragsprognose (Open-Meteo + Solcast)
-    │   └── load_decomposition.py  # Lastzerlegung
-    ├── devices/
-    │   ├── goe.py          # go-e Wallbox Integration
-    │   ├── wallbox.py      # Abstrakte Wallbox-Schnittstelle
-    │   └── battery_balancer.py  # Batterie-Zellenausgleich
-    └── translations/
-        ├── en.yaml         # Englische Uebersetzung
-        └── de.yaml         # Deutsche Uebersetzung
+HA-Energy/
+├── ha-energy-optimizer/
+│   ├── app/
+│   │   ├── data/
+│   │   │   ├── __init__.py
+│   │   │   ├── collector.py
+│   │   │   ├── forecast.py
+│   │   │   ├── load_decomposition.py
+│   │   │   └── prices.py
+│   │   ├── devices/
+│   │   │   ├── __init__.py
+│   │   │   ├── battery_balancer.py
+│   │   │   ├── goe.py
+│   │   │   └── wallbox.py
+│   │   ├── optimizer/
+│   │   │   ├── __init__.py
+│   │   │   ├── coordinator.py
+│   │   │   ├── emhass_backend.py
+│   │   │   ├── ev_strategy.py
+│   │   │   ├── genetic.py
+│   │   │   ├── linear.py
+│   │   │   └── realtime.py
+│   │   ├── static/
+│   │   │   └── index.html
+│   │   ├── config.py
+│   │   ├── ha_client.py
+│   │   ├── main.py
+│   │   ├── mcp_server.py
+│   │   ├── models.py
+│   │   ├── requirements.txt
+│   │   └── scheduler.py
+│   ├── rootfs/
+│   │   └── etc/services.d/energy-optimizer/
+│   ├── translations/
+│   ├── .dockerignore
+│   ├── build.yaml
+│   ├── CHANGELOG.md
+│   ├── config.yaml
+│   ├── Dockerfile
+│   ├── icon.png
+│   └── logo.png
+├── repository.yaml
+└── README.md
 ```
 
-### Technologie-Stack
+### Mitmachen
 
-| Bereich | Technologie |
-|---|---|
-| **Backend** | Python 3.11, FastAPI, APScheduler |
-| **Optimierung** | SciPy (linprog/HiGHS), NumPy, optional EMHASS |
-| **Datenvalidierung** | Pydantic v2 |
-| **HTTP-Client** | HTTPX (async), AIOHTTP |
-| **Frontend** | HTML/CSS/JS, Chart.js, WebSocket |
-| **Container** | Docker, Alpine Linux 3.18 |
-| **HA-Integration** | Supervisor API, Ingress, Add-on Schema |
-
-### Fehler melden / Feature-Requests
-
-Issues direkt auf GitHub erstellen:
-[github.com/ORPA1988/HA-Energy/issues](https://github.com/ORPA1988/HA-Energy/issues)
+1. Repository forken
+2. Feature-Branch erstellen: `git checkout -b feature/mein-feature`
+3. Änderungen committen: `git commit -m "Add: Beschreibung"`
+4. Branch pushen: `git push origin feature/mein-feature`
+5. Pull Request erstellen
 
 ---
 
 ## Changelog
 
-Siehe [CHANGELOG.md](ha-energy-optimizer/CHANGELOG.md) fuer die vollstaendige Versionshistorie.
+### 0.2.0
 
-### Aktuelle Version: 0.1.0
+- **Versionsbereinigung:** Konsistente Version 0.2.0 in allen Dateien
+- **Bug-Fix Batterie-Balancing:** Hold-Timer wurde ab Ladebeginn statt ab Hold-Beginn gemessen – Halten konnte vorzeitig enden
+- **Bug-Fix EV-SOC-Warnung:** Warnung über fehlenden EV-SOC-Sensor erschien alle 30 s – jetzt nur einmalig bis Sensor wieder verfügbar
+- **Bug-Fix Config-Update:** App-State wurde nach API-Config-Update nicht aktualisiert – Änderungen erst nach Neustart wirksam
+- **Bug-Fix EV-Modus-Validierung:** `/api/ev/mode` akzeptierte ungültige Moduswerte ohne Fehlermeldung
+- **Bug-Fix Open-Meteo Timeout:** Timeout von 5 s auf 15 s erhöht – verhindert Fehlschläge auf Raspberry Pi mit langsamer Verbindung
+- **Code-Bereinigung:** Unbenutzte Variablen in ENTSO-E-Preisparser entfernt
 
-- **Auto-Erkennung**: Automatische Erkennung von HA-Entitaeten (Sensoren, Switches) mit Confidence-Bewertung
-- **Bedingte Felder**: Nicht relevante Konfigurationsfelder werden je nach Auswahl ausgeblendet
-- **PV-Prognose**: Forecast-Source Auswahl (Auto/Solcast/Open-Meteo) mit Solcast-Konfiguration
-- **Batterie-Balancing UI**: Vollstaendige Konfigurationsoberflaeche fuer Balancing-Parameter
-- **Benachrichtigungen UI**: Konfiguration von Benachrichtigungszielen und Ausloesern
-- **go-e Cloud**: Cloud-Verbindungsfelder (Serial, Token) bei Cloud-Modus
+### 0.1.0
 
-### Fruehere Versionen
+- Auto-Erkennung von HA-Entitäten mit Confidence-Bewertung
+- Bedingte Felder in der Konfiguration
+- Dedizierte Sektionen für alle Preisquellen
+- PV-Prognose-Source-Auswahl (Auto/Solcast/Open-Meteo)
+- Vollständige Batterie-Balancing-UI
+- Benachrichtigungs-Konfiguration
+- go-e Cloud-Verbindungsfelder
+- Wallbox-Sichtbarkeit abhängig von Aktivierung
 
-- **0.0.3**: Read-Only Modus, MCP-Server mit 17 Tools, Bug-Fixes, Multi-EV Dashboard, Lastzerlegung
-- **0.0.2**: EMHASS Backend, Multi-EV, Wallbox-Abstraktion, Lastzerlegung
-- **0.0.1**: Erstveroeffentlichung mit dreistufiger Optimierung, Live-Dashboard, Multi-Source Strompreise
+### 0.0.3
+
+- Read-Only-Modus für sicheres Testen
+- MCP-Server mit 17 Tools
+- 6 kritische Bug-Fixes
+- Multi-EV Dashboard
+- Lastzerlegung im Dashboard
+- Config-Validierung mit Fehlern/Warnungen
+- Rotierende Logdatei
+
+### 0.0.2
+
+- EMHASS-Backend als optionaler Drop-in-Optimizer
+- Multi-EV-Support (go-e, HA Entity, OCPP)
+- Wallbox-Abstraktion
+- Lastzerlegung
+
+### 0.0.1
+
+- Erstveröffentlichung
+- Dreistufige Optimierung (Realtime, LP, Genetisch)
+- Live-Dashboard mit WebSocket
+- PV-Prognose via Open-Meteo
+- 7 Strompreisquellen
+- go-e Wallbox Integration
+- Batterie-Balancing
+- Steuerbare Verbraucher
+- Web-GUI Konfiguration
 
 ---
 
-*HA Energy Optimizer kombiniert Konzepte aus [EVCC](https://evcc.io/), [EOS](https://github.com/josepowera/eos) und [EMHASS](https://github.com/davidusb-geek/emhass).*
+## Lizenz
+
+Dieses Projekt ist unter der MIT-Lizenz veröffentlicht. Details siehe [LICENSE](LICENSE).
+
+---
+
+> **Hinweis:** Dieses Projekt befindet sich in aktiver Entwicklung. Feedback und Beiträge sind willkommen!
