@@ -107,3 +107,31 @@ def setup_jobs(app_state: "AppState") -> None:
     )
 
     logger.info("All scheduler jobs registered")
+
+
+_JOB_IDS = [
+    "realtime", "lp_optimize", "genetic_plan", "price_refresh",
+    "ev_strategy", "balancing_check", "cheap_window_notify",
+]
+
+
+def pause_jobs() -> None:
+    """Pause all optimization jobs (stopped mode)."""
+    scheduler = get_scheduler()
+    for job_id in _JOB_IDS:
+        try:
+            scheduler.pause_job(job_id)
+        except Exception:
+            pass
+    logger.info("All scheduler jobs paused")
+
+
+def resume_jobs() -> None:
+    """Resume all optimization jobs (running mode)."""
+    scheduler = get_scheduler()
+    for job_id in _JOB_IDS:
+        try:
+            scheduler.resume_job(job_id)
+        except Exception:
+            pass
+    logger.info("All scheduler jobs resumed")

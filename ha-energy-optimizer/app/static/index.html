@@ -266,8 +266,8 @@
     <div class="stat-label">⚡ Überschuss</div>
   </div>
   <div class="stat">
-    <div class="stat-value" id="mode-indicator" style="cursor:pointer" onclick="toggleReadOnly()">AKTIV</div>
-    <div class="stat-label">🔒 Modus</div>
+    <div class="stat-value red" id="mode-indicator" style="cursor:pointer" onclick="switchTab('config')">GESTOPPT</div>
+    <div class="stat-label">Modus</div>
   </div>
 </div>
 
@@ -1225,9 +1225,21 @@
     </div>
   </div>
 
-  <!-- Optimization Config -->
-  <div class="card full-width">
+  <!-- Operation Mode: Start/Stop -->
+  <div class="card full-width" id="operation-mode-card">
     <div class="card-title">Betriebsmodus</div>
+    <div id="first-start-banner" style="display:none;background:var(--card-bg);border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:16px">
+      <div style="font-weight:700;color:#3b82f6;margin-bottom:4px">Erster Start erkannt</div>
+      <div style="font-size:0.85rem;color:var(--muted)">
+        Sensoren wurden automatisch erkannt. Pr&uuml;fe die Konfiguration unten und dr&uuml;cke <b>START</b>, wenn alles passt.
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px">
+      <button id="btn-start" class="btn" onclick="startOptimizer()" style="background:#22c55e;color:#fff;font-weight:700;font-size:1rem;padding:10px 32px;border-radius:8px;border:none;cursor:pointer;opacity:0.6">START</button>
+      <button id="btn-stop" class="btn" onclick="stopOptimizer()" style="background:#ef4444;color:#fff;font-weight:700;font-size:1rem;padding:10px 32px;border-radius:8px;border:none;cursor:pointer;opacity:1">STOP</button>
+      <span id="operation-status" style="font-size:0.9rem;font-weight:600;margin-left:8px;color:#ef4444">GESTOPPT</span>
+    </div>
+    <div id="start-validation-result" style="display:none;margin-bottom:12px;padding:10px;border-radius:6px;font-size:0.85rem"></div>
     <div class="form-grid">
       <div class="form-group">
         <label>Read-Only Modus</label>
@@ -1350,6 +1362,7 @@ function connect() {
     loadPrices();
     loadStrategy();
     loadLoads();
+    checkFirstStart();
   };
 
   ws.onmessage = (e) => {
@@ -1383,15 +1396,20 @@ function updateState(d) {
   setClass('price-ct', d.price_ct < 15 ? 'stat-value green' : d.price_ct < 25 ? 'stat-value yellow' : 'stat-value red');
   setText('surplus-w', fmt(d.surplus_w || 0) + ' W');
 
-  // Read-only indicator
+  // Operation mode + read-only indicator
   const modeEl = document.getElementById('mode-indicator');
-  if (d.read_only) {
-    modeEl.textContent = 'READ-ONLY';
+  if (d.operation_mode === 'stopped') {
+    modeEl.textContent = 'GESTOPPT';
+    modeEl.className = 'stat-value red';
+  } else if (d.read_only) {
+    modeEl.textContent = 'MONITORING';
     modeEl.className = 'stat-value yellow';
   } else {
     modeEl.textContent = 'AKTIV';
     modeEl.className = 'stat-value green';
   }
+  // Update Start/Stop button states
+  updateOperationButtons(d.operation_mode || 'stopped');
 
   // Flow diagram
   setText('flow-pv', fmt(d.pv_w) + ' W');
@@ -1663,6 +1681,88 @@ async function toggleReadOnly() {
     await fetch('/api/mode', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({read_only: newState})});
     showToast(newState ? 'Read-Only Modus aktiviert' : 'Aktiver Modus aktiviert');
   } catch (e) { showToast('Fehler', true); }
+}
+
+function updateOperationButtons(mode) {
+  const btnStart = document.getElementById('btn-start');
+  const btnStop = document.getElementById('btn-stop');
+  const statusEl = document.getElementById('operation-status');
+  if (!btnStart || !btnStop) return;
+  if (mode === 'running') {
+    btnStart.style.opacity = '1';
+    btnStop.style.opacity = '0.6';
+    statusEl.textContent = 'AKTIV';
+    statusEl.style.color = '#22c55e';
+  } else {
+    btnStart.style.opacity = '0.6';
+    btnStop.style.opacity = '1';
+    statusEl.textContent = 'GESTOPPT';
+    statusEl.style.color = '#ef4444';
+  }
+}
+
+async function startOptimizer() {
+  const resultEl = document.getElementById('start-validation-result');
+  resultEl.style.display = 'block';
+  resultEl.style.background = 'rgba(59,130,246,0.1)';
+  resultEl.style.border = '1px solid #3b82f6';
+  resultEl.innerHTML = 'Konfiguration wird gepr&uuml;ft...';
+  try {
+    const r = await fetch('/api/mode/start', {method:'POST', headers:{'Content-Type':'application/json'}});
+    const data = await r.json();
+    if (r.ok) {
+      let html = '<div style="color:#22c55e;font-weight:700">Optimizer gestartet</div>';
+      if (data.warnings && data.warnings.length > 0) {
+        html += '<div style="color:#eab308;margin-top:6px">' + data.warnings.map(w => '&#x26A0; ' + w).join('<br>') + '</div>';
+      }
+      resultEl.style.background = 'rgba(34,197,94,0.1)';
+      resultEl.style.border = '1px solid #22c55e';
+      resultEl.innerHTML = html;
+      updateOperationButtons('running');
+      showToast('Optimizer gestartet');
+      // Hide first-start banner
+      document.getElementById('first-start-banner').style.display = 'none';
+    } else {
+      let html = '<div style="color:#ef4444;font-weight:700">Start nicht m&ouml;glich — Konfigurationsfehler:</div>';
+      if (data.errors) html += '<div style="margin-top:6px">' + data.errors.map(e => '&#x274C; ' + e).join('<br>') + '</div>';
+      if (data.warnings && data.warnings.length > 0) html += '<div style="color:#eab308;margin-top:6px">' + data.warnings.map(w => '&#x26A0; ' + w).join('<br>') + '</div>';
+      resultEl.style.background = 'rgba(239,68,68,0.1)';
+      resultEl.style.border = '1px solid #ef4444';
+      resultEl.innerHTML = html;
+    }
+  } catch (e) {
+    resultEl.style.background = 'rgba(239,68,68,0.1)';
+    resultEl.style.border = '1px solid #ef4444';
+    resultEl.innerHTML = '<div style="color:#ef4444">Netzwerkfehler beim Starten</div>';
+  }
+}
+
+async function stopOptimizer() {
+  try {
+    await fetch('/api/mode/stop', {method:'POST', headers:{'Content-Type':'application/json'}});
+    updateOperationButtons('stopped');
+    showToast('Optimizer gestoppt');
+    document.getElementById('start-validation-result').style.display = 'none';
+  } catch (e) { showToast('Fehler beim Stoppen', true); }
+}
+
+async function checkFirstStart() {
+  try {
+    const r = await fetch('/api/mode');
+    const data = await r.json();
+    updateOperationButtons(data.operation_mode || 'stopped');
+    if (data.is_first_start) {
+      document.getElementById('first-start-banner').style.display = 'block';
+      // Switch to config tab
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      const configTab = document.getElementById('tab-config');
+      if (configTab) configTab.classList.add('active');
+      // Auto-detect entities
+      loadAllConfig();
+      setTimeout(() => autoDetectEntities(), 1000);
+    }
+  } catch (e) { console.warn('Mode check failed:', e); }
 }
 
 async function startBalancing() {
@@ -2488,6 +2588,7 @@ async function loadAllConfig() {
       emhassEl.innerHTML = '<span style="color:var(--muted)">\u2717 EMHASS nicht installiert (pip install emhass)</span>';
     }
     document.getElementById('cfg-read-only').value = String(cfg.read_only || false);
+    updateOperationButtons(cfg.operation_mode || 'stopped');
     document.getElementById('cfg-opt-goal').value = cfg.optimization_goal || 'cost';
     document.getElementById('cfg-opt-interval').value = cfg.optimization_interval_minutes || 60;
     document.getElementById('cfg-opt-long').value = cfg.long_term_plan_interval_hours || 6;

@@ -165,6 +165,7 @@ class Config:
 
     # Operation mode
     read_only: bool = True  # Default: safe mode on first start, no switching/control
+    operation_mode: str = "stopped"  # "stopped" = no optimization/scheduler, "running" = full operation
 
     # Optimization
     optimizer_backend: str = "builtin"  # "builtin" (scipy LP) or "emhass"
@@ -240,7 +241,7 @@ def load_config() -> Config:
         "ev_allow_battery_to_charge_ev", "ev_allow_grid_to_charge_ev",
         "ev_combined_charge_threshold_ct",
         "ev_surplus_start_threshold_w", "ev_surplus_stop_threshold_w",
-        "read_only",
+        "read_only", "operation_mode",
         "optimizer_backend", "optimization_goal", "optimization_interval_minutes",
         "long_term_plan_interval_hours", "peak_shaving_limit_w",
         "notify_target", "notify_on_balancing",

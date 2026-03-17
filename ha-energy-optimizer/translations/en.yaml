@@ -225,6 +225,9 @@ configuration:
   read_only:
     name: "Read-Only Mode"
     description: "When enabled: system only reads sensors, no switching or control actions. Ideal for initial setup testing."
+  operation_mode:
+    name: "Operation Mode"
+    description: "Stopped: No optimization or scheduling active. Running: All optimizations and controls active."
   # --- Optimization ---
   optimizer_backend:
     name: Optimizer Backend

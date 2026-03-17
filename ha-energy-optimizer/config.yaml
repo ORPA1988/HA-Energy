@@ -123,6 +123,7 @@ options:
       price_limit_ct_kwh: 20.0
   # --- Operation Mode ---
   read_only: true  # Default: true for safe first start, switch to false after setup
+  operation_mode: "stopped"  # "stopped" = no optimization, "running" = full operation
   # --- Optimization ---
   optimizer_backend: "builtin"  # "builtin" or "emhass"
   optimization_goal: "cost"
@@ -220,6 +221,7 @@ schema:
       min_soc_battery: int
       price_limit_ct_kwh: float
   read_only: bool
+  operation_mode: list(stopped|running)
   optimizer_backend: list(builtin|emhass)
   optimization_goal: list(cost|self_consumption|balanced)
   optimization_interval_minutes: int
