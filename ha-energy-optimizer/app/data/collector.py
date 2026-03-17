@@ -83,7 +83,7 @@ class DataCollector:
             house_load_w=house_load,
             surplus_w=surplus,
             ev_soc_percent=ev_soc,
-            ev_charge_mode=EVChargeMode(cfg.ev_charge_mode),
+            ev_charge_mode=EVChargeMode(cfg.ev_charge_mode) if cfg.ev_charge_mode in EVChargeMode._value2member_map_ else EVChargeMode.SMART,
             price_raw_ct_kwh=current_price_ct,
             price_net_ct_kwh=current_price_net_ct,
             price_total_ct_kwh=current_price_total_ct,

@@ -263,7 +263,7 @@ class AppState:
                 ev_soc=ev_soc,
                 ev_target_soc=target_soc,
                 ev_departure_h=departure_h,
-                goal=OptimizationGoal(self.cfg.optimization_goal),
+                goal=OptimizationGoal(self.cfg.optimization_goal) if self.cfg.optimization_goal in OptimizationGoal._value2member_map_ else OptimizationGoal.COST,
                 ev_soc_map=ev_soc_map,
             )
             logger.info("LP optimization complete. Cost: €%.3f", self.current_schedule.total_cost_eur)
