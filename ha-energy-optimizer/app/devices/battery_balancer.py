@@ -32,6 +32,7 @@ class BatteryBalancer:
         self._ha = get_ha_client()
         self._state = BalancingState.IDLE
         self._balance_start: Optional[datetime] = None
+        self._hold_start: Optional[datetime] = None
         self._last_balance: Optional[datetime] = None
         self._load_state()
 
@@ -43,6 +44,7 @@ class BatteryBalancer:
         data = {
             "state": self._state.value,
             "balance_start": self._balance_start.isoformat() if self._balance_start else None,
+            "hold_start": self._hold_start.isoformat() if self._hold_start else None,
             "last_balance": self._last_balance.isoformat() if self._last_balance else None,
         }
         STATE_FILE.write_text(json.dumps(data))
@@ -55,6 +57,8 @@ class BatteryBalancer:
             self._state = BalancingState(data.get("state", "idle"))
             if data.get("balance_start"):
                 self._balance_start = datetime.fromisoformat(data["balance_start"])
+            if data.get("hold_start"):
+                self._hold_start = datetime.fromisoformat(data["hold_start"])
             if data.get("last_balance"):
                 self._last_balance = datetime.fromisoformat(data["last_balance"])
         except Exception as e:
@@ -191,12 +195,13 @@ class BatteryBalancer:
                 logger.info("Battery reached target SOC %.1f%%, holding for %dh",
                             battery_soc, self._cfg.battery_balancing_hold_duration_h)
                 self._state = BalancingState.HOLDING
+                self._hold_start = datetime.now()
                 self._save_state()
                 await self._ha.publish_sensor("balancing_status", "holding", "")
 
         elif self._state == BalancingState.HOLDING:
-            if self._balance_start:
-                hold_elapsed = datetime.now() - self._balance_start
+            if self._hold_start:
+                hold_elapsed = datetime.now() - self._hold_start
                 target_hold = timedelta(hours=self._cfg.battery_balancing_hold_duration_h)
                 if hold_elapsed >= target_hold:
                     await self.stop_balancing()
@@ -207,6 +212,7 @@ class BatteryBalancer:
         self._state = BalancingState.IDLE
         self._last_balance = datetime.now()
         self._balance_start = None
+        self._hold_start = None
         self._save_state()
 
         await self._ha.publish_sensor("balancing_status", "idle", "",

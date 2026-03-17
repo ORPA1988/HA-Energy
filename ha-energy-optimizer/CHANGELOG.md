@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0
+
+- **Versionsbereinigung**: Konsistente Version 0.2.0 in allen Dateien (config.yaml, build.yaml, main.py, mcp_server.py, README)
+- **Bug-Fix Batterie-Balancing**: Hold-Timer wurde ab Ladebeginn statt ab Hold-Beginn gemessen — Halten konnte vorzeitig enden
+- **Bug-Fix EV-SOC-Warnung**: Warnung über fehlenden EV-SOC-Sensor erschien alle 30s — jetzt nur einmalig bis Sensor wieder verfügbar
+- **Bug-Fix Config-Update**: App-State wurde nach API-Config-Update nicht aktualisiert — Änderungen erst nach Neustart wirksam
+- **Bug-Fix EV-Modus-Validierung**: `/api/ev/mode` akzeptierte ungültige Moduswerte ohne Fehlermeldung
+- **Bug-Fix Open-Meteo Timeout**: Timeout von 5s auf 15s erhöht — verhindert Fehlschläge auf Raspberry Pi mit langsamer Verbindung
+- **Code-Bereinigung**: Unbenutzte Variablen in ENTSO-E-Preisparser entfernt
+
 ## 0.1.0
 
 - **Auto-Erkennung**: Automatische Erkennung von HA-Entitäten (Sensoren, Switches) mit Confidence-Bewertung

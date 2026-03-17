@@ -205,9 +205,7 @@ class PriceFetcher:
         prices_ct: list[float] = []
 
         for ts in root.findall(".//ns:TimeSeries", ns):
-            unit = ts.findtext("ns:currency_Unit.name", namespaces=ns)
             for period in ts.findall("ns:Period", ns):
-                resolution = ts.findtext("ns:resolution", namespaces=ns, default="PT60M")
                 for pt in period.findall("ns:Point", ns):
                     price_raw = float(pt.findtext("ns:price.amount", default="0", namespaces=ns))
                     # ENTSO-E gives EUR/MWh → convert to ct/kWh

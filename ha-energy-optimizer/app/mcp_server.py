@@ -418,7 +418,7 @@ class MCPServer:
                         "capabilities": {"tools": {}},
                         "serverInfo": {
                             "name": "ha-energy-optimizer",
-                            "version": "1.0.3",
+                            "version": "0.2.0",
                         },
                     },
                 })
