@@ -118,6 +118,9 @@ class LinearOptimizer:
         )
 
         # ---- Equality constraints (energy balance per hour) ----
+        # When loads are subtracted from total (decomposition active), we must
+        # add their power explicitly as decision variables in the energy balance.
+        # When not subtracted, load power is already included in house_load profile.
         A_eq = np.zeros((N, n_total))
         b_eq = np.zeros(N)
         for t in range(N):
@@ -126,8 +129,11 @@ class LinearOptimizer:
             A_eq[t, 2 * N + t] = 1.0  # ev_charge
             A_eq[t, 3 * N + t] = 1.0  # grid_import
             A_eq[t, 4 * N + t] = -1.0 # grid_export
-            # Load power included in house_load, so it's already accounted for
-            b_eq[t] = house[t] - pv[t]  # net demand (positive = need from grid/battery)
+            # Add deferrable load power as explicit demand when active
+            for li, load in enumerate(cfg.deferrable_loads):
+                load_base = n_base + li * N
+                A_eq[t, load_base + t] = load.power_w  # load_on * power_w adds to demand
+            b_eq[t] = house[t] - pv[t]  # net demand (base load - PV generation)
 
         # ---- Inequality constraints ----
         ineq_rows = []

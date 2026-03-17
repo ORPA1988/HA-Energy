@@ -17,6 +17,13 @@ class DataCollector:
     def __init__(self):
         self._cfg = get_config()
         self._ha = get_ha_client()
+        self._decomposer = None
+
+    def _get_decomposer(self):
+        if self._decomposer is None:
+            from data.load_decomposition import get_load_decomposer
+            self._decomposer = get_load_decomposer()
+        return self._decomposer
 
     async def get_current_state(
         self,
@@ -32,10 +39,16 @@ class DataCollector:
         battery_power = await ha.get_state_value(cfg.battery_power_sensor, 0.0)
         grid_power = await ha.get_state_value(cfg.grid_power_sensor, 0.0)
 
-        # House load: PV - grid_export - battery_charge (simplified energy balance)
-        # grid positive = import, negative = export
-        # battery positive = charging, negative = discharging
-        house_load = max(0.0, pv_w + max(0.0, grid_power) - max(0.0, battery_power))
+        # Use load decomposition if any loads are marked for subtraction
+        has_subtractable = any(dl.subtract_from_total for dl in cfg.deferrable_loads)
+        if has_subtractable:
+            decomposer = self._get_decomposer()
+            house_load = await decomposer.get_base_load_w()
+        else:
+            # House load: PV - grid_export - battery_charge (simplified energy balance)
+            # grid positive = import, negative = export
+            # battery positive = charging, negative = discharging
+            house_load = max(0.0, pv_w + max(0.0, grid_power) - max(0.0, battery_power))
 
         # Solar surplus: what's available beyond house load and battery charging
         surplus = max(0.0, pv_w - house_load - max(0.0, battery_power))

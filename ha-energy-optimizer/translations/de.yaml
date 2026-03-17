@@ -1,0 +1,88 @@
+configuration:
+  pv_power_sensor:
+    name: PV-Leistungssensor
+    description: "Home Assistant Sensor-Entit\u00e4t f\u00fcr aktuelle Solarleistung (W)"
+  pv_forecast_kwp:
+    name: PV-Anlagenleistung (kWp)
+    description: "Spitzenleistung der Solaranlage in Kilowatt-Peak"
+  pv_orientation:
+    name: PV-Ausrichtung
+    description: "Azimut der Module in Grad (0=Nord, 90=Ost, 180=S\u00fcd, 270=West)"
+  pv_tilt:
+    name: PV-Neigung
+    description: "Neigungswinkel der Module in Grad (0=horizontal, 90=vertikal)"
+  pv_latitude:
+    name: Breitengrad
+    description: "Geografischer Breitengrad der PV-Anlage"
+  pv_longitude:
+    name: "L\u00e4ngengrad"
+    description: "Geografischer L\u00e4ngengrad der PV-Anlage"
+  battery_soc_sensor:
+    name: Batterie-SOC-Sensor
+    description: "Home Assistant Sensor f\u00fcr den Ladezustand der Batterie (%)"
+  battery_power_sensor:
+    name: Batterie-Leistungssensor
+    description: "Home Assistant Sensor f\u00fcr Batterieleistung (W, positiv=laden)"
+  battery_capacity_kwh:
+    name: "Batteriekapazit\u00e4t (kWh)"
+    description: "Nutzbare Batteriekapazit\u00e4t in Kilowattstunden"
+  battery_max_charge_w:
+    name: Max. Ladeleistung (W)
+    description: "Maximale Ladeleistung der Batterie in Watt"
+  battery_max_discharge_w:
+    name: Max. Entladeleistung (W)
+    description: "Maximale Entladeleistung der Batterie in Watt"
+  battery_min_soc:
+    name: Minimaler SOC (%)
+    description: "Batterie nie unter diesen Wert entladen"
+  battery_reserve_soc:
+    name: Reserve-SOC (%)
+    description: "Batterie \u00fcber diesem Wert halten wenn E-Auto-Laden geplant"
+  grid_power_sensor:
+    name: Netz-Leistungssensor
+    description: "Home Assistant Sensor f\u00fcr Netzleistung (W, positiv=Bezug)"
+  total_power_sensor:
+    name: Gesamtverbrauch-Sensor
+    description: "Home Assistant Sensor f\u00fcr Gesamthausverbrauch (W). Wird f\u00fcr Lastzerlegung verwendet."
+  grid_max_import_w:
+    name: Max. Netzbezug (W)
+    description: "Maximaler erlaubter Netzbezug in Watt (0=unbegrenzt)"
+  price_source:
+    name: Preisquelle
+    description: "Woher die Strompreise bezogen werden"
+  epex_import_entity:
+    name: "EPEX Import-Preis Entit\u00e4t"
+    description: "Home Assistant Entit\u00e4t f\u00fcr Import-Strompreise (z.B. sensor.epex_spot_de_price)"
+  epex_export_entity:
+    name: "EPEX Export-Preis Entit\u00e4t"
+    description: "Home Assistant Entit\u00e4t f\u00fcr Einspeiseverg\u00fctung (optional)"
+  epex_unit:
+    name: EPEX Preiseinheit
+    description: "Einheit der EPEX-Preiswerte"
+  fixed_price_ct_kwh:
+    name: Fester Preis (ct/kWh)
+    description: "Fester Strompreis als Fallback"
+  price_feed_in_ct_kwh:
+    name: "Einspeiseverg\u00fctung (ct/kWh)"
+    description: "Verg\u00fctung f\u00fcr eingespeisten Strom"
+  goe_enabled:
+    name: go-e Charger aktiviert
+    description: "go-e Charger Integration aktivieren"
+  goe_connection_type:
+    name: go-e Verbindungstyp
+    description: "\u00dcber lokales Netzwerk oder Cloud-API verbinden"
+  ev_soc_sensor:
+    name: E-Auto SOC-Sensor
+    description: "Home Assistant Sensor f\u00fcr den Ladestand des E-Autos (%)"
+  ev_battery_capacity_kwh:
+    name: "E-Auto Batteriekapazit\u00e4t (kWh)"
+    description: "Gesamte Batteriekapazit\u00e4t des Elektrofahrzeugs"
+  ev_charge_mode:
+    name: E-Auto Lademodus
+    description: "Standard-Ladestrategie (solar/min_solar/fast/smart/off)"
+  optimization_goal:
+    name: Optimierungsziel
+    description: "Wof\u00fcr optimiert werden soll: Kosten, Eigenverbrauch oder ausgewogen"
+  peak_shaving_limit_w:
+    name: Peak-Shaving Grenze (W)
+    description: "Batterie entladen wenn Netzbezug diesen Wert \u00fcberschreitet (0=deaktiviert)"

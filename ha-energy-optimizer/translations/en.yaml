@@ -1,0 +1,88 @@
+configuration:
+  pv_power_sensor:
+    name: PV Power Sensor
+    description: "Home Assistant sensor entity for current solar power output (W)"
+  pv_forecast_kwp:
+    name: PV System Size (kWp)
+    description: "Peak power of your solar installation in kilowatt-peak"
+  pv_orientation:
+    name: PV Orientation
+    description: "Panel azimuth in degrees (0=North, 90=East, 180=South, 270=West)"
+  pv_tilt:
+    name: PV Tilt
+    description: "Panel tilt angle in degrees (0=horizontal, 90=vertical)"
+  pv_latitude:
+    name: Latitude
+    description: "Geographic latitude of your PV installation"
+  pv_longitude:
+    name: Longitude
+    description: "Geographic longitude of your PV installation"
+  battery_soc_sensor:
+    name: Battery SOC Sensor
+    description: "Home Assistant sensor for battery state of charge (%)"
+  battery_power_sensor:
+    name: Battery Power Sensor
+    description: "Home Assistant sensor for battery power (W, positive=charging)"
+  battery_capacity_kwh:
+    name: Battery Capacity (kWh)
+    description: "Usable battery capacity in kilowatt-hours"
+  battery_max_charge_w:
+    name: Max Charge Power (W)
+    description: "Maximum battery charging power in watts"
+  battery_max_discharge_w:
+    name: Max Discharge Power (W)
+    description: "Maximum battery discharging power in watts"
+  battery_min_soc:
+    name: Minimum SOC (%)
+    description: "Never discharge battery below this level"
+  battery_reserve_soc:
+    name: Reserve SOC (%)
+    description: "Keep battery above this level when EV charging is planned"
+  grid_power_sensor:
+    name: Grid Power Sensor
+    description: "Home Assistant sensor for grid power (W, positive=import)"
+  total_power_sensor:
+    name: Total Power Sensor
+    description: "Home Assistant sensor for total house consumption (W). Used for load decomposition."
+  grid_max_import_w:
+    name: Max Grid Import (W)
+    description: "Maximum allowed grid import in watts (0=unlimited)"
+  price_source:
+    name: Price Source
+    description: "Where to get electricity prices from"
+  epex_import_entity:
+    name: EPEX Import Price Entity
+    description: "Home Assistant entity for import electricity prices (e.g. sensor.epex_spot_de_price)"
+  epex_export_entity:
+    name: EPEX Export Price Entity
+    description: "Home Assistant entity for export/feed-in prices (optional)"
+  epex_unit:
+    name: EPEX Price Unit
+    description: "Unit of the EPEX price entity values"
+  fixed_price_ct_kwh:
+    name: Fixed Price (ct/kWh)
+    description: "Fallback fixed electricity price"
+  price_feed_in_ct_kwh:
+    name: Feed-in Tariff (ct/kWh)
+    description: "Compensation for exported electricity"
+  goe_enabled:
+    name: go-e Charger Enabled
+    description: "Enable go-e Charger integration"
+  goe_connection_type:
+    name: go-e Connection Type
+    description: "Connect to go-e via local network or cloud API"
+  ev_soc_sensor:
+    name: EV SOC Sensor
+    description: "Home Assistant sensor for electric vehicle battery level (%)"
+  ev_battery_capacity_kwh:
+    name: EV Battery Capacity (kWh)
+    description: "Total battery capacity of your electric vehicle"
+  ev_charge_mode:
+    name: EV Charge Mode
+    description: "Default charging strategy (solar/min_solar/fast/smart/off)"
+  optimization_goal:
+    name: Optimization Goal
+    description: "What to optimize for: cost, self-consumption, or balanced"
+  peak_shaving_limit_w:
+    name: Peak Shaving Limit (W)
+    description: "Discharge battery when grid import exceeds this (0=disabled)"
