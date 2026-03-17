@@ -564,7 +564,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="HA Energy Optimizer",
-    version="1.0.3",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -642,6 +642,12 @@ async def get_ev_strategy():
 @app.post("/api/ev/mode")
 async def set_ev_mode(body: dict):
     mode = body.get("mode", "smart")
+    valid_modes = {"solar", "min_solar", "fast", "smart", "off"}
+    if mode not in valid_modes:
+        return JSONResponse(
+            {"error": f"Invalid mode '{mode}'. Must be one of: {', '.join(sorted(valid_modes))}"},
+            status_code=400,
+        )
     cfg = get_config()
     cfg.ev_charge_mode = mode
     return {"status": "ok", "mode": mode}
@@ -822,6 +828,7 @@ async def update_config_api(body: dict):
     body.pop("supervisor_token", None)
     body.pop("ha_url", None)
     cfg = update_config(body)
+    app_state.cfg = cfg
     return {"status": "ok", "message": "Config updated"}
 
 

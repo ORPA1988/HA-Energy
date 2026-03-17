@@ -19,6 +19,7 @@ class DataCollector:
         self._cfg = get_config()
         self._ha = get_ha_client()
         self._decomposer = None
+        self._ev_soc_warned: bool = False  # Rate-limit EV SOC unavailable warning
 
     def _get_decomposer(self):
         if self._decomposer is None:
@@ -67,11 +68,15 @@ class DataCollector:
             except (ValueError, TypeError):
                 ev_soc = None
         
-        # Warn if EV charging configured but sensor unavailable
+        # Warn if EV charging configured but sensor unavailable (once only)
         if ev_soc is None and (cfg.goe_enabled or cfg.ev_charging_windows):
-            logger.warning("EV SOC sensor '%s' unavailable but EV charging is enabled. "
-                          "Optimization will use fallback SOC values.",
-                          cfg.ev_soc_sensor)
+            if not self._ev_soc_warned:
+                logger.warning("EV SOC sensor '%s' unavailable but EV charging is enabled. "
+                              "Optimization will use fallback SOC values.",
+                              cfg.ev_soc_sensor)
+                self._ev_soc_warned = True
+        elif ev_soc is not None:
+            self._ev_soc_warned = False  # Reset when sensor becomes available
 
         return EnergyState(
             timestamp=datetime.now(),
