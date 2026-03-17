@@ -94,6 +94,38 @@ class HAClient:
         except (KeyError, ValueError, TypeError):
             return default
 
+    async def get_all_states(self) -> list[dict]:
+        """Returns all entity states from HA."""
+        if not self._client:
+            return []
+        try:
+            await self._check_rate_limit()
+            r = await self._client.get(f"{self._base}/states")
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            logger.warning("get_all_states() failed: %s", e)
+            return []
+
+    async def get_entities_by_domain(self, domain: str = "") -> list[dict]:
+        """Returns entity summaries, optionally filtered by domain."""
+        all_states = await self.get_all_states()
+        entities = []
+        for s in all_states:
+            eid = s.get("entity_id", "")
+            if domain and not eid.startswith(domain + "."):
+                continue
+            attrs = s.get("attributes", {})
+            entities.append({
+                "entity_id": eid,
+                "state": s.get("state", ""),
+                "friendly_name": attrs.get("friendly_name", eid),
+                "unit": attrs.get("unit_of_measurement", ""),
+                "device_class": attrs.get("device_class", ""),
+            })
+        entities.sort(key=lambda e: e["entity_id"])
+        return entities
+
     # ------------------------------------------------------------------
     # Control
     # ------------------------------------------------------------------

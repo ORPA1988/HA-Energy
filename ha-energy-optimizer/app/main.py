@@ -25,7 +25,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from config import get_config
+from config import get_config, save_config, update_config, reload_config
 from data.collector import DataCollector
 from data.forecast import get_pv_forecast
 from data.prices import get_price_fetcher
@@ -515,6 +515,185 @@ async def stop_balancing():
 async def get_history(hours: int = 24):
     cutoff_count = hours * 120  # 30s intervals → 120 per hour
     return {"history": app_state._history[-cutoff_count:]}
+
+
+# ---------------------------------------------------------------------------
+# Config API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/config")
+async def get_config_api():
+    """Return current configuration as JSON."""
+    cfg = get_config()
+    data = {}
+    for f in cfg.__dataclass_fields__:
+        val = getattr(cfg, f)
+        if isinstance(val, list) and val and hasattr(val[0], '__dataclass_fields__'):
+            data[f] = [
+                {k: getattr(item, k) for k in item.__dataclass_fields__}
+                for item in val
+            ]
+        else:
+            data[f] = val
+    # Remove sensitive fields from response
+    data.pop("supervisor_token", None)
+    return data
+
+
+@app.post("/api/config")
+async def update_config_api(body: dict):
+    """Update configuration. Accepts partial updates."""
+    # Don't allow updating sensitive runtime fields
+    body.pop("supervisor_token", None)
+    body.pop("ha_url", None)
+    cfg = update_config(body)
+    return {"status": "ok", "message": "Config updated"}
+
+
+# ---------------------------------------------------------------------------
+# HA Entity API (for entity picker in GUI)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/ha/entities")
+async def get_ha_entities(domain: str = ""):
+    """List all HA entities, optionally filtered by domain."""
+    entities = await app_state.ha.get_entities_by_domain(domain)
+    return {"entities": entities}
+
+
+@app.get("/api/ha/entity/{entity_id:path}")
+async def get_ha_entity_state(entity_id: str):
+    """Get current state of a specific HA entity."""
+    state = await app_state.ha.get_state(entity_id)
+    if not state:
+        return JSONResponse({"error": "Entity not found"}, status_code=404)
+    return state
+
+
+# ---------------------------------------------------------------------------
+# Deferrable Loads API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/config/loads")
+async def get_loads():
+    """List all configured deferrable loads."""
+    cfg = get_config()
+    loads = []
+    for i, dl in enumerate(cfg.deferrable_loads):
+        loads.append({
+            "index": i,
+            **{k: getattr(dl, k) for k in dl.__dataclass_fields__},
+        })
+    return {"loads": loads}
+
+
+@app.post("/api/config/loads")
+async def add_load(body: dict):
+    """Add a new deferrable load."""
+    cfg = get_config()
+    from config import DeferrableLoad
+    try:
+        load = DeferrableLoad(**body)
+        cfg.deferrable_loads.append(load)
+        save_config(cfg)
+        return {"status": "ok", "index": len(cfg.deferrable_loads) - 1}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.put("/api/config/loads/{index}")
+async def update_load(index: int, body: dict):
+    """Update a deferrable load by index."""
+    cfg = get_config()
+    if index < 0 or index >= len(cfg.deferrable_loads):
+        return JSONResponse({"error": "Invalid index"}, status_code=404)
+    from config import DeferrableLoad
+    try:
+        cfg.deferrable_loads[index] = DeferrableLoad(**body)
+        save_config(cfg)
+        return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.delete("/api/config/loads/{index}")
+async def delete_load(index: int):
+    """Delete a deferrable load by index."""
+    cfg = get_config()
+    if index < 0 or index >= len(cfg.deferrable_loads):
+        return JSONResponse({"error": "Invalid index"}, status_code=404)
+    cfg.deferrable_loads.pop(index)
+    save_config(cfg)
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# EV / Wallbox Config API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/config/evs")
+async def get_evs():
+    """List all configured EV charging windows."""
+    cfg = get_config()
+    evs = []
+    for i, w in enumerate(cfg.ev_charging_windows):
+        evs.append({
+            "index": i,
+            **{k: getattr(w, k) for k in w.__dataclass_fields__},
+        })
+    return {"evs": evs}
+
+
+@app.post("/api/config/evs")
+async def add_ev(body: dict):
+    """Add a new EV charging window."""
+    cfg = get_config()
+    from config import EVChargingWindow
+    try:
+        window = EVChargingWindow(**body)
+        cfg.ev_charging_windows.append(window)
+        save_config(cfg)
+        return {"status": "ok", "index": len(cfg.ev_charging_windows) - 1}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.put("/api/config/evs/{index}")
+async def update_ev(index: int, body: dict):
+    """Update an EV charging window by index."""
+    cfg = get_config()
+    if index < 0 or index >= len(cfg.ev_charging_windows):
+        return JSONResponse({"error": "Invalid index"}, status_code=404)
+    from config import EVChargingWindow
+    try:
+        cfg.ev_charging_windows[index] = EVChargingWindow(**body)
+        save_config(cfg)
+        return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.delete("/api/config/evs/{index}")
+async def delete_ev(index: int):
+    """Delete an EV charging window by index."""
+    cfg = get_config()
+    if index < 0 or index >= len(cfg.ev_charging_windows):
+        return JSONResponse({"error": "Invalid index"}, status_code=404)
+    cfg.ev_charging_windows.pop(index)
+    save_config(cfg)
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Load Decomposition API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/load-decomposition")
+async def get_load_decomposition():
+    """Get current load decomposition (base load vs controllable loads)."""
+    from data.load_decomposition import get_load_decomposer
+    decomposer = get_load_decomposer()
+    return await decomposer.get_decomposition()
 
 
 @app.websocket("/ws")
