@@ -17,6 +17,9 @@ configuration:
   pv_longitude:
     name: Longitude
     description: "Geographic longitude of your PV installation"
+  pv_efficiency:
+    name: PV Efficiency
+    description: "Solar panel efficiency factor (0.0–1.0, typical: 0.18)"
   battery_soc_sensor:
     name: Battery SOC Sensor
     description: "Home Assistant sensor for battery state of charge (%)"
@@ -26,6 +29,12 @@ configuration:
   battery_capacity_kwh:
     name: Battery Capacity (kWh)
     description: "Usable battery capacity in kilowatt-hours"
+  battery_charge_switch:
+    name: Battery Charge Switch
+    description: "Home Assistant switch entity to enable battery charging"
+  battery_discharge_switch:
+    name: Battery Discharge Switch
+    description: "Home Assistant switch entity to enable battery discharging"
   battery_max_charge_w:
     name: Max Charge Power (W)
     description: "Maximum battery charging power in watts"
@@ -38,6 +47,36 @@ configuration:
   battery_reserve_soc:
     name: Reserve SOC (%)
     description: "Keep battery above this level when EV charging is planned"
+  battery_efficiency:
+    name: Battery Efficiency
+    description: "Round-trip efficiency of the battery (0.0–1.0, typical: 0.95)"
+  battery_balancing_enabled:
+    name: Battery Balancing Enabled
+    description: "Enable periodic full-charge cycles for cell equalization"
+  battery_balancing_mode:
+    name: Balancing Mode
+    description: "When to trigger balancing: auto, scheduled, or manual"
+  battery_balancing_frequency:
+    name: Balancing Frequency
+    description: "How often to balance: daily, weekly, monthly, or custom"
+  battery_balancing_custom_days:
+    name: Custom Balancing Interval (days)
+    description: "Number of days between balancing cycles (if frequency=custom)"
+  battery_balancing_target_soc:
+    name: Balancing Target SOC (%)
+    description: "Charge battery to this level during balancing"
+  battery_balancing_hold_duration_h:
+    name: Balancing Hold Duration (h)
+    description: "Hold at target SOC for this many hours after reaching it"
+  battery_balancing_preferred_time:
+    name: Preferred Balancing Time
+    description: "Preferred time of day to start balancing (HH:MM)"
+  battery_balancing_auto_trigger_soc_deviation:
+    name: Auto-Trigger SOC Deviation (%)
+    description: "Trigger balancing automatically if max SOC deviates by this amount"
+  battery_balancing_use_solar_only:
+    name: Solar-Only Balancing
+    description: "Only balance when sufficient solar power is available"
   grid_power_sensor:
     name: Grid Power Sensor
     description: "Home Assistant sensor for grid power (W, positive=import)"
@@ -50,6 +89,24 @@ configuration:
   price_source:
     name: Price Source
     description: "Where to get electricity prices from"
+  entso_e_token:
+    name: ENTSO-E API Token
+    description: "Security token for the ENTSO-E Transparency Platform API"
+  entso_e_area:
+    name: ENTSO-E Bidding Zone
+    description: "Market area code (e.g. 10YDE-EON------1 for Germany)"
+  tibber_token:
+    name: Tibber API Token
+    description: "Personal access token from Tibber Developer Portal"
+  awattar_country:
+    name: aWATTar Country
+    description: "Country for aWATTar prices (AT=Austria, DE=Germany)"
+  epex_spot_area:
+    name: EPEX Spot Area
+    description: "Market area for EPEX Spot prices (DE-LU, AT, CH)"
+  price_sensor_entity:
+    name: Price Sensor Entity
+    description: "Home Assistant sensor entity for current electricity price"
   epex_import_entity:
     name: EPEX Import Price Entity
     description: "Home Assistant entity for import electricity prices (e.g. sensor.epex_spot_de_price)"
@@ -62,6 +119,27 @@ configuration:
   fixed_price_ct_kwh:
     name: Fixed Price (ct/kWh)
     description: "Fallback fixed electricity price"
+  price_input_is_netto:
+    name: Price Input is Net
+    description: "Whether the price source provides net prices (before VAT)"
+  price_vat_percent:
+    name: VAT (%)
+    description: "Value added tax percentage (e.g. 19.0 for Germany)"
+  price_grid_fee_source:
+    name: Grid Fee Source
+    description: "How to determine grid fees: fixed value or HA entity"
+  price_grid_fee_fixed_ct_kwh:
+    name: Fixed Grid Fee (ct/kWh)
+    description: "Fixed grid usage fee per kilowatt-hour"
+  price_grid_fee_entity:
+    name: Grid Fee Entity
+    description: "Home Assistant entity providing dynamic grid fees"
+  price_supplier_markup_ct_kwh:
+    name: Supplier Markup (ct/kWh)
+    description: "Energy supplier markup per kilowatt-hour"
+  price_other_taxes_ct_kwh:
+    name: Other Taxes (ct/kWh)
+    description: "Additional taxes and levies per kilowatt-hour"
   price_feed_in_ct_kwh:
     name: Feed-in Tariff (ct/kWh)
     description: "Compensation for exported electricity"
@@ -71,6 +149,21 @@ configuration:
   goe_connection_type:
     name: go-e Connection Type
     description: "Connect to go-e via local network or cloud API"
+  goe_local_ip:
+    name: go-e Local IP
+    description: "Local IP address of the go-e Charger (e.g. 192.168.1.100)"
+  goe_cloud_serial:
+    name: go-e Cloud Serial
+    description: "Serial number for go-e Cloud API access"
+  goe_cloud_token:
+    name: go-e Cloud Token
+    description: "API token for go-e Cloud API access"
+  goe_max_current_a:
+    name: go-e Max Current (A)
+    description: "Maximum charging current in amperes"
+  goe_phases:
+    name: go-e Phases
+    description: "Number of phases for charging (1 or 3)"
   ev_soc_sensor:
     name: EV SOC Sensor
     description: "Home Assistant sensor for electric vehicle battery level (%)"
@@ -80,9 +173,30 @@ configuration:
   ev_charge_mode:
     name: EV Charge Mode
     description: "Default charging strategy (solar/min_solar/fast/smart/off)"
+  ev_min_charge_current_a:
+    name: EV Min Charge Current (A)
+    description: "Minimum charging current in amperes (typically 6A)"
+  ev_max_charge_current_a:
+    name: EV Max Charge Current (A)
+    description: "Maximum charging current in amperes (typically 16A or 32A)"
+  ev_allow_battery_to_charge_ev:
+    name: Allow Battery → EV
+    description: "Allow discharging home battery to charge the electric vehicle"
+  ev_allow_grid_to_charge_ev:
+    name: Allow Grid → EV
+    description: "Allow grid electricity to charge the electric vehicle"
+  ev_combined_charge_threshold_ct:
+    name: Combined Charge Threshold (ct/kWh)
+    description: "Use grid+solar combined charging when price is below this threshold"
+  ev_charging_windows:
+    name: EV Charging Windows
+    description: "List of time windows when EV charging is allowed"
   ev_configs:
     name: EV/Wallbox Configurations
     description: "List of configured electric vehicles and wallboxes"
+  deferrable_loads:
+    name: Deferrable Loads
+    description: "List of controllable loads that can be time-shifted (e.g. washing machine)"
   read_only:
     name: "Read-Only Mode"
     description: "When enabled: system only reads sensors, no switching or control actions. Ideal for initial setup testing."
@@ -92,6 +206,24 @@ configuration:
   optimization_goal:
     name: Optimization Goal
     description: "What to optimize for: cost, self-consumption, or balanced"
+  optimization_interval_minutes:
+    name: Optimization Interval (min)
+    description: "How often to run the LP optimization (in minutes)"
+  long_term_plan_interval_hours:
+    name: Long-Term Plan Interval (h)
+    description: "How often to run the 48h genetic planner (in hours)"
   peak_shaving_limit_w:
     name: Peak Shaving Limit (W)
     description: "Discharge battery when grid import exceeds this (0=disabled)"
+  notify_target:
+    name: Notification Target
+    description: "Home Assistant notification service (e.g. notify.mobile_app)"
+  notify_on_balancing:
+    name: Notify on Balancing
+    description: "Send notification when battery balancing starts/stops"
+  notify_on_cheap_window:
+    name: Notify on Cheap Window
+    description: "Send notification when a cheap electricity window is approaching"
+  notify_on_ev_charged:
+    name: Notify on EV Charged
+    description: "Send notification when EV has reached target SOC"
