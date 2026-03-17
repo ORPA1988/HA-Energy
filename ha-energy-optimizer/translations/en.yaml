@@ -83,6 +83,9 @@ configuration:
   ev_configs:
     name: EV/Wallbox Configurations
     description: "List of configured electric vehicles and wallboxes"
+  optimizer_backend:
+    name: Optimizer Backend
+    description: "Optimization engine: built-in (scipy LP/HiGHS) or EMHASS (ML + CVXPY)"
   optimization_goal:
     name: Optimization Goal
     description: "What to optimize for: cost, self-consumption, or balanced"
