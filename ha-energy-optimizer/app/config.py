@@ -157,7 +157,7 @@ class Config:
     deferrable_loads: list[DeferrableLoad] = field(default_factory=list)
 
     # Operation mode
-    read_only: bool = False  # Read-only mode: no switching, no control, only monitoring
+    read_only: bool = True  # Default: safe mode on first start, no switching/control
 
     # Optimization
     optimizer_backend: str = "builtin"  # "builtin" (scipy LP) or "emhass"

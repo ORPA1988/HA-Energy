@@ -117,7 +117,7 @@ options:
       min_soc_battery: 20
       price_limit_ct_kwh: 20.0
   # --- Operation Mode ---
-  read_only: false  # true = monitoring only, no active control
+  read_only: true  # Default: true for safe first start, switch to false after setup
   # --- Optimization ---
   optimizer_backend: "builtin"  # "builtin" or "emhass"
   optimization_goal: "cost"
