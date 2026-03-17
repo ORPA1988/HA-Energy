@@ -56,7 +56,7 @@ from optimizer.genetic import get_genetic_planner
 from optimizer.emhass_backend import get_emhass_optimizer, is_emhass_available
 from optimizer.linear import get_linear_optimizer
 from optimizer.realtime import get_realtime_controller
-from scheduler import get_scheduler, setup_jobs
+from scheduler import get_scheduler, setup_jobs, pause_jobs, resume_jobs
 
 
 class AppState:
@@ -466,6 +466,7 @@ class AppState:
             "price_ct": round(state.price_total_ct_kwh, 2),
             "is_balancing": state.battery_is_balancing,
             "read_only": self.cfg.read_only,
+            "operation_mode": self.cfg.operation_mode,
             "optimizer_backend": self.cfg.optimizer_backend,
             "ts": state.timestamp.isoformat(),
         }
@@ -499,12 +500,36 @@ app_state = AppState()
 async def lifespan(app: FastAPI):
     # Startup
     await app_state.ha.start()
+    cfg = app_state.cfg
+
+    # First-start auto-detection
+    from config import CONFIG_JSON_FILE
+    is_first_start = not CONFIG_JSON_FILE.exists()
+    if is_first_start:
+        logger.info("First start detected — running auto-configuration")
+        try:
+            detected = await _run_auto_detect()
+            if detected:
+                updates = {field: info["entity_id"] for field, info in detected.items()}
+                updates["operation_mode"] = "stopped"
+                updates["read_only"] = True
+                from config import update_config as _update_cfg
+                _update_cfg(updates)
+                app_state.cfg = get_config()
+                cfg = app_state.cfg
+                logger.info("Auto-detected %d entities on first start", len(detected))
+        except Exception as e:
+            logger.warning("Auto-detection on first start failed: %s", e)
+        app_state.is_first_start = True
+    else:
+        app_state.is_first_start = False
+
+    # Register scheduler jobs
     scheduler = get_scheduler()
     setup_jobs(app_state)
     scheduler.start()
 
     # Validate config at startup
-    cfg = app_state.cfg
     if cfg.battery_capacity_kwh <= 0:
         logger.warning("battery_capacity_kwh is 0 — battery optimization disabled")
     if cfg.battery_min_soc >= 100:
@@ -514,11 +539,16 @@ async def lifespan(app: FastAPI):
     if cfg.price_source == "entso-e" and not cfg.entso_e_token:
         logger.warning("ENTSO-E selected but no token configured — will use fixed price")
 
-    # Run initial optimizations
-    await app_state.refresh_prices()
-    await app_state.run_linear_optimization()
-    await app_state.run_genetic_planning()
-    await app_state.run_ev_strategy()
+    # Only run optimizations if operation_mode is "running"
+    if cfg.operation_mode == "running":
+        logger.info("Operation mode: running — starting optimizations")
+        await app_state.refresh_prices()
+        await app_state.run_linear_optimization()
+        await app_state.run_genetic_planning()
+        await app_state.run_ev_strategy()
+    else:
+        logger.info("Operation mode: stopped — skipping optimizations, pausing scheduler")
+        pause_jobs()
 
     try:
         yield
@@ -637,7 +667,12 @@ async def trigger_optimization():
 async def get_mode():
     """Get current operation mode."""
     cfg = get_config()
-    return {"read_only": cfg.read_only, "mode": "read_only" if cfg.read_only else "active"}
+    return {
+        "read_only": cfg.read_only,
+        "operation_mode": cfg.operation_mode,
+        "is_first_start": getattr(app_state, "is_first_start", False),
+        "mode": cfg.operation_mode,
+    }
 
 
 @app.post("/api/mode")
@@ -646,8 +681,85 @@ async def set_mode_api(body: dict):
     read_only = body.get("read_only", False)
     cfg = update_config({"read_only": read_only})
     mode = "read_only" if cfg.read_only else "active"
-    logger.info("Operation mode changed to: %s", mode)
+    logger.info("Read-only mode changed to: %s", mode)
     return {"status": "ok", "read_only": cfg.read_only, "mode": mode}
+
+
+def _validate_config_internal() -> tuple[list[str], list[str]]:
+    """Validate config and return (errors, warnings)."""
+    cfg = get_config()
+    warnings = []
+    errors = []
+
+    if not cfg.pv_power_sensor:
+        errors.append("PV-Leistungssensor nicht konfiguriert")
+    if not cfg.battery_soc_sensor:
+        warnings.append("Batterie-SOC-Sensor nicht konfiguriert")
+    if not cfg.grid_power_sensor:
+        warnings.append("Netz-Leistungssensor nicht konfiguriert")
+    if cfg.price_source == "epex_entity" and not cfg.epex_import_entity:
+        errors.append("EPEX-Entity als Preisquelle gewählt aber keine Import-Entität konfiguriert")
+    if cfg.price_source == "entso-e" and not cfg.entso_e_token:
+        errors.append("ENTSO-E als Preisquelle gewählt aber kein API-Token konfiguriert")
+    if cfg.price_source == "tibber" and not cfg.tibber_token:
+        errors.append("Tibber als Preisquelle gewählt aber kein Token konfiguriert")
+    if cfg.battery_capacity_kwh <= 0:
+        warnings.append("Batteriekapazität ist 0 — Batterieoptimierung deaktiviert")
+    if cfg.battery_min_soc >= 100:
+        errors.append("Minimaler SOC >= 100% — Batterie kann nie entladen werden")
+    if cfg.goe_enabled and not cfg.goe_local_ip and cfg.goe_connection_type == "local":
+        warnings.append("go-e Charger aktiviert aber keine lokale IP konfiguriert")
+    for dl in cfg.deferrable_loads:
+        if not dl.switch:
+            errors.append(f"Steuerbare Last '{dl.name}' hat keine Switch-Entität")
+        if dl.power_w <= 0 and not dl.power_sensor:
+            warnings.append(f"Steuerbare Last '{dl.name}' hat weder Leistung noch Sensor")
+    if any(dl.subtract_from_total for dl in cfg.deferrable_loads) and not cfg.total_power_sensor:
+        warnings.append("Lastzerlegung aktiviert aber kein Gesamtverbrauch-Sensor konfiguriert")
+    if cfg.optimizer_backend == "emhass" and not is_emhass_available():
+        warnings.append("EMHASS als Backend gewählt aber nicht installiert — Fallback auf eingebauten LP")
+
+    return errors, warnings
+
+
+@app.post("/api/mode/start")
+async def start_optimizer():
+    """Start optimizer: validate config first, then enable scheduler."""
+    errors, warnings = _validate_config_internal()
+    if errors:
+        return JSONResponse({
+            "status": "error",
+            "message": "Konfiguration enthält Fehler — Start nicht möglich",
+            "errors": errors,
+            "warnings": warnings,
+        }, status_code=400)
+
+    cfg = update_config({"operation_mode": "running"})
+    app_state.cfg = cfg
+    resume_jobs()
+
+    # Run initial optimizations
+    asyncio.create_task(app_state.refresh_prices(), name="initial_prices")
+    asyncio.create_task(app_state.run_linear_optimization(), name="initial_lp")
+    asyncio.create_task(app_state.run_genetic_planning(), name="initial_genetic")
+    asyncio.create_task(app_state.run_ev_strategy(), name="initial_ev")
+
+    logger.info("Optimizer started — all jobs resumed")
+    return {
+        "status": "ok",
+        "operation_mode": "running",
+        "warnings": warnings,
+    }
+
+
+@app.post("/api/mode/stop")
+async def stop_optimizer():
+    """Stop optimizer: pause all scheduler jobs."""
+    cfg = update_config({"operation_mode": "stopped"})
+    app_state.cfg = cfg
+    pause_jobs()
+    logger.info("Optimizer stopped — all jobs paused")
+    return {"status": "ok", "operation_mode": "stopped"}
 
 
 @app.post("/api/balance/start")
@@ -713,51 +825,7 @@ async def update_config_api(body: dict):
 @app.get("/api/config/validate")
 async def validate_config():
     """Validate current configuration and return warnings/errors."""
-    cfg = get_config()
-    warnings = []
-    errors = []
-
-    # Check critical sensors
-    if not cfg.pv_power_sensor:
-        errors.append("PV-Leistungssensor nicht konfiguriert")
-    if not cfg.battery_soc_sensor:
-        warnings.append("Batterie-SOC-Sensor nicht konfiguriert")
-    if not cfg.grid_power_sensor:
-        warnings.append("Netz-Leistungssensor nicht konfiguriert")
-
-    # Check price config
-    if cfg.price_source == "epex_entity" and not cfg.epex_import_entity:
-        errors.append("EPEX-Entity als Preisquelle gewählt aber keine Import-Entität konfiguriert")
-    if cfg.price_source == "entso-e" and not cfg.entso_e_token:
-        errors.append("ENTSO-E als Preisquelle gewählt aber kein API-Token konfiguriert")
-    if cfg.price_source == "tibber" and not cfg.tibber_token:
-        errors.append("Tibber als Preisquelle gewählt aber kein Token konfiguriert")
-
-    # Check battery config
-    if cfg.battery_capacity_kwh <= 0:
-        warnings.append("Batteriekapazität ist 0 — Batterieoptimierung deaktiviert")
-    if cfg.battery_min_soc >= 100:
-        errors.append("Minimaler SOC >= 100% — Batterie kann nie entladen werden")
-
-    # Check EV config
-    if cfg.goe_enabled and not cfg.goe_local_ip and cfg.goe_connection_type == "local":
-        warnings.append("go-e Charger aktiviert aber keine lokale IP konfiguriert")
-
-    # Check deferrable loads
-    for i, dl in enumerate(cfg.deferrable_loads):
-        if not dl.switch:
-            errors.append(f"Steuerbare Last '{dl.name}' hat keine Switch-Entität")
-        if dl.power_w <= 0 and not dl.power_sensor:
-            warnings.append(f"Steuerbare Last '{dl.name}' hat weder Leistung noch Sensor")
-
-    # Check load decomposition
-    if any(dl.subtract_from_total for dl in cfg.deferrable_loads) and not cfg.total_power_sensor:
-        warnings.append("Lastzerlegung aktiviert aber kein Gesamtverbrauch-Sensor konfiguriert")
-
-    # Check EMHASS
-    if cfg.optimizer_backend == "emhass" and not is_emhass_available():
-        warnings.append("EMHASS als Backend gewählt aber nicht installiert — Fallback auf eingebauten LP")
-
+    errors, warnings = _validate_config_internal()
     return {
         "valid": len(errors) == 0,
         "errors": errors,
@@ -827,9 +895,8 @@ def _match_entity(entity: dict, domain: str, device_classes: list[str],
     return False, ""
 
 
-@app.get("/api/config/auto-detect")
-async def auto_detect_entities():
-    """Auto-detect HA entities for configuration fields."""
+async def _run_auto_detect() -> dict:
+    """Run auto-detection logic, returns dict of field_name -> suggestion info."""
     all_states = await app_state.ha.get_all_states()
     suggestions = {}
 
@@ -855,6 +922,13 @@ async def auto_detect_entities():
         if best:
             suggestions[field_name] = best
 
+    return suggestions
+
+
+@app.get("/api/config/auto-detect")
+async def auto_detect_entities():
+    """Auto-detect HA entities for configuration fields."""
+    suggestions = await _run_auto_detect()
     return {
         "suggestions": suggestions,
         "found_count": len(suggestions),
