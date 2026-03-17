@@ -234,9 +234,9 @@ class AppState:
             for ev in self.cfg.ev_configs:
                 if ev.soc_sensor:
                     try:
-                        val = await self.ha.get_state(ev.soc_sensor)
-                        if val is not None:
-                            ev_soc_map[ev.name] = float(val)
+                        soc_val = await self.ha.get_state_value(ev.soc_sensor, default=-1.0)
+                        if soc_val >= 0:
+                            ev_soc_map[ev.name] = soc_val
                     except (ValueError, TypeError, KeyError) as e:
                         logger.debug("Could not read EV SOC for %s: %s", ev.name, e)
 

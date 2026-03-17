@@ -283,6 +283,8 @@ def load_config() -> Config:
     cfg.goe_phases = max(1, min(3, cfg.goe_phases))
     cfg.ev_min_charge_current_a = max(0, min(32, cfg.ev_min_charge_current_a))
     cfg.ev_max_charge_current_a = max(cfg.ev_min_charge_current_a, min(32, cfg.ev_max_charge_current_a))
+    cfg.battery_capacity_kwh = max(0.1, cfg.battery_capacity_kwh)
+    cfg.ev_battery_capacity_kwh = max(0.1, cfg.ev_battery_capacity_kwh)
 
     logger.info("Configuration loaded successfully")
     return cfg

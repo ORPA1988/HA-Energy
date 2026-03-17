@@ -52,6 +52,12 @@ class EVChargeStrategySolver:
             hours.append(h)
             h += timedelta(hours=1)
 
+        # Guard against empty forecast lists
+        if not price_forecast_ct:
+            price_forecast_ct = [cfg.fixed_price_ct_kwh]
+        if not pv_forecast_w:
+            pv_forecast_w = [0.0]
+
         # Map hours to price/PV forecast indices
         def hour_idx(dt: datetime) -> int:
             delta = int((dt - now).total_seconds() / 3600)

@@ -126,10 +126,7 @@ class PVForecast:
             # Temperature correction
             temp_factor = max(0.0, 1.0 - self.TEMP_COEFF * max(0.0, temp - 25.0))
 
-            # PV power in watts
-            power_w = g_tilt * self.kwp * self.efficiency * temp_factor * 1000.0 / 1000.0
-            # g_tilt is in W/m², kwp in kWp, so: P(W) = G(W/m²) * area(m²) * eff
-            # Simplified: P(kW) = G(kW/m²) * kwp(kWp), since kwp already accounts for area
+            # PV power: g_tilt(W/m²) * kwp(kWp) * efficiency * temp_factor
             power_w = g_tilt * self.kwp * self.efficiency * temp_factor
 
             hours.append(t)
