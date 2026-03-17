@@ -158,6 +158,8 @@ class PriceFetcher:
                 return await self._fetch_tibber()
             elif source == "epex_spot":
                 return await self._fetch_epex_spot()
+            elif source == "epex_entity":
+                return await self._fetch_epex_entity()
             elif source == "sensor":
                 return await self._fetch_ha_sensor()
             else:
@@ -345,6 +347,96 @@ class PriceFetcher:
         while len(hourly) < 48:
             hourly.append(hourly[-1])
         return hourly
+
+    @staticmethod
+    def _convert_price_to_ct_kwh(value: float, unit: str) -> float:
+        """Convert price value to ct/kWh from various units."""
+        if unit == "EUR/MWh":
+            return value / 10.0
+        elif unit == "EUR/kWh":
+            return value * 100.0
+        # Default: already ct/kWh
+        return value
+
+    async def _fetch_epex_entity(self) -> list[float]:
+        """
+        Read electricity prices directly from HA entities.
+
+        Supports EPEX Spot, Nordpool, and similar integrations that expose
+        price forecasts via entity attributes 'today' and 'tomorrow'.
+        Falls back to reading 'raw_today'/'raw_tomorrow' or 'prices_today'/'prices_tomorrow'.
+        """
+        entity_id = self._cfg.epex_import_entity
+        if not entity_id:
+            logger.warning("epex_import_entity not set, falling back to fixed price")
+            return await self._fetch_fixed()
+
+        ha = get_ha_client()
+        state_data = await ha.get_state(entity_id)
+        if not state_data:
+            logger.warning("EPEX entity %s not available", entity_id)
+            return await self._fetch_fixed()
+
+        attrs = state_data.get("attributes", {})
+        unit = self._cfg.epex_unit
+
+        prices_ct: list[float] = []
+
+        # Try various attribute names used by different integrations
+        # EPEX Spot integration: 'data' attribute with list of {start_time, end_time, price_ct_per_kwh}
+        epex_data = attrs.get("data", [])
+        if epex_data and isinstance(epex_data, list):
+            for entry in epex_data:
+                if isinstance(entry, dict):
+                    price = entry.get("price_ct_per_kwh") or entry.get("price") or 0.0
+                    prices_ct.append(self._convert_price_to_ct_kwh(float(price), unit))
+            if prices_ct:
+                logger.info("EPEX entity: read %d prices from 'data' attribute", len(prices_ct))
+
+        # Nordpool integration: 'today' and 'tomorrow' attributes (list of floats)
+        if not prices_ct:
+            today = attrs.get("today") or attrs.get("raw_today") or attrs.get("prices_today") or []
+            tomorrow = attrs.get("tomorrow") or attrs.get("raw_tomorrow") or attrs.get("prices_tomorrow") or []
+
+            if today and isinstance(today, list):
+                for p in today:
+                    if isinstance(p, dict):
+                        val = p.get("value", p.get("price", 0.0))
+                    else:
+                        val = p
+                    try:
+                        prices_ct.append(self._convert_price_to_ct_kwh(float(val), unit))
+                    except (ValueError, TypeError):
+                        prices_ct.append(self._cfg.fixed_price_ct_kwh)
+
+                for p in (tomorrow if isinstance(tomorrow, list) else []):
+                    if isinstance(p, dict):
+                        val = p.get("value", p.get("price", 0.0))
+                    else:
+                        val = p
+                    try:
+                        prices_ct.append(self._convert_price_to_ct_kwh(float(val), unit))
+                    except (ValueError, TypeError):
+                        prices_ct.append(self._cfg.fixed_price_ct_kwh)
+
+                if prices_ct:
+                    logger.info("EPEX entity: read %d prices from today/tomorrow attributes", len(prices_ct))
+
+        # Fallback: read single current price from state
+        if not prices_ct:
+            try:
+                current_price = float(state_data.get("state", 0))
+                prices_ct = [self._convert_price_to_ct_kwh(current_price, unit)] * 48
+                logger.info("EPEX entity: using single current price %.2f", prices_ct[0])
+            except (ValueError, TypeError):
+                return await self._fetch_fixed()
+
+        # Pad to 48h
+        if not prices_ct:
+            return await self._fetch_fixed()
+        while len(prices_ct) < 48:
+            prices_ct.append(prices_ct[-1])
+        return prices_ct[:48]
 
     async def _fetch_ha_sensor(self) -> list[float]:
         """Read current price from HA sensor — duplicated for 48h (no forecast)."""

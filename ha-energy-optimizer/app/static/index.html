@@ -136,6 +136,96 @@
 
     /* Charts */
     .chart-wrap { position: relative; height: 180px; }
+
+    /* Tab Navigation */
+    .tab-nav {
+      display: flex;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      gap: 0;
+      overflow-x: auto;
+    }
+    .tab-btn {
+      padding: 10px 16px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--green); border-bottom-color: var(--green); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Config Forms */
+    .config-section { margin-bottom: 24px; }
+    .config-section-title { font-size: 0.9rem; font-weight: 700; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: 0.75rem; color: var(--muted); font-weight: 600; }
+    .form-group input, .form-group select {
+      padding: 8px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.85rem;
+    }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--blue); }
+    .form-group .hint { font-size: 0.65rem; color: var(--muted); }
+
+    /* Entity Picker */
+    .entity-picker { position: relative; }
+    .entity-picker input { width: 100%; }
+    .entity-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+      background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+      max-height: 200px; overflow-y: auto; display: none;
+    }
+    .entity-dropdown.show { display: block; }
+    .entity-option {
+      padding: 6px 10px; cursor: pointer; font-size: 0.8rem;
+      display: flex; justify-content: space-between;
+    }
+    .entity-option:hover { background: var(--border); }
+    .entity-option .entity-value { color: var(--muted); font-size: 0.7rem; }
+
+    /* Item Cards (Loads, EVs) */
+    .item-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+    .item-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .item-card-title { font-weight: 700; font-size: 0.9rem; }
+    .item-card-actions { display: flex; gap: 6px; }
+    .btn-icon { background: transparent; border: 1px solid var(--border); color: var(--muted); cursor: pointer; border-radius: 4px; padding: 4px 8px; font-size: 0.75rem; }
+    .btn-icon:hover { border-color: var(--blue); color: var(--blue); }
+    .btn-icon.danger:hover { border-color: var(--red); color: var(--red); }
+
+    /* Decomposition chart */
+    .decomp-bar { display: flex; height: 24px; border-radius: 6px; overflow: hidden; margin: 8px 0; }
+    .decomp-segment { display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 600; color: #fff; min-width: 20px; }
+    .decomp-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.75rem; }
+    .decomp-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+
+    /* Toast notification */
+    .toast {
+      position: fixed; bottom: 20px; right: 20px; padding: 12px 20px;
+      background: var(--green); color: #000; border-radius: 8px; font-weight: 600;
+      font-size: 0.85rem; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+    }
+    .toast.show { opacity: 1; }
+    .toast.error { background: var(--red); color: #fff; }
   </style>
 </head>
 <body>
@@ -176,6 +266,21 @@
     <div class="stat-label">⚡ Überschuss</div>
   </div>
 </div>
+
+<!-- Tab Navigation -->
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('dashboard')">Dashboard</button>
+  <button class="tab-btn" onclick="switchTab('loads')">Steuerbare Lasten</button>
+  <button class="tab-btn" onclick="switchTab('ev')">E-Auto / Wallbox</button>
+  <button class="tab-btn" onclick="switchTab('prices')">Strompreise</button>
+  <button class="tab-btn" onclick="switchTab('config')">Einstellungen</button>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ==================== TAB: Dashboard ==================== -->
+<div class="tab-content active" id="tab-dashboard">
 
 <!-- Main Grid -->
 <div class="main">
@@ -315,6 +420,471 @@
   </div>
 
 </div><!-- /main -->
+</div><!-- /tab-dashboard -->
+
+<!-- ==================== TAB: Steuerbare Lasten ==================== -->
+<div class="tab-content" id="tab-loads">
+<div class="main" style="grid-template-columns:1fr">
+
+  <div class="card full-width">
+    <div class="card-title">Lastzerlegung</div>
+    <div id="decomposition-view">
+      <div style="color:var(--muted);font-size:0.8rem">Lade Lastzerlegung...</div>
+    </div>
+  </div>
+
+  <div class="card full-width">
+    <div class="card-title" style="justify-content:space-between">
+      Steuerbare Lasten
+      <button class="btn btn-primary" onclick="showAddLoadForm()">+ Last hinzuf&uuml;gen</button>
+    </div>
+    <div id="loads-manager">
+      <div style="color:var(--muted);font-size:0.8rem">Lade...</div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Load Modal -->
+  <div class="card full-width" id="load-form-card" style="display:none">
+    <div class="card-title">Last konfigurieren</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="load-name" placeholder="z.B. Waschmaschine">
+      </div>
+      <div class="form-group">
+        <label>Switch-Entit&auml;t</label>
+        <div class="entity-picker">
+          <input type="text" id="load-switch" placeholder="switch.waschmaschine" oninput="entitySearch(this, 'switch')">
+          <div class="entity-dropdown" id="load-switch-dropdown"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Leistung (W)</label>
+        <input type="number" id="load-power" placeholder="2000" value="2000">
+      </div>
+      <div class="form-group">
+        <label>Leistungs-Sensor (optional)</label>
+        <div class="entity-picker">
+          <input type="text" id="load-power-sensor" placeholder="sensor.waschmaschine_power" oninput="entitySearch(this, 'sensor')">
+          <div class="entity-dropdown" id="load-power-sensor-dropdown"></div>
+        </div>
+        <span class="hint">&Uuml;berschreibt festen Watt-Wert wenn gesetzt</span>
+      </div>
+      <div class="form-group">
+        <label>Laufzeit (h)</label>
+        <input type="number" id="load-duration" step="0.5" value="2.0">
+      </div>
+      <div class="form-group">
+        <label>Fr&uuml;hester Start (Stunde)</label>
+        <input type="number" id="load-earliest" min="0" max="23" value="22">
+      </div>
+      <div class="form-group">
+        <label>Sp&auml;testes Ende (Stunde)</label>
+        <input type="number" id="load-latest" min="0" max="23" value="8">
+      </div>
+      <div class="form-group">
+        <label>Preislimit (ct/kWh)</label>
+        <input type="number" id="load-price-limit" step="0.1" value="20.0">
+      </div>
+      <div class="form-group">
+        <label>Min. Akku-SOC (%)</label>
+        <input type="number" id="load-min-soc" min="0" max="100" value="20">
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:6px">
+          <input type="checkbox" id="load-subtract"> Aus Gesamtverbrauch herausrechnen
+        </label>
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="saveLoad()">Speichern</button>
+      <button class="btn btn-secondary" onclick="cancelLoadForm()">Abbrechen</button>
+    </div>
+    <input type="hidden" id="load-edit-index" value="-1">
+  </div>
+
+</div>
+</div><!-- /tab-loads -->
+
+<!-- ==================== TAB: E-Auto / Wallbox ==================== -->
+<div class="tab-content" id="tab-ev">
+<div class="main" style="grid-template-columns:1fr">
+
+  <div class="card full-width">
+    <div class="card-title" style="justify-content:space-between">
+      E-Auto / Wallbox Konfiguration
+      <button class="btn btn-primary" onclick="showAddEVForm()">+ Ladefenster hinzuf&uuml;gen</button>
+    </div>
+    <div id="ev-manager">
+      <div style="color:var(--muted);font-size:0.8rem">Lade...</div>
+    </div>
+  </div>
+
+  <!-- EV Config Card -->
+  <div class="card full-width">
+    <div class="card-title">Wallbox-Einstellungen</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Wallbox aktiviert</label>
+        <select id="cfg-goe-enabled">
+          <option value="true">Ja</option>
+          <option value="false">Nein</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Verbindungstyp</label>
+        <select id="cfg-goe-conn">
+          <option value="local">Lokal (IP)</option>
+          <option value="cloud">Cloud (API)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Lokale IP</label>
+        <input type="text" id="cfg-goe-ip" placeholder="192.168.1.100">
+      </div>
+      <div class="form-group">
+        <label>Max. Ladestrom (A)</label>
+        <input type="number" id="cfg-goe-max-a" value="16">
+      </div>
+      <div class="form-group">
+        <label>Phasen</label>
+        <select id="cfg-goe-phases">
+          <option value="1">1-phasig</option>
+          <option value="3">3-phasig</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>E-Auto SOC-Sensor</label>
+        <div class="entity-picker">
+          <input type="text" id="cfg-ev-soc-sensor" placeholder="sensor.ev_battery_soc" oninput="entitySearch(this, 'sensor')">
+          <div class="entity-dropdown" id="cfg-ev-soc-sensor-dropdown"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Batterie-Kapazit&auml;t (kWh)</label>
+        <input type="number" id="cfg-ev-cap" value="60">
+      </div>
+      <div class="form-group">
+        <label>Lademodus</label>
+        <select id="cfg-ev-mode">
+          <option value="smart">Smart (LP-optimiert)</option>
+          <option value="solar">Nur Solar</option>
+          <option value="min_solar">Min + Solar</option>
+          <option value="fast">Schnellladen</option>
+          <option value="off">Aus</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn btn-primary" onclick="saveEVConfig()">Wallbox-Einstellungen speichern</button>
+    </div>
+  </div>
+
+  <!-- Add/Edit EV Window Modal -->
+  <div class="card full-width" id="ev-form-card" style="display:none">
+    <div class="card-title">Ladefenster konfigurieren</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="ev-window-name" placeholder="z.B. Nacht">
+      </div>
+      <div class="form-group">
+        <label>Verf&uuml;gbar ab</label>
+        <input type="time" id="ev-window-from" value="22:00">
+      </div>
+      <div class="form-group">
+        <label>Verf&uuml;gbar bis</label>
+        <input type="time" id="ev-window-until" value="07:00">
+      </div>
+      <div class="form-group">
+        <label>Ziel-SOC (%)</label>
+        <input type="number" id="ev-window-target" min="10" max="100" value="80">
+      </div>
+      <div class="form-group">
+        <label>Fertig bis</label>
+        <input type="time" id="ev-window-finish" value="07:00">
+      </div>
+      <div class="form-group">
+        <label>Priorit&auml;t</label>
+        <select id="ev-window-priority">
+          <option value="cost">Kosten minimieren</option>
+          <option value="solar">Solar bevorzugen</option>
+          <option value="balanced">Ausgewogen</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="saveEVWindow()">Speichern</button>
+      <button class="btn btn-secondary" onclick="cancelEVForm()">Abbrechen</button>
+    </div>
+    <input type="hidden" id="ev-edit-index" value="-1">
+  </div>
+
+</div>
+</div><!-- /tab-ev -->
+
+<!-- ==================== TAB: Strompreise ==================== -->
+<div class="tab-content" id="tab-prices">
+<div class="main" style="grid-template-columns:1fr">
+
+  <div class="card full-width">
+    <div class="card-title">Preisquelle konfigurieren</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Preisquelle</label>
+        <select id="cfg-price-source" onchange="togglePriceSections()">
+          <option value="epex_entity">EPEX Entit&auml;t (HA Sensor)</option>
+          <option value="entso-e">ENTSO-E API</option>
+          <option value="awattar">aWATTar API</option>
+          <option value="tibber">Tibber API</option>
+          <option value="epex_spot">SMARD.de (EPEX Spot)</option>
+          <option value="sensor">HA-Sensor (Einzelwert)</option>
+          <option value="fixed">Fester Preis</option>
+        </select>
+      </div>
+      <div class="form-group" id="price-fixed-group">
+        <label>Fester Preis (ct/kWh)</label>
+        <input type="number" id="cfg-fixed-price" step="0.1" value="25.0">
+      </div>
+    </div>
+
+    <!-- EPEX Entity Section -->
+    <div id="price-epex-entity-section" class="config-section" style="display:none;margin-top:16px">
+      <div class="config-section-title">EPEX Entit&auml;t</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Import-Preis Entit&auml;t</label>
+          <div class="entity-picker">
+            <input type="text" id="cfg-epex-import" placeholder="sensor.epex_spot_de_price" oninput="entitySearch(this, 'sensor')">
+            <div class="entity-dropdown" id="cfg-epex-import-dropdown"></div>
+          </div>
+          <span class="hint">z.B. sensor.epex_spot_de_price, sensor.nordpool_kwh_de_eur</span>
+        </div>
+        <div class="form-group">
+          <label>Export-Preis Entit&auml;t (optional)</label>
+          <div class="entity-picker">
+            <input type="text" id="cfg-epex-export" placeholder="" oninput="entitySearch(this, 'sensor')">
+            <div class="entity-dropdown" id="cfg-epex-export-dropdown"></div>
+          </div>
+          <span class="hint">F&uuml;r dynamische Einspeiseverg&uuml;tung</span>
+        </div>
+        <div class="form-group">
+          <label>Einheit der Entit&auml;t</label>
+          <select id="cfg-epex-unit">
+            <option value="ct/kWh">ct/kWh</option>
+            <option value="EUR/MWh">EUR/MWh</option>
+            <option value="EUR/kWh">EUR/kWh</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- ENTSO-E Section -->
+    <div id="price-entsoe-section" class="config-section" style="display:none;margin-top:16px">
+      <div class="config-section-title">ENTSO-E API</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Security Token</label>
+          <input type="password" id="cfg-entsoe-token" placeholder="Dein ENTSO-E Token">
+        </div>
+        <div class="form-group">
+          <label>Marktgebiet</label>
+          <input type="text" id="cfg-entsoe-area" value="10YDE-EON------1">
+        </div>
+      </div>
+    </div>
+
+    <!-- Price Calculation Section -->
+    <div class="config-section" style="margin-top:16px">
+      <div class="config-section-title">Preisberechnung (Aufschl&auml;ge auf B&ouml;rsenpreis)</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Eingabepreis ist Netto</label>
+          <select id="cfg-price-netto">
+            <option value="true">Ja (Netto)</option>
+            <option value="false">Nein (Brutto)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>MwSt. (%)</label>
+          <input type="number" id="cfg-vat" step="0.1" value="19.0">
+        </div>
+        <div class="form-group">
+          <label>Netzentgelt (ct/kWh)</label>
+          <input type="number" id="cfg-grid-fee" step="0.1" value="7.5">
+        </div>
+        <div class="form-group">
+          <label>Versorger-Aufschlag (ct/kWh)</label>
+          <input type="number" id="cfg-markup" step="0.1" value="2.0">
+        </div>
+        <div class="form-group">
+          <label>Sonstige Abgaben (ct/kWh)</label>
+          <input type="number" id="cfg-other-taxes" step="0.1" value="0.0">
+        </div>
+        <div class="form-group">
+          <label>Einspeiseverg&uuml;tung (ct/kWh)</label>
+          <input type="number" id="cfg-feed-in" step="0.1" value="8.0">
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <button class="btn btn-primary" onclick="savePriceConfig()">Preiskonfiguration speichern</button>
+    </div>
+  </div>
+
+  <!-- Current Prices Chart -->
+  <div class="card full-width">
+    <div class="card-title">Aktuelle Preise (48h)</div>
+    <div class="chart-wrap" style="height:250px">
+      <canvas id="price-detail-chart"></canvas>
+    </div>
+  </div>
+
+</div>
+</div><!-- /tab-prices -->
+
+<!-- ==================== TAB: Einstellungen ==================== -->
+<div class="tab-content" id="tab-config">
+<div class="main" style="grid-template-columns:1fr">
+
+  <!-- PV Config -->
+  <div class="card full-width">
+    <div class="card-title">PV-Anlage</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>PV-Leistungs-Sensor</label>
+        <div class="entity-picker">
+          <input type="text" id="cfg-pv-sensor" placeholder="sensor.solar_power" oninput="entitySearch(this, 'sensor')">
+          <div class="entity-dropdown" id="cfg-pv-sensor-dropdown"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Anlagenleistung (kWp)</label>
+        <input type="number" id="cfg-pv-kwp" step="0.1" value="10.0">
+      </div>
+      <div class="form-group">
+        <label>Ausrichtung (0=Nord, 180=S&uuml;d)</label>
+        <input type="number" id="cfg-pv-orientation" value="180">
+      </div>
+      <div class="form-group">
+        <label>Neigung (&deg;)</label>
+        <input type="number" id="cfg-pv-tilt" value="30">
+      </div>
+      <div class="form-group">
+        <label>Breitengrad</label>
+        <input type="number" id="cfg-pv-lat" step="0.001" value="48.0">
+      </div>
+      <div class="form-group">
+        <label>L&auml;ngengrad</label>
+        <input type="number" id="cfg-pv-lon" step="0.001" value="11.0">
+      </div>
+    </div>
+  </div>
+
+  <!-- Battery Config -->
+  <div class="card full-width">
+    <div class="card-title">Hausbatterie</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>SOC-Sensor</label>
+        <div class="entity-picker">
+          <input type="text" id="cfg-bat-soc-sensor" placeholder="sensor.battery_soc" oninput="entitySearch(this, 'sensor')">
+          <div class="entity-dropdown" id="cfg-bat-soc-sensor-dropdown"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Leistungs-Sensor</label>
+        <div class="entity-picker">
+          <input type="text" id="cfg-bat-power-sensor" placeholder="sensor.battery_power" oninput="entitySearch(this, 'sensor')">
+          <div class="entity-dropdown" id="cfg-bat-power-sensor-dropdown"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Kapazit&auml;t (kWh)</label>
+        <input type="number" id="cfg-bat-cap" step="0.1" value="10.0">
+      </div>
+      <div class="form-group">
+        <label>Max. Ladeleistung (W)</label>
+        <input type="number" id="cfg-bat-max-ch" value="3000">
+      </div>
+      <div class="form-group">
+        <label>Max. Entladeleistung (W)</label>
+        <input type="number" id="cfg-bat-max-dis" value="3000">
+      </div>
+      <div class="form-group">
+        <label>Min. SOC (%)</label>
+        <input type="number" id="cfg-bat-min-soc" min="0" max="100" value="10">
+      </div>
+      <div class="form-group">
+        <label>Reserve SOC (%)</label>
+        <input type="number" id="cfg-bat-reserve" min="0" max="100" value="20">
+      </div>
+      <div class="form-group">
+        <label>Effizienz</label>
+        <input type="number" id="cfg-bat-eff" step="0.01" min="0.5" max="1.0" value="0.95">
+      </div>
+    </div>
+  </div>
+
+  <!-- Grid Config -->
+  <div class="card full-width">
+    <div class="card-title">Netzanschluss</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Netz-Leistungs-Sensor</label>
+        <div class="entity-picker">
+          <input type="text" id="cfg-grid-sensor" placeholder="sensor.grid_power" oninput="entitySearch(this, 'sensor')">
+          <div class="entity-dropdown" id="cfg-grid-sensor-dropdown"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Gesamtverbrauch-Sensor (f&uuml;r Lastzerlegung)</label>
+        <div class="entity-picker">
+          <input type="text" id="cfg-total-power-sensor" placeholder="sensor.total_power" oninput="entitySearch(this, 'sensor')">
+          <div class="entity-dropdown" id="cfg-total-power-sensor-dropdown"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Max. Netzimport (W, 0=unbegrenzt)</label>
+        <input type="number" id="cfg-grid-max" value="0">
+      </div>
+      <div class="form-group">
+        <label>Peak-Shaving Limit (W, 0=aus)</label>
+        <input type="number" id="cfg-peak-shaving" value="0">
+      </div>
+    </div>
+  </div>
+
+  <!-- Optimization Config -->
+  <div class="card full-width">
+    <div class="card-title">Optimierung</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Optimierungsziel</label>
+        <select id="cfg-opt-goal">
+          <option value="cost">Kosten minimieren</option>
+          <option value="self_consumption">Eigenverbrauch maximieren</option>
+          <option value="balanced">Ausgewogen</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>LP-Intervall (Minuten)</label>
+        <input type="number" id="cfg-opt-interval" value="60">
+      </div>
+      <div class="form-group">
+        <label>48h-Plan Intervall (Stunden)</label>
+        <input type="number" id="cfg-opt-long" value="6">
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn btn-primary" onclick="saveAllConfig()">Alle Einstellungen speichern</button>
+      <button class="btn btn-secondary" onclick="loadAllConfig()" style="margin-left:8px">Zur&uuml;cksetzen</button>
+    </div>
+  </div>
+
+</div>
+</div><!-- /tab-config -->
 
 <script>
 // ============================================================================
@@ -661,6 +1231,532 @@ function setClass(id, cls) {
 function fmt(val) {
   const v = Math.round(val || 0);
   return v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v);
+}
+
+// ============================================================================
+// Tab Navigation
+// ============================================================================
+function switchTab(tabName) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const tab = document.getElementById('tab-' + tabName);
+  if (tab) tab.classList.add('active');
+  event.target.classList.add('active');
+
+  // Load data for specific tabs
+  if (tabName === 'loads') { loadLoadsManager(); loadDecomposition(); }
+  if (tabName === 'ev') { loadEVManager(); loadEVConfig(); }
+  if (tabName === 'prices') { loadPriceConfig(); loadPriceDetailChart(); }
+  if (tabName === 'config') { loadAllConfig(); }
+}
+
+// ============================================================================
+// Toast Notifications
+// ============================================================================
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ============================================================================
+// Entity Picker (autocomplete)
+// ============================================================================
+let entityCache = {};
+
+async function entitySearch(input, domain) {
+  const query = input.value.toLowerCase();
+  const dropdown = input.parentElement.querySelector('.entity-dropdown');
+  if (query.length < 2) { dropdown.classList.remove('show'); return; }
+
+  // Cache entities per domain
+  if (!entityCache[domain]) {
+    try {
+      const r = await fetch('/api/ha/entities?domain=' + domain);
+      const data = await r.json();
+      entityCache[domain] = data.entities || [];
+    } catch (e) { return; }
+  }
+
+  const matches = entityCache[domain].filter(e =>
+    e.entity_id.toLowerCase().includes(query) ||
+    (e.friendly_name || '').toLowerCase().includes(query)
+  ).slice(0, 15);
+
+  if (matches.length === 0) { dropdown.classList.remove('show'); return; }
+
+  dropdown.innerHTML = matches.map(e =>
+    `<div class="entity-option" onclick="selectEntity(this, '${e.entity_id}')">
+      <span>${e.entity_id}</span>
+      <span class="entity-value">${e.state} ${e.unit}</span>
+    </div>`
+  ).join('');
+  dropdown.classList.add('show');
+}
+
+function selectEntity(el, entityId) {
+  const picker = el.closest('.entity-picker');
+  picker.querySelector('input').value = entityId;
+  picker.querySelector('.entity-dropdown').classList.remove('show');
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.entity-picker')) {
+    document.querySelectorAll('.entity-dropdown').forEach(d => d.classList.remove('show'));
+  }
+});
+
+// ============================================================================
+// Loads Manager
+// ============================================================================
+async function loadLoadsManager() {
+  try {
+    const r = await fetch('/api/config/loads');
+    const data = await r.json();
+    const loads = data.loads || [];
+
+    if (loads.length === 0) {
+      document.getElementById('loads-manager').innerHTML =
+        '<div style="color:var(--muted);font-size:0.85rem">Keine steuerbaren Lasten konfiguriert. Klicke "+ Last hinzuf\u00fcgen".</div>';
+      return;
+    }
+
+    let html = '';
+    for (const load of loads) {
+      html += `<div class="item-card">
+        <div class="item-card-header">
+          <span class="item-card-title">${load.name}</span>
+          <div class="item-card-actions">
+            <button class="btn-icon" onclick="editLoad(${load.index})">Bearbeiten</button>
+            <button class="btn-icon danger" onclick="deleteLoad(${load.index})">L\u00f6schen</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.8rem;color:var(--muted)">
+          <span>Switch: ${load.switch}</span>
+          <span>Leistung: ${load.power_w}W</span>
+          ${load.power_sensor ? '<span>Sensor: ' + load.power_sensor + '</span>' : ''}
+          <span>Laufzeit: ${load.duration_h}h</span>
+          <span>Fenster: ${load.earliest_start_h}:00-${load.latest_end_h}:00</span>
+          <span>Preislimit: ${load.price_limit_ct_kwh} ct</span>
+          ${load.subtract_from_total ? '<span style="color:var(--green)">Wird herausgerechnet</span>' : ''}
+        </div>
+      </div>`;
+    }
+    document.getElementById('loads-manager').innerHTML = html;
+  } catch (e) { console.warn('Load manager error:', e); }
+}
+
+function showAddLoadForm() {
+  document.getElementById('load-form-card').style.display = 'block';
+  document.getElementById('load-edit-index').value = '-1';
+  document.getElementById('load-name').value = '';
+  document.getElementById('load-switch').value = '';
+  document.getElementById('load-power').value = '2000';
+  document.getElementById('load-power-sensor').value = '';
+  document.getElementById('load-duration').value = '2.0';
+  document.getElementById('load-earliest').value = '22';
+  document.getElementById('load-latest').value = '8';
+  document.getElementById('load-price-limit').value = '20.0';
+  document.getElementById('load-min-soc').value = '20';
+  document.getElementById('load-subtract').checked = false;
+}
+
+async function editLoad(index) {
+  try {
+    const r = await fetch('/api/config/loads');
+    const data = await r.json();
+    const load = data.loads.find(l => l.index === index);
+    if (!load) return;
+
+    document.getElementById('load-form-card').style.display = 'block';
+    document.getElementById('load-edit-index').value = index;
+    document.getElementById('load-name').value = load.name;
+    document.getElementById('load-switch').value = load.switch;
+    document.getElementById('load-power').value = load.power_w;
+    document.getElementById('load-power-sensor').value = load.power_sensor || '';
+    document.getElementById('load-duration').value = load.duration_h;
+    document.getElementById('load-earliest').value = load.earliest_start_h;
+    document.getElementById('load-latest').value = load.latest_end_h;
+    document.getElementById('load-price-limit').value = load.price_limit_ct_kwh;
+    document.getElementById('load-min-soc').value = load.min_soc_battery;
+    document.getElementById('load-subtract').checked = load.subtract_from_total || false;
+  } catch (e) { showToast('Fehler beim Laden', true); }
+}
+
+async function saveLoad() {
+  const idx = parseInt(document.getElementById('load-edit-index').value);
+  const body = {
+    name: document.getElementById('load-name').value,
+    switch: document.getElementById('load-switch').value,
+    power_w: parseInt(document.getElementById('load-power').value),
+    power_sensor: document.getElementById('load-power-sensor').value,
+    duration_h: parseFloat(document.getElementById('load-duration').value),
+    earliest_start_h: parseInt(document.getElementById('load-earliest').value),
+    latest_end_h: parseInt(document.getElementById('load-latest').value),
+    price_limit_ct_kwh: parseFloat(document.getElementById('load-price-limit').value),
+    min_soc_battery: parseInt(document.getElementById('load-min-soc').value),
+    subtract_from_total: document.getElementById('load-subtract').checked,
+  };
+
+  try {
+    const url = idx >= 0 ? `/api/config/loads/${idx}` : '/api/config/loads';
+    const method = idx >= 0 ? 'PUT' : 'POST';
+    const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) {
+      showToast('Last gespeichert');
+      cancelLoadForm();
+      loadLoadsManager();
+    } else {
+      const err = await r.json();
+      showToast('Fehler: ' + (err.error || 'Unbekannt'), true);
+    }
+  } catch (e) { showToast('Netzwerkfehler', true); }
+}
+
+async function deleteLoad(index) {
+  if (!confirm('Last wirklich l\u00f6schen?')) return;
+  try {
+    await fetch(`/api/config/loads/${index}`, { method: 'DELETE' });
+    showToast('Last gel\u00f6scht');
+    loadLoadsManager();
+  } catch (e) { showToast('Fehler', true); }
+}
+
+function cancelLoadForm() {
+  document.getElementById('load-form-card').style.display = 'none';
+}
+
+// ============================================================================
+// EV / Wallbox Manager
+// ============================================================================
+async function loadEVManager() {
+  try {
+    const r = await fetch('/api/config/evs');
+    const data = await r.json();
+    const evs = data.evs || [];
+
+    if (evs.length === 0) {
+      document.getElementById('ev-manager').innerHTML =
+        '<div style="color:var(--muted);font-size:0.85rem">Keine Ladefenster konfiguriert.</div>';
+      return;
+    }
+
+    let html = '';
+    for (const ev of evs) {
+      html += `<div class="item-card">
+        <div class="item-card-header">
+          <span class="item-card-title">${ev.name}</span>
+          <div class="item-card-actions">
+            <button class="btn-icon" onclick="editEVWindow(${ev.index})">Bearbeiten</button>
+            <button class="btn-icon danger" onclick="deleteEVWindow(${ev.index})">L\u00f6schen</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.8rem;color:var(--muted)">
+          <span>Von: ${ev.available_from}</span>
+          <span>Bis: ${ev.available_until}</span>
+          <span>Ziel-SOC: ${ev.target_soc_percent}%</span>
+          <span>Fertig bis: ${ev.must_finish_by}</span>
+          <span>Priorit\u00e4t: ${ev.priority}</span>
+        </div>
+      </div>`;
+    }
+    document.getElementById('ev-manager').innerHTML = html;
+  } catch (e) { console.warn('EV manager error:', e); }
+}
+
+function showAddEVForm() {
+  document.getElementById('ev-form-card').style.display = 'block';
+  document.getElementById('ev-edit-index').value = '-1';
+  document.getElementById('ev-window-name').value = '';
+  document.getElementById('ev-window-from').value = '22:00';
+  document.getElementById('ev-window-until').value = '07:00';
+  document.getElementById('ev-window-target').value = '80';
+  document.getElementById('ev-window-finish').value = '07:00';
+  document.getElementById('ev-window-priority').value = 'cost';
+}
+
+async function editEVWindow(index) {
+  try {
+    const r = await fetch('/api/config/evs');
+    const data = await r.json();
+    const ev = data.evs.find(e => e.index === index);
+    if (!ev) return;
+
+    document.getElementById('ev-form-card').style.display = 'block';
+    document.getElementById('ev-edit-index').value = index;
+    document.getElementById('ev-window-name').value = ev.name;
+    document.getElementById('ev-window-from').value = ev.available_from;
+    document.getElementById('ev-window-until').value = ev.available_until;
+    document.getElementById('ev-window-target').value = ev.target_soc_percent;
+    document.getElementById('ev-window-finish').value = ev.must_finish_by;
+    document.getElementById('ev-window-priority').value = ev.priority;
+  } catch (e) { showToast('Fehler', true); }
+}
+
+async function saveEVWindow() {
+  const idx = parseInt(document.getElementById('ev-edit-index').value);
+  const body = {
+    name: document.getElementById('ev-window-name').value,
+    available_from: document.getElementById('ev-window-from').value,
+    available_until: document.getElementById('ev-window-until').value,
+    target_soc_percent: parseInt(document.getElementById('ev-window-target').value),
+    must_finish_by: document.getElementById('ev-window-finish').value,
+    priority: document.getElementById('ev-window-priority').value,
+  };
+
+  try {
+    const url = idx >= 0 ? `/api/config/evs/${idx}` : '/api/config/evs';
+    const method = idx >= 0 ? 'PUT' : 'POST';
+    const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) {
+      showToast('Ladefenster gespeichert');
+      cancelEVForm();
+      loadEVManager();
+    } else {
+      const err = await r.json();
+      showToast('Fehler: ' + (err.error || 'Unbekannt'), true);
+    }
+  } catch (e) { showToast('Netzwerkfehler', true); }
+}
+
+async function deleteEVWindow(index) {
+  if (!confirm('Ladefenster wirklich l\u00f6schen?')) return;
+  try {
+    await fetch(`/api/config/evs/${index}`, { method: 'DELETE' });
+    showToast('Ladefenster gel\u00f6scht');
+    loadEVManager();
+  } catch (e) { showToast('Fehler', true); }
+}
+
+function cancelEVForm() {
+  document.getElementById('ev-form-card').style.display = 'none';
+}
+
+async function loadEVConfig() {
+  try {
+    const r = await fetch('/api/config');
+    const cfg = await r.json();
+    document.getElementById('cfg-goe-enabled').value = String(cfg.goe_enabled);
+    document.getElementById('cfg-goe-conn').value = cfg.goe_connection_type || 'local';
+    document.getElementById('cfg-goe-ip').value = cfg.goe_local_ip || '';
+    document.getElementById('cfg-goe-max-a').value = cfg.goe_max_current_a || 16;
+    document.getElementById('cfg-goe-phases').value = cfg.goe_phases || 1;
+    document.getElementById('cfg-ev-soc-sensor').value = cfg.ev_soc_sensor || '';
+    document.getElementById('cfg-ev-cap').value = cfg.ev_battery_capacity_kwh || 60;
+    document.getElementById('cfg-ev-mode').value = cfg.ev_charge_mode || 'smart';
+  } catch (e) {}
+}
+
+async function saveEVConfig() {
+  const body = {
+    goe_enabled: document.getElementById('cfg-goe-enabled').value === 'true',
+    goe_connection_type: document.getElementById('cfg-goe-conn').value,
+    goe_local_ip: document.getElementById('cfg-goe-ip').value,
+    goe_max_current_a: parseInt(document.getElementById('cfg-goe-max-a').value),
+    goe_phases: parseInt(document.getElementById('cfg-goe-phases').value),
+    ev_soc_sensor: document.getElementById('cfg-ev-soc-sensor').value,
+    ev_battery_capacity_kwh: parseFloat(document.getElementById('cfg-ev-cap').value),
+    ev_charge_mode: document.getElementById('cfg-ev-mode').value,
+  };
+  try {
+    const r = await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) showToast('Wallbox-Einstellungen gespeichert');
+    else showToast('Fehler beim Speichern', true);
+  } catch (e) { showToast('Netzwerkfehler', true); }
+}
+
+// ============================================================================
+// Price Config
+// ============================================================================
+function togglePriceSections() {
+  const source = document.getElementById('cfg-price-source').value;
+  document.getElementById('price-epex-entity-section').style.display = source === 'epex_entity' ? 'block' : 'none';
+  document.getElementById('price-entsoe-section').style.display = source === 'entso-e' ? 'block' : 'none';
+  document.getElementById('price-fixed-group').style.display = source === 'fixed' ? 'block' : 'none';
+}
+
+async function loadPriceConfig() {
+  try {
+    const r = await fetch('/api/config');
+    const cfg = await r.json();
+    document.getElementById('cfg-price-source').value = cfg.price_source || 'entso-e';
+    document.getElementById('cfg-fixed-price').value = cfg.fixed_price_ct_kwh || 25;
+    document.getElementById('cfg-epex-import').value = cfg.epex_import_entity || '';
+    document.getElementById('cfg-epex-export').value = cfg.epex_export_entity || '';
+    document.getElementById('cfg-epex-unit').value = cfg.epex_unit || 'ct/kWh';
+    document.getElementById('cfg-entsoe-token').value = cfg.entso_e_token || '';
+    document.getElementById('cfg-entsoe-area').value = cfg.entso_e_area || '10YDE-EON------1';
+    document.getElementById('cfg-price-netto').value = String(cfg.price_input_is_netto);
+    document.getElementById('cfg-vat').value = cfg.price_vat_percent || 19;
+    document.getElementById('cfg-grid-fee').value = cfg.price_grid_fee_fixed_ct_kwh || 7.5;
+    document.getElementById('cfg-markup').value = cfg.price_supplier_markup_ct_kwh || 2;
+    document.getElementById('cfg-other-taxes').value = cfg.price_other_taxes_ct_kwh || 0;
+    document.getElementById('cfg-feed-in').value = cfg.price_feed_in_ct_kwh || 8;
+    togglePriceSections();
+  } catch (e) {}
+}
+
+async function savePriceConfig() {
+  const body = {
+    price_source: document.getElementById('cfg-price-source').value,
+    fixed_price_ct_kwh: parseFloat(document.getElementById('cfg-fixed-price').value),
+    epex_import_entity: document.getElementById('cfg-epex-import').value,
+    epex_export_entity: document.getElementById('cfg-epex-export').value,
+    epex_unit: document.getElementById('cfg-epex-unit').value,
+    entso_e_token: document.getElementById('cfg-entsoe-token').value,
+    entso_e_area: document.getElementById('cfg-entsoe-area').value,
+    price_input_is_netto: document.getElementById('cfg-price-netto').value === 'true',
+    price_vat_percent: parseFloat(document.getElementById('cfg-vat').value),
+    price_grid_fee_fixed_ct_kwh: parseFloat(document.getElementById('cfg-grid-fee').value),
+    price_supplier_markup_ct_kwh: parseFloat(document.getElementById('cfg-markup').value),
+    price_other_taxes_ct_kwh: parseFloat(document.getElementById('cfg-other-taxes').value),
+    price_feed_in_ct_kwh: parseFloat(document.getElementById('cfg-feed-in').value),
+  };
+  try {
+    const r = await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) showToast('Preiskonfiguration gespeichert');
+    else showToast('Fehler', true);
+  } catch (e) { showToast('Netzwerkfehler', true); }
+}
+
+let priceDetailChart;
+async function loadPriceDetailChart() {
+  try {
+    const r = await fetch('/api/prices');
+    const data = await r.json();
+    const labels = data.hours.map(h => new Date(h).getHours() + ':00');
+
+    const ctx = document.getElementById('price-detail-chart').getContext('2d');
+    if (priceDetailChart) priceDetailChart.destroy();
+
+    priceDetailChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels.slice(0, 48),
+        datasets: [
+          { label: 'Gesamt (ct/kWh)', data: data.total_ct.slice(0, 48),
+            backgroundColor: data.total_ct.slice(0, 48).map(p => p < 15 ? 'rgba(34,197,94,0.7)' : p < 25 ? 'rgba(234,179,8,0.7)' : 'rgba(239,68,68,0.7)') },
+          { label: 'B\u00f6rse (ct/kWh)', data: data.raw_ct.slice(0, 48), type: 'line', borderColor: '#3b82f6', backgroundColor: 'transparent', tension: 0.3 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+        scales: {
+          x: { ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }, grid: { color: 'rgba(51,65,85,0.5)' } },
+          y: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: 'rgba(51,65,85,0.5)' } },
+        }
+      }
+    });
+  } catch (e) {}
+}
+
+// ============================================================================
+// Load Decomposition
+// ============================================================================
+async function loadDecomposition() {
+  try {
+    const r = await fetch('/api/load-decomposition');
+    if (!r.ok) {
+      document.getElementById('decomposition-view').innerHTML = '<div style="color:var(--muted);font-size:0.8rem">Lastzerlegung nicht verf\u00fcgbar</div>';
+      return;
+    }
+    const data = await r.json();
+
+    const colors = ['#3b82f6', '#f97316', '#a855f7', '#22c55e', '#ef4444', '#eab308'];
+    const loads = Object.entries(data.loads || {});
+    const totalW = data.total_power_w || 1;
+
+    // Stacked bar
+    let barHtml = '<div class="decomp-bar">';
+    barHtml += `<div class="decomp-segment" style="flex:${data.base_load_w / totalW};background:#64748b">${Math.round(data.base_load_w)}W</div>`;
+    loads.forEach(([name, w], i) => {
+      if (w > 0) barHtml += `<div class="decomp-segment" style="flex:${w / totalW};background:${colors[i % colors.length]}">${Math.round(w)}W</div>`;
+    });
+    barHtml += '</div>';
+
+    // Legend
+    let legendHtml = '<div class="decomp-legend">';
+    legendHtml += `<span><span class="decomp-dot" style="background:#64748b"></span>Grundlast: ${Math.round(data.base_load_w)}W (${data.base_load_percent}%)</span>`;
+    loads.forEach(([name, w], i) => {
+      legendHtml += `<span><span class="decomp-dot" style="background:${colors[i % colors.length]}"></span>${name}: ${Math.round(w)}W</span>`;
+    });
+    legendHtml += '</div>';
+
+    document.getElementById('decomposition-view').innerHTML =
+      `<div style="font-size:0.85rem;margin-bottom:8px">Gesamtverbrauch: <strong>${Math.round(data.total_power_w)}W</strong></div>` +
+      barHtml + legendHtml;
+  } catch (e) {
+    document.getElementById('decomposition-view').innerHTML = '<div style="color:var(--muted);font-size:0.8rem">Lastzerlegung nicht verf\u00fcgbar</div>';
+  }
+}
+
+// ============================================================================
+// General Config (Settings tab)
+// ============================================================================
+async function loadAllConfig() {
+  try {
+    const r = await fetch('/api/config');
+    const cfg = await r.json();
+    // PV
+    document.getElementById('cfg-pv-sensor').value = cfg.pv_power_sensor || '';
+    document.getElementById('cfg-pv-kwp').value = cfg.pv_forecast_kwp || 10;
+    document.getElementById('cfg-pv-orientation').value = cfg.pv_orientation || 180;
+    document.getElementById('cfg-pv-tilt').value = cfg.pv_tilt || 30;
+    document.getElementById('cfg-pv-lat').value = cfg.pv_latitude || 48;
+    document.getElementById('cfg-pv-lon').value = cfg.pv_longitude || 11;
+    // Battery
+    document.getElementById('cfg-bat-soc-sensor').value = cfg.battery_soc_sensor || '';
+    document.getElementById('cfg-bat-power-sensor').value = cfg.battery_power_sensor || '';
+    document.getElementById('cfg-bat-cap').value = cfg.battery_capacity_kwh || 10;
+    document.getElementById('cfg-bat-max-ch').value = cfg.battery_max_charge_w || 3000;
+    document.getElementById('cfg-bat-max-dis').value = cfg.battery_max_discharge_w || 3000;
+    document.getElementById('cfg-bat-min-soc').value = cfg.battery_min_soc || 10;
+    document.getElementById('cfg-bat-reserve').value = cfg.battery_reserve_soc || 20;
+    document.getElementById('cfg-bat-eff').value = cfg.battery_efficiency || 0.95;
+    // Grid
+    document.getElementById('cfg-grid-sensor').value = cfg.grid_power_sensor || '';
+    document.getElementById('cfg-total-power-sensor').value = cfg.total_power_sensor || '';
+    document.getElementById('cfg-grid-max').value = cfg.grid_max_import_w || 0;
+    document.getElementById('cfg-peak-shaving').value = cfg.peak_shaving_limit_w || 0;
+    // Optimization
+    document.getElementById('cfg-opt-goal').value = cfg.optimization_goal || 'cost';
+    document.getElementById('cfg-opt-interval').value = cfg.optimization_interval_minutes || 60;
+    document.getElementById('cfg-opt-long').value = cfg.long_term_plan_interval_hours || 6;
+  } catch (e) { console.warn('Config load error:', e); }
+}
+
+async function saveAllConfig() {
+  const body = {
+    pv_power_sensor: document.getElementById('cfg-pv-sensor').value,
+    pv_forecast_kwp: parseFloat(document.getElementById('cfg-pv-kwp').value),
+    pv_orientation: parseInt(document.getElementById('cfg-pv-orientation').value),
+    pv_tilt: parseInt(document.getElementById('cfg-pv-tilt').value),
+    pv_latitude: parseFloat(document.getElementById('cfg-pv-lat').value),
+    pv_longitude: parseFloat(document.getElementById('cfg-pv-lon').value),
+    battery_soc_sensor: document.getElementById('cfg-bat-soc-sensor').value,
+    battery_power_sensor: document.getElementById('cfg-bat-power-sensor').value,
+    battery_capacity_kwh: parseFloat(document.getElementById('cfg-bat-cap').value),
+    battery_max_charge_w: parseInt(document.getElementById('cfg-bat-max-ch').value),
+    battery_max_discharge_w: parseInt(document.getElementById('cfg-bat-max-dis').value),
+    battery_min_soc: parseInt(document.getElementById('cfg-bat-min-soc').value),
+    battery_reserve_soc: parseInt(document.getElementById('cfg-bat-reserve').value),
+    battery_efficiency: parseFloat(document.getElementById('cfg-bat-eff').value),
+    grid_power_sensor: document.getElementById('cfg-grid-sensor').value,
+    total_power_sensor: document.getElementById('cfg-total-power-sensor').value,
+    grid_max_import_w: parseInt(document.getElementById('cfg-grid-max').value),
+    peak_shaving_limit_w: parseInt(document.getElementById('cfg-peak-shaving').value),
+    optimization_goal: document.getElementById('cfg-opt-goal').value,
+    optimization_interval_minutes: parseInt(document.getElementById('cfg-opt-interval').value),
+    long_term_plan_interval_hours: parseInt(document.getElementById('cfg-opt-long').value),
+  };
+  try {
+    const r = await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) showToast('Einstellungen gespeichert');
+    else showToast('Fehler beim Speichern', true);
+  } catch (e) { showToast('Netzwerkfehler', true); }
 }
 
 // ============================================================================

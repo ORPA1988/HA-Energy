@@ -47,6 +47,7 @@ options:
   # --- Grid ---
   grid_power_sensor: "sensor.grid_power"
   grid_max_import_w: 0
+  total_power_sensor: ""
   # --- Electricity Pricing ---
   price_source: "entso-e"
   entso_e_token: ""
@@ -56,6 +57,9 @@ options:
   epex_spot_area: "DE-LU"
   price_sensor_entity: ""
   fixed_price_ct_kwh: 25.0
+  epex_import_entity: ""
+  epex_export_entity: ""
+  epex_unit: "ct/kWh"
   # --- Price Calculation ---
   price_input_is_netto: true
   price_vat_percent: 19.0
@@ -147,7 +151,8 @@ schema:
   battery_balancing_use_solar_only: bool
   grid_power_sensor: str
   grid_max_import_w: int
-  price_source: list(entso-e|awattar|tibber|epex_spot|sensor|fixed)
+  total_power_sensor: str
+  price_source: list(entso-e|awattar|tibber|epex_spot|epex_entity|sensor|fixed)
   entso_e_token: str
   entso_e_area: str
   tibber_token: str
@@ -155,6 +160,9 @@ schema:
   epex_spot_area: str
   price_sensor_entity: str
   fixed_price_ct_kwh: float
+  epex_import_entity: str
+  epex_export_entity: str
+  epex_unit: list(ct/kWh|EUR/MWh|EUR/kWh)
   price_input_is_netto: bool
   price_vat_percent: float
   price_grid_fee_source: list(fixed|entity)

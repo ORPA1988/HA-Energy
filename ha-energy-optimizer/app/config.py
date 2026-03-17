@@ -33,6 +33,8 @@ class DeferrableLoad:
     earliest_start_h: int
     min_soc_battery: int = 20
     price_limit_ct_kwh: float = 999.0
+    power_sensor: str = ""  # HA sensor for actual power (overrides power_w)
+    subtract_from_total: bool = False  # Subtract from total consumption for base load calc
 
 
 @dataclass
@@ -72,6 +74,7 @@ class Config:
     # Grid
     grid_power_sensor: str = "sensor.grid_power"
     grid_max_import_w: int = 0
+    total_power_sensor: str = ""  # Total house consumption sensor for load decomposition
 
     # Prices
     price_source: str = "entso-e"
@@ -82,6 +85,10 @@ class Config:
     epex_spot_area: str = "DE-LU"
     price_sensor_entity: str = ""
     fixed_price_ct_kwh: float = 25.0
+    # EPEX entity support (reads directly from HA entities like sensor.epex_spot_de_price)
+    epex_import_entity: str = ""
+    epex_export_entity: str = ""
+    epex_unit: str = "ct/kWh"  # "ct/kWh", "EUR/MWh", "EUR/kWh"
 
     # Price calculation
     price_input_is_netto: bool = True
@@ -136,17 +143,28 @@ class Config:
 
 
 def load_config() -> Config:
-    """Load configuration from /data/options.json (HA Supervisor format)."""
+    """Load configuration from JSON config file, falling back to /data/options.json."""
     cfg = Config()
 
-    if not OPTIONS_FILE.exists():
-        logger.warning("options.json not found, using defaults")
-        return cfg
+    # Priority: 1. ha_energy_config.json (web GUI), 2. options.json (HA Supervisor)
+    opts = {}
+    if CONFIG_JSON_FILE.exists():
+        try:
+            opts = json.loads(CONFIG_JSON_FILE.read_text())
+            logger.info("Configuration loaded from %s", CONFIG_JSON_FILE)
+        except Exception as e:
+            logger.error("Failed to parse %s: %s", CONFIG_JSON_FILE, e)
 
-    try:
-        opts = json.loads(OPTIONS_FILE.read_text())
-    except Exception as e:
-        logger.error("Failed to parse options.json: %s", e)
+    if not opts and OPTIONS_FILE.exists():
+        try:
+            opts = json.loads(OPTIONS_FILE.read_text())
+            logger.info("Configuration loaded from %s", OPTIONS_FILE)
+        except Exception as e:
+            logger.error("Failed to parse options.json: %s", e)
+            return cfg
+
+    if not opts:
+        logger.warning("No config files found, using defaults")
         return cfg
 
     # Map flat options to dataclass fields
@@ -163,10 +181,11 @@ def load_config() -> Config:
         "battery_balancing_preferred_time",
         "battery_balancing_auto_trigger_soc_deviation",
         "battery_balancing_use_solar_only",
-        "grid_power_sensor", "grid_max_import_w",
+        "grid_power_sensor", "grid_max_import_w", "total_power_sensor",
         "price_source", "entso_e_token", "entso_e_area",
         "tibber_token", "awattar_country", "epex_spot_area",
         "price_sensor_entity", "fixed_price_ct_kwh",
+        "epex_import_entity", "epex_export_entity", "epex_unit",
         "price_input_is_netto", "price_vat_percent",
         "price_grid_fee_source", "price_grid_fee_fixed_ct_kwh",
         "price_grid_fee_entity", "price_supplier_markup_ct_kwh",
@@ -207,6 +226,64 @@ def load_config() -> Config:
             cfg.deferrable_loads = []
 
     logger.info("Configuration loaded from %s", OPTIONS_FILE)
+    return cfg
+
+
+CONFIG_JSON_FILE = Path("/data/ha_energy_config.json")
+
+
+def save_config(cfg: Config) -> bool:
+    """Save current config to JSON file for persistence across restarts."""
+    try:
+        data = {}
+        for f in cfg.__dataclass_fields__:
+            val = getattr(cfg, f)
+            if isinstance(val, list):
+                if val and hasattr(val[0], '__dataclass_fields__'):
+                    data[f] = [
+                        {k: getattr(item, k) for k in item.__dataclass_fields__}
+                        for item in val
+                    ]
+                else:
+                    data[f] = val
+            else:
+                data[f] = val
+        CONFIG_JSON_FILE.write_text(json.dumps(data, indent=2, default=str))
+        logger.info("Config saved to %s", CONFIG_JSON_FILE)
+        return True
+    except Exception as e:
+        logger.error("Failed to save config: %s", e)
+        return False
+
+
+def reload_config() -> Config:
+    """Force reload config from disk."""
+    global _config
+    _config = load_config()
+    return _config
+
+
+def update_config(updates: dict) -> Config:
+    """Apply partial updates to config and save."""
+    cfg = get_config()
+
+    for key, value in updates.items():
+        if key == "deferrable_loads" and isinstance(value, list):
+            try:
+                cfg.deferrable_loads = [DeferrableLoad(**dl) for dl in value]
+            except Exception as e:
+                logger.error("Invalid deferrable load update: %s", e)
+            continue
+        if key == "ev_charging_windows" and isinstance(value, list):
+            try:
+                cfg.ev_charging_windows = [EVChargingWindow(**w) for w in value]
+            except Exception as e:
+                logger.error("Invalid EV window update: %s", e)
+            continue
+        if hasattr(cfg, key):
+            setattr(cfg, key, value)
+
+    save_config(cfg)
     return cfg
 
 
