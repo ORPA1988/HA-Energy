@@ -226,6 +226,12 @@ class AppState:
             pv = await self.pv_forecast.get_forecast_48h()
             state = self.current_state
 
+            # Guard: skip LP if no sensor data available (sensors not configured yet)
+            if not state or (state.pv_power_w == 0 and state.grid_power_w == 0
+                             and state.battery_power_w == 0 and state.house_load_w == 0):
+                logger.warning("No sensor data available — skipping LP optimization")
+                return
+
             bat_soc = state.battery_soc_percent if state else 50.0
             ev_soc = state.ev_soc_percent if state else None
 
