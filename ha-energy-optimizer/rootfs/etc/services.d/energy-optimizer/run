@@ -4,8 +4,8 @@
 # ==============================================================================
 bashio::log.info "Starting HA Energy Optimizer..."
 
-# Export Home Assistant supervisor token
-export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN}"
+# Export Home Assistant supervisor token (supports both old and new env var names)
+export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN:-${HASSIO_TOKEN:-}}"
 export HA_URL="http://supervisor/core"
 
 # Log add-on configuration summary

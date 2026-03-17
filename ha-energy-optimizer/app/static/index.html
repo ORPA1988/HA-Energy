@@ -1343,6 +1343,21 @@
 
 <script>
 // ============================================================================
+// HA Ingress base path detection
+// ============================================================================
+// In HA ingress the page is served at /api/hassio_ingress/<session>/
+// All API and WebSocket calls must include this prefix.
+const _bp = (() => {
+  let p = location.pathname;
+  if (p.endsWith('/')) p = p.slice(0, -1);
+  return p;
+})();
+
+function apiUrl(path) {
+  return _bp + path;
+}
+
+// ============================================================================
 // WebSocket connection
 // ============================================================================
 let ws;
@@ -1352,7 +1367,7 @@ let batGaugeCtx, evGaugeCtx;
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws = new WebSocket(`${proto}://${location.host}${_bp}/ws`);
 
   ws.onopen = () => {
     document.getElementById('conn-dot').className = 'conn-dot connected';
@@ -1482,8 +1497,8 @@ function updateState(d) {
 async function loadPrices() {
   try {
     const [pricesR, scheduleR] = await Promise.all([
-      fetch('/api/prices').then(r => r.json()),
-      fetch('/api/schedule').then(r => r.json()),
+      fetch(apiUrl('/api/prices')).then(r => r.json()),
+      fetch(apiUrl('/api/schedule')).then(r => r.json()),
     ]);
 
     const labels = pricesR.hours.map(h => new Date(h).getHours() + ':00');
@@ -1546,7 +1561,7 @@ async function loadPrices() {
 // ============================================================================
 async function loadSchedule() {
   try {
-    const r = await fetch('/api/schedule');
+    const r = await fetch(apiUrl('/api/schedule'));
     const schedule = await r.json();
     if (!schedule.slots) return;
 
@@ -1606,7 +1621,7 @@ async function loadSchedule() {
 // ============================================================================
 async function loadStrategy() {
   try {
-    const r = await fetch('/api/ev/strategy');
+    const r = await fetch(apiUrl('/api/ev/strategy'));
     if (!r.ok) return;
     const data = await r.json();
 
@@ -1640,7 +1655,7 @@ async function loadStrategy() {
 // ============================================================================
 async function loadLoads() {
   try {
-    const r = await fetch('/api/schedule');
+    const r = await fetch(apiUrl('/api/schedule'));
     if (!r.ok) return;
     const data = await r.json();
     if (!data.slots || !data.slots[0]) return;
@@ -1672,7 +1687,7 @@ async function loadLoads() {
 // Controls
 // ============================================================================
 async function setMode(mode) {
-  await fetch('/api/ev/mode', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode})});
+  await fetch(apiUrl('/api/ev/mode'), {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode})});
   document.querySelectorAll('.mode-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === mode);
   });
@@ -1680,12 +1695,12 @@ async function setMode(mode) {
 
 async function toggleReadOnly() {
   try {
-    const r = await fetch('/api/mode');
+    const r = await fetch(apiUrl('/api/mode'));
     const data = await r.json();
     const newState = !data.read_only;
     const label = newState ? 'READ-ONLY (nur Monitoring)' : 'AKTIV (Steuerung aktiv)';
     if (!confirm('Modus wechseln zu: ' + label + '?')) return;
-    await fetch('/api/mode', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({read_only: newState})});
+    await fetch(apiUrl('/api/mode'), {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({read_only: newState})});
     showToast(newState ? 'Read-Only Modus aktiviert' : 'Aktiver Modus aktiviert');
   } catch (e) { showToast('Fehler', true); }
 }
@@ -1715,7 +1730,7 @@ async function startOptimizer() {
   resultEl.style.border = '1px solid #3b82f6';
   resultEl.innerHTML = 'Konfiguration wird gepr&uuml;ft...';
   try {
-    const r = await fetch('/api/mode/start', {method:'POST', headers:{'Content-Type':'application/json'}});
+    const r = await fetch(apiUrl('/api/mode/start'), {method:'POST', headers:{'Content-Type':'application/json'}});
     const data = await r.json();
     if (r.ok) {
       let html = '<div style="color:#22c55e;font-weight:700">Optimizer gestartet</div>';
@@ -1746,7 +1761,7 @@ async function startOptimizer() {
 
 async function stopOptimizer() {
   try {
-    await fetch('/api/mode/stop', {method:'POST', headers:{'Content-Type':'application/json'}});
+    await fetch(apiUrl('/api/mode/stop'), {method:'POST', headers:{'Content-Type':'application/json'}});
     updateOperationButtons('stopped');
     showToast('Optimizer gestoppt');
     document.getElementById('start-validation-result').style.display = 'none';
@@ -1755,7 +1770,7 @@ async function stopOptimizer() {
 
 async function checkFirstStart() {
   try {
-    const r = await fetch('/api/mode');
+    const r = await fetch(apiUrl('/api/mode'));
     const data = await r.json();
     updateOperationButtons(data.operation_mode || 'stopped');
     if (data.is_first_start) {
@@ -1770,12 +1785,12 @@ async function checkFirstStart() {
 }
 
 async function startBalancing() {
-  await fetch('/api/balance/start', {method:'POST'});
+  await fetch(apiUrl('/api/balance/start'), {method:'POST'});
   setText('bal-state', '🔄 Gestartet...');
 }
 
 async function stopBalancing() {
-  await fetch('/api/balance/stop', {method:'POST'});
+  await fetch(apiUrl('/api/balance/stop'), {method:'POST'});
   setText('bal-state', 'Inaktiv');
 }
 
@@ -1880,7 +1895,7 @@ async function entitySearch(input, domain) {
   // Cache entities per domain
   if (!entityCache[domain]) {
     try {
-      const r = await fetch('/api/ha/entities?domain=' + domain);
+      const r = await fetch(apiUrl('/api/ha/entities?domain=' + domain));
       const data = await r.json();
       entityCache[domain] = data.entities || [];
     } catch (e) { return; }
@@ -1920,7 +1935,7 @@ document.addEventListener('click', (e) => {
 // ============================================================================
 async function loadLoadsManager() {
   try {
-    const r = await fetch('/api/config/loads');
+    const r = await fetch(apiUrl('/api/config/loads'));
     const data = await r.json();
     const loads = data.loads || [];
 
@@ -1972,7 +1987,7 @@ function showAddLoadForm() {
 
 async function editLoad(index) {
   try {
-    const r = await fetch('/api/config/loads');
+    const r = await fetch(apiUrl('/api/config/loads'));
     const data = await r.json();
     const load = data.loads.find(l => l.index === index);
     if (!load) return;
@@ -2008,7 +2023,7 @@ async function saveLoad() {
   };
 
   try {
-    const url = idx >= 0 ? `/api/config/loads/${idx}` : '/api/config/loads';
+    const url = idx >= 0 ? apiUrl(`/api/config/loads/${idx}`) : apiUrl('/api/config/loads');
     const method = idx >= 0 ? 'PUT' : 'POST';
     const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (r.ok) {
@@ -2025,7 +2040,7 @@ async function saveLoad() {
 async function deleteLoad(index) {
   if (!confirm('Last wirklich l\u00f6schen?')) return;
   try {
-    await fetch(`/api/config/loads/${index}`, { method: 'DELETE' });
+    await fetch(apiUrl(`/api/config/loads/${index}`), { method: 'DELETE' });
     showToast('Last gel\u00f6scht');
     loadLoadsManager();
   } catch (e) { showToast('Fehler', true); }
@@ -2040,7 +2055,7 @@ function cancelLoadForm() {
 // ============================================================================
 async function loadEVManager() {
   try {
-    const r = await fetch('/api/config/evs');
+    const r = await fetch(apiUrl('/api/config/evs'));
     const data = await r.json();
     const evs = data.evs || [];
 
@@ -2086,7 +2101,7 @@ function showAddEVForm() {
 
 async function editEVWindow(index) {
   try {
-    const r = await fetch('/api/config/evs');
+    const r = await fetch(apiUrl('/api/config/evs'));
     const data = await r.json();
     const ev = data.evs.find(e => e.index === index);
     if (!ev) return;
@@ -2114,7 +2129,7 @@ async function saveEVWindow() {
   };
 
   try {
-    const url = idx >= 0 ? `/api/config/evs/${idx}` : '/api/config/evs';
+    const url = idx >= 0 ? apiUrl(`/api/config/evs/${idx}`) : apiUrl('/api/config/evs');
     const method = idx >= 0 ? 'PUT' : 'POST';
     const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (r.ok) {
@@ -2131,7 +2146,7 @@ async function saveEVWindow() {
 async function deleteEVWindow(index) {
   if (!confirm('Ladefenster wirklich l\u00f6schen?')) return;
   try {
-    await fetch(`/api/config/evs/${index}`, { method: 'DELETE' });
+    await fetch(apiUrl(`/api/config/evs/${index}`), { method: 'DELETE' });
     showToast('Ladefenster gel\u00f6scht');
     loadEVManager();
   } catch (e) { showToast('Fehler', true); }
@@ -2143,7 +2158,7 @@ function cancelEVForm() {
 
 async function loadEVConfig() {
   try {
-    const r = await fetch('/api/config');
+    const r = await fetch(apiUrl('/api/config'));
     const cfg = await r.json();
     document.getElementById('cfg-goe-enabled').value = String(cfg.goe_enabled);
     document.getElementById('cfg-goe-conn').value = cfg.goe_connection_type || 'local';
@@ -2193,7 +2208,7 @@ async function saveEVConfig() {
   if (!body.goe_cloud_serial) delete body.goe_cloud_serial;
   if (!body.goe_cloud_token) delete body.goe_cloud_token;
   try {
-    const r = await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const r = await fetch(apiUrl('/api/config'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (r.ok) showToast('Wallbox-Einstellungen gespeichert');
     else showToast('Fehler beim Speichern', true);
   } catch (e) { showToast('Netzwerkfehler', true); }
@@ -2206,7 +2221,7 @@ const wbTypeNames = { goe: 'go-e Charger', ha_entity: 'HA-Entity', ocpp: 'OCPP' 
 
 async function loadEVConfigManager() {
   try {
-    const r = await fetch('/api/config/ev-configs');
+    const r = await fetch(apiUrl('/api/config/ev-configs'));
     const data = await r.json();
     const evs = data.ev_configs || [];
 
@@ -2267,7 +2282,7 @@ function showAddEVConfigForm() {
 
 async function editEVConfig2(index) {
   try {
-    const r = await fetch('/api/config/ev-configs');
+    const r = await fetch(apiUrl('/api/config/ev-configs'));
     const data = await r.json();
     const ev = (data.ev_configs || []).find(e => e.index === index);
     if (!ev) return;
@@ -2310,7 +2325,7 @@ async function saveEVConfig2() {
   };
 
   try {
-    const url = idx >= 0 ? `/api/config/ev-configs/${idx}` : '/api/config/ev-configs';
+    const url = idx >= 0 ? apiUrl(`/api/config/ev-configs/${idx}`) : apiUrl('/api/config/ev-configs');
     const method = idx >= 0 ? 'PUT' : 'POST';
     const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (r.ok) {
@@ -2327,7 +2342,7 @@ async function saveEVConfig2() {
 async function deleteEVConfig2(index) {
   if (!confirm('Wallbox-Konfiguration wirklich l\u00f6schen?')) return;
   try {
-    await fetch(`/api/config/ev-configs/${index}`, { method: 'DELETE' });
+    await fetch(apiUrl(`/api/config/ev-configs/${index}`), { method: 'DELETE' });
     showToast('Wallbox-Konfiguration gel\u00f6scht');
     loadEVConfigManager();
   } catch (e) { showToast('Fehler', true); }
@@ -2396,7 +2411,7 @@ function toggleGridFeeFields() {
 
 async function loadPriceConfig() {
   try {
-    const r = await fetch('/api/config');
+    const r = await fetch(apiUrl('/api/config'));
     const cfg = await r.json();
     document.getElementById('cfg-price-source').value = cfg.price_source || 'entso-e';
     document.getElementById('cfg-fixed-price').value = cfg.fixed_price_ct_kwh || 25;
@@ -2458,7 +2473,7 @@ async function savePriceConfig() {
   if (entsoeToken) body.entso_e_token = entsoeToken;
   if (tibberToken) body.tibber_token = tibberToken;
   try {
-    const r = await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const r = await fetch(apiUrl('/api/config'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (r.ok) showToast('Preiskonfiguration gespeichert');
     else showToast('Fehler', true);
   } catch (e) { showToast('Netzwerkfehler', true); }
@@ -2467,7 +2482,7 @@ async function savePriceConfig() {
 let priceDetailChart;
 async function loadPriceDetailChart() {
   try {
-    const r = await fetch('/api/prices');
+    const r = await fetch(apiUrl('/api/prices'));
     const data = await r.json();
     const labels = data.hours.map(h => new Date(h).getHours() + ':00');
 
@@ -2501,7 +2516,7 @@ async function loadPriceDetailChart() {
 // ============================================================================
 async function loadDecomposition() {
   try {
-    const r = await fetch('/api/load-decomposition');
+    const r = await fetch(apiUrl('/api/load-decomposition'));
     if (!r.ok) {
       document.getElementById('decomposition-view').innerHTML = '<div style="color:var(--muted);font-size:0.8rem">Lastzerlegung nicht verf\u00fcgbar</div>';
       return;
@@ -2541,7 +2556,7 @@ async function loadDecomposition() {
 // ============================================================================
 async function loadAllConfig() {
   try {
-    const r = await fetch('/api/config');
+    const r = await fetch(apiUrl('/api/config'));
     const cfg = await r.json();
     // PV
     document.getElementById('cfg-pv-sensor').value = cfg.pv_power_sensor || '';
@@ -2650,7 +2665,7 @@ async function saveAllConfig() {
     notify_on_ev_charged: document.getElementById('cfg-notify-ev').value === 'true',
   };
   try {
-    const r = await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const r = await fetch(apiUrl('/api/config'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (r.ok) showToast('Einstellungen gespeichert');
     else showToast('Fehler beim Speichern', true);
   } catch (e) { showToast('Netzwerkfehler', true); }
@@ -2658,7 +2673,7 @@ async function saveAllConfig() {
 
 async function validateConfig() {
   try {
-    const r = await fetch('/api/config/validate');
+    const r = await fetch(apiUrl('/api/config/validate'));
     const data = await r.json();
     const el = document.getElementById('config-validation');
     el.style.display = 'block';
@@ -2694,7 +2709,7 @@ async function autoDetectEntities() {
   resultEl.innerHTML = '<div style="color:var(--muted);font-size:0.8rem">Suche Entit\u00e4ten...</div>';
 
   try {
-    const r = await fetch('/api/config/auto-detect');
+    const r = await fetch(apiUrl('/api/config/auto-detect'));
     const data = await r.json();
     const suggestions = data.suggestions || {};
     const count = data.found_count || 0;

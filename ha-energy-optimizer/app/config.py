@@ -182,7 +182,7 @@ class Config:
 
     # Runtime (not from config file)
     ha_url: str = field(default_factory=lambda: os.environ.get("HA_URL", "http://supervisor/core"))
-    supervisor_token: str = field(default_factory=lambda: os.environ.get("SUPERVISOR_TOKEN", ""))
+    supervisor_token: str = field(default_factory=lambda: os.environ.get("SUPERVISOR_TOKEN", os.environ.get("HASSIO_TOKEN", "")))
 
 
 def load_config() -> Config:
