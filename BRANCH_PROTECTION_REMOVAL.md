@@ -159,7 +159,7 @@ Oder prüfe in der GitHub Web UI: Settings → Branches
 
 ### "Resource protected" Error
 - Es gibt möglicherweise mehrere Protection Rules
-- Prüfe auch Organization-level Rules (falls das Repo zu einer Org gehört)
+- Prüfe auch Organization-level Rules (falls das Repo zu einer Organisation gehört)
 
 ---
 
