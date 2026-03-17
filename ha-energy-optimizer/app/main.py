@@ -680,10 +680,13 @@ async def get_config_api():
             ]
         else:
             data[f] = val
-    # Remove sensitive fields from response
+    # Remove sensitive fields from response, but indicate if they are set
     data.pop("supervisor_token", None)
+    data["_has_goe_cloud_token"] = bool(cfg.goe_cloud_token)
     data.pop("goe_cloud_token", None)
+    data["_has_tibber_token"] = bool(cfg.tibber_token)
     data.pop("tibber_token", None)
+    data["_has_entso_e_token"] = bool(cfg.entso_e_token)
     data.pop("entso_e_token", None)
     # Add runtime info
     data["_emhass_available"] = is_emhass_available()
