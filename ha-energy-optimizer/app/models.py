@@ -141,6 +141,14 @@ class PVForecastResult(BaseModel):
 # Optimization schedule models
 # ---------------------------------------------------------------------------
 
+class EVSlotData(BaseModel):
+    """Per-EV data within an hourly slot (for multi-EV support)."""
+    name: str = ""
+    charge_w: float = 0.0
+    current_a: int = 0
+    soc_end: Optional[float] = None
+
+
 class HourlySlot(BaseModel):
     """One-hour slot in the optimization schedule."""
     hour: datetime
@@ -152,6 +160,7 @@ class HourlySlot(BaseModel):
     grid_export_w: float = 0.0
     battery_soc_end: float = 0.0
     ev_soc_end: Optional[float] = None
+    ev_slots: list[EVSlotData] = []
     deferrable_loads: dict[str, bool] = {}
     cost_eur: float = 0.0
     price_ct: float = 0.0

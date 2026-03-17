@@ -696,6 +696,63 @@ async def delete_ev(index: int):
 
 
 # ---------------------------------------------------------------------------
+# EV/Wallbox Configuration API (Multi-EV)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/config/ev-configs")
+async def get_ev_configs():
+    """List all configured EV/wallbox pairs."""
+    cfg = get_config()
+    evs = []
+    for i, ev in enumerate(cfg.ev_configs):
+        evs.append({
+            "index": i,
+            **{k: getattr(ev, k) for k in ev.__dataclass_fields__},
+        })
+    return {"ev_configs": evs}
+
+
+@app.post("/api/config/ev-configs")
+async def add_ev_config(body: dict):
+    """Add a new EV/wallbox configuration."""
+    cfg = get_config()
+    from config import EVConfig
+    try:
+        ev = EVConfig(**body)
+        cfg.ev_configs.append(ev)
+        save_config(cfg)
+        return {"status": "ok", "index": len(cfg.ev_configs) - 1}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.put("/api/config/ev-configs/{index}")
+async def update_ev_config(index: int, body: dict):
+    """Update an EV/wallbox configuration by index."""
+    cfg = get_config()
+    if index < 0 or index >= len(cfg.ev_configs):
+        return JSONResponse({"error": "Invalid index"}, status_code=404)
+    from config import EVConfig
+    try:
+        cfg.ev_configs[index] = EVConfig(**body)
+        save_config(cfg)
+        return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.delete("/api/config/ev-configs/{index}")
+async def delete_ev_config(index: int):
+    """Delete an EV/wallbox configuration by index."""
+    cfg = get_config()
+    if index < 0 or index >= len(cfg.ev_configs):
+        return JSONResponse({"error": "Invalid index"}, status_code=404)
+    cfg.ev_configs.pop(index)
+    save_config(cfg)
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
 # Load Decomposition API
 # ---------------------------------------------------------------------------
 
