@@ -704,7 +704,11 @@ ha-energy-optimizer/
 
 ### Branch Protection & Automatisierung
 
-Für automatisierte Commits (z.B. durch GitHub Copilot/Claude) kann es notwendig sein, die Branch Protection auf dem `main` Branch temporär zu entfernen. Eine detaillierte Anleitung findest du in:
+Für automatisierte Commits (z.B. durch GitHub Copilot/Claude) kann es notwendig sein, die Branch Protection auf dem `main` Branch **temporär** zu entfernen. 
+
+⚠️ **Wichtig**: Branch Protection sollte nach Abschluss der automatisierten Änderungen wieder aktiviert werden, um die Code-Qualität und Sicherheit zu gewährleisten.
+
+Eine detaillierte Anleitung findest du in:
 ➡️ [BRANCH_PROTECTION_REMOVAL.md](BRANCH_PROTECTION_REMOVAL.md)
 
 ### Fehler melden / Feature-Requests

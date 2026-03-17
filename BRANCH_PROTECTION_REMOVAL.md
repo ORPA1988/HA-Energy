@@ -105,11 +105,29 @@ After removing branch protection, Claude/Copilot can push directly to the `main`
 
 ⚠️ **Security Risk**: Without branch protection, anyone with write access can push directly to `main` without code review.
 
-### Best Practice:
-- Erwäge, Branch Protection wieder zu aktivieren, nachdem die automatisierten Änderungen abgeschlossen sind
-- Oder nutze einen Service Account / Bot mit speziellen Rechten für automatisierte Commits
-- Consider re-enabling branch protection after automated changes are complete
-- Or use a service account/bot with special permissions for automated commits
+### Best Practice (Empfohlen für temporäres Entfernen / Recommended for temporary removal):
+
+**WICHTIG**: Branch Protection sollte nach Abschluss der automatisierten Änderungen wieder aktiviert werden!
+
+**IMPORTANT**: Branch protection should be re-enabled after automated changes are complete!
+
+#### Schritte zum Wieder-Aktivieren / Steps to Re-Enable:
+
+1. **Gehe zu**: Settings → Branches → "Add branch protection rule"
+2. **Branch name pattern**: `main`
+3. **Empfohlene Einstellungen / Recommended settings**:
+   - ✅ Require a pull request before merging
+   - ✅ Require approvals (mind. 1)
+   - ✅ Dismiss stale pull request approvals when new commits are pushed
+   - ✅ Require status checks to pass before merging (optional)
+   - ✅ Require conversation resolution before merging
+   - ✅ Do not allow bypassing the above settings (oder Ausnahmen für Admins)
+
+#### Alternative Langfristige Lösungen / Alternative Long-term Solutions:
+- Nutze einen Service Account / Bot mit speziellen Bypass-Rechten für automatisierte Commits
+- Konfiguriere Branch Protection mit Ausnahmen für spezifische Workflows (siehe "Alternative Lösung" oben)
+- Use a service account/bot with special bypass permissions for automated commits
+- Configure branch protection with exceptions for specific workflows (see "Alternative Solution" above)
 
 ---
 
