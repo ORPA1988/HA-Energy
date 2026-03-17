@@ -265,6 +265,10 @@
     <div class="stat-value green" id="surplus-w">-- W</div>
     <div class="stat-label">⚡ Überschuss</div>
   </div>
+  <div class="stat">
+    <div class="stat-value" id="mode-indicator" style="cursor:pointer" onclick="toggleReadOnly()">AKTIV</div>
+    <div class="stat-label">🔒 Modus</div>
+  </div>
 </div>
 
 <!-- Tab Navigation -->
@@ -1002,6 +1006,22 @@
 
   <!-- Optimization Config -->
   <div class="card full-width">
+    <div class="card-title">Betriebsmodus</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Read-Only Modus</label>
+        <select id="cfg-read-only">
+          <option value="false">Deaktiviert (Aktive Steuerung)</option>
+          <option value="true">Aktiviert (Nur Monitoring)</option>
+        </select>
+        <div style="font-size:0.75rem;color:var(--muted);margin-top:4px">
+          Im Read-Only Modus werden keine Schalt- oder Regelvorg&auml;nge ausgef&uuml;hrt. Ideal zum Testen des Setups.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card full-width">
     <div class="card-title">Optimierung</div>
     <div class="form-grid">
       <div class="form-group">
@@ -1098,6 +1118,16 @@ function updateState(d) {
   setText('price-ct', (d.price_ct || 0).toFixed(1) + ' ct');
   setClass('price-ct', d.price_ct < 15 ? 'stat-value green' : d.price_ct < 25 ? 'stat-value yellow' : 'stat-value red');
   setText('surplus-w', fmt(d.surplus_w || 0) + ' W');
+
+  // Read-only indicator
+  const modeEl = document.getElementById('mode-indicator');
+  if (d.read_only) {
+    modeEl.textContent = 'READ-ONLY';
+    modeEl.className = 'stat-value yellow';
+  } else {
+    modeEl.textContent = 'AKTIV';
+    modeEl.className = 'stat-value green';
+  }
 
   // Flow diagram
   setText('flow-pv', fmt(d.pv_w) + ' W');
@@ -1357,6 +1387,18 @@ async function setMode(mode) {
   await fetch('/api/ev/mode', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode})});
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
   event.target.classList.add('active');
+}
+
+async function toggleReadOnly() {
+  try {
+    const r = await fetch('/api/mode');
+    const data = await r.json();
+    const newState = !data.read_only;
+    const label = newState ? 'READ-ONLY (nur Monitoring)' : 'AKTIV (Steuerung aktiv)';
+    if (!confirm('Modus wechseln zu: ' + label + '?')) return;
+    await fetch('/api/mode', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({read_only: newState})});
+    showToast(newState ? 'Read-Only Modus aktiviert' : 'Aktiver Modus aktiviert');
+  } catch (e) { showToast('Fehler', true); }
 }
 
 async function startBalancing() {
@@ -2064,6 +2106,7 @@ async function loadAllConfig() {
     } else {
       emhassEl.innerHTML = '<span style="color:var(--muted)">\u2717 EMHASS nicht installiert (pip install emhass)</span>';
     }
+    document.getElementById('cfg-read-only').value = String(cfg.read_only || false);
     document.getElementById('cfg-opt-goal').value = cfg.optimization_goal || 'cost';
     document.getElementById('cfg-opt-interval').value = cfg.optimization_interval_minutes || 60;
     document.getElementById('cfg-opt-long').value = cfg.long_term_plan_interval_hours || 6;
@@ -2091,6 +2134,7 @@ async function saveAllConfig() {
     grid_max_import_w: parseInt(document.getElementById('cfg-grid-max').value),
     peak_shaving_limit_w: parseInt(document.getElementById('cfg-peak-shaving').value),
     optimizer_backend: document.getElementById('cfg-opt-backend').value,
+    read_only: document.getElementById('cfg-read-only').value === 'true',
     optimization_goal: document.getElementById('cfg-opt-goal').value,
     optimization_interval_minutes: parseInt(document.getElementById('cfg-opt-interval').value),
     long_term_plan_interval_hours: parseInt(document.getElementById('cfg-opt-long').value),

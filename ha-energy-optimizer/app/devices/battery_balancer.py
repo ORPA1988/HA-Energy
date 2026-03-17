@@ -153,6 +153,9 @@ class BatteryBalancer:
 
     async def start_balancing(self, reason: str = "manual") -> None:
         """Initiate balancing cycle: force battery to charge to target SOC."""
+        if self._cfg.read_only:
+            logger.info("[READ-ONLY] Balancing request ignored: %s", reason)
+            return
         if self._state in (BalancingState.CHARGING, BalancingState.HOLDING):
             logger.info("Balancing already in progress, skipping")
             return

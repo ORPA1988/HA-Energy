@@ -181,6 +181,11 @@ class RealtimeController:
         """Execute one control cycle. Called every 30s by scheduler."""
         cfg = self._cfg
 
+        # Read-only mode: skip all control actions
+        if cfg.read_only:
+            logger.debug("[READ-ONLY] Skipping EV control cycle")
+            return
+
         # Determine phases from go-e status, wallbox status, or config
         wb = self._get_wallbox()
         if goe_status:

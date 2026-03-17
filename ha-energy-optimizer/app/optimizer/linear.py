@@ -45,16 +45,18 @@ class LinearOptimizer:
         self._last_schedule: Optional[DailySchedule] = None
 
     def _get_ev_params(self, ev_soc: Optional[float], ev_target_soc: int,
-                        ev_departure_h: int) -> list[dict]:
+                        ev_departure_h: int,
+                        ev_soc_map: Optional[dict[str, float]] = None) -> list[dict]:
         """Build EV parameter list from ev_configs or legacy single-EV config."""
         cfg = self._cfg
+        soc_map = ev_soc_map or {}
         if cfg.ev_configs:
             params = []
             for ev in cfg.ev_configs:
                 params.append({
                     "name": ev.name,
                     "cap_wh": ev.battery_capacity_kwh * 1000.0,
-                    "init_soc": 0.0,  # Will be filled from HA sensors at runtime
+                    "init_soc": soc_map.get(ev.name, 0.0) / 100.0,
                     "max_ch_w": ev.max_charge_current_a * ev.phases * 230.0,
                     "target_soc": ev.target_soc / 100.0,
                     "departure_h": ev_departure_h,
@@ -84,6 +86,7 @@ class LinearOptimizer:
         ev_target_soc: int = 80,
         ev_departure_h: int = 7,
         goal: OptimizationGoal = OptimizationGoal.COST,
+        ev_soc_map: Optional[dict[str, float]] = None,
     ) -> DailySchedule:
         """Run LP optimization and return a 24h schedule."""
         cfg = self._cfg
@@ -114,7 +117,7 @@ class LinearOptimizer:
         bat_max_dis = float(cfg.battery_max_discharge_w)
 
         # Multi-EV parameters
-        ev_params = self._get_ev_params(ev_soc, ev_target_soc, ev_departure_h)
+        ev_params = self._get_ev_params(ev_soc, ev_target_soc, ev_departure_h, ev_soc_map)
         n_evs = len(ev_params)
         n_loads = len(cfg.deferrable_loads)
 
@@ -211,7 +214,7 @@ class LinearOptimizer:
             row_dur = np.zeros(n_total)
             for t in range(N):
                 hour = (datetime.now().hour + t) % 24
-                if load.earliest_start_h <= hour or hour < load.latest_end_h:
+                if load.earliest_start_h <= hour and hour < load.latest_end_h:
                     row_dur[base + t] = -1.0
             ineq_rows.append(row_dur)
             ineq_b.append(-duration_slots)

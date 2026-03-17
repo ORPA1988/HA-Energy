@@ -11,6 +11,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 OPTIONS_FILE = Path("/data/options.json")
+CONFIG_JSON_FILE = Path("/data/ha_energy_config.json")
 
 
 @dataclass
@@ -155,6 +156,9 @@ class Config:
     # Deferrable Loads
     deferrable_loads: list[DeferrableLoad] = field(default_factory=list)
 
+    # Operation mode
+    read_only: bool = False  # Read-only mode: no switching, no control, only monitoring
+
     # Optimization
     optimizer_backend: str = "builtin"  # "builtin" (scipy LP) or "emhass"
     optimization_goal: str = "cost"
@@ -227,6 +231,7 @@ def load_config() -> Config:
         "ev_min_charge_current_a", "ev_max_charge_current_a",
         "ev_allow_battery_to_charge_ev", "ev_allow_grid_to_charge_ev",
         "ev_combined_charge_threshold_ct",
+        "read_only",
         "optimizer_backend", "optimization_goal", "optimization_interval_minutes",
         "long_term_plan_interval_hours", "peak_shaving_limit_w",
         "notify_target", "notify_on_balancing",
@@ -267,8 +272,6 @@ def load_config() -> Config:
     logger.info("Configuration loaded from %s", OPTIONS_FILE)
     return cfg
 
-
-CONFIG_JSON_FILE = Path("/data/ha_energy_config.json")
 
 
 def save_config(cfg: Config) -> bool:
