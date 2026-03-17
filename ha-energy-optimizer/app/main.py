@@ -757,6 +757,103 @@ async def validate_config():
 
 
 # ---------------------------------------------------------------------------
+# Auto-Detection API
+# ---------------------------------------------------------------------------
+
+# Mapping: config_field -> (domain, device_classes, keywords_in_entity_id)
+_AUTO_DETECT_RULES: list[tuple[str, str, list[str], list[str]]] = [
+    ("pv_power_sensor", "sensor", ["power", "energy"],
+     ["solar", "pv", "photovoltaic", "solarpower", "pv_power"]),
+    ("battery_soc_sensor", "sensor", ["battery"],
+     ["battery_soc", "akku_soc", "battery_state_of_charge", "battery_level",
+      "batt_soc", "speicher_soc"]),
+    ("battery_power_sensor", "sensor", ["power"],
+     ["battery_power", "akku_power", "battery_charging_power",
+      "speicher_leistung", "batt_power"]),
+    ("battery_charge_switch", "switch", [],
+     ["battery_charge", "akku_laden", "battery_grid_charging",
+      "batt_charge", "speicher_laden"]),
+    ("battery_discharge_switch", "switch", [],
+     ["battery_discharge", "akku_entladen", "batt_discharge",
+      "speicher_entladen"]),
+    ("grid_power_sensor", "sensor", ["power"],
+     ["grid_power", "netz", "meter_power", "stromzaehler", "grid_import",
+      "netzbezug", "house_meter"]),
+    ("total_power_sensor", "sensor", ["power"],
+     ["total_power", "house_power", "gesamtverbrauch", "hausverbrauch",
+      "total_consumption", "load_power"]),
+    ("ev_soc_sensor", "sensor", ["battery"],
+     ["ev_battery", "car_soc", "fahrzeug", "ev_soc", "vehicle_battery",
+      "auto_soc", "car_battery"]),
+    ("epex_import_entity", "sensor", ["monetary"],
+     ["epex_spot", "nordpool", "electricity_price", "strompreis",
+      "energy_price", "spot_price"]),
+    ("price_sensor_entity", "sensor", ["monetary"],
+     ["electricity_price", "strompreis", "energy_price", "power_price",
+      "current_price"]),
+]
+
+
+def _match_entity(entity: dict, domain: str, device_classes: list[str],
+                   keywords: list[str]) -> tuple[bool, str]:
+    """Score an entity against detection rules. Returns (matched, confidence)."""
+    eid = entity.get("entity_id", "")
+    attrs = entity.get("attributes", {})
+    dc = attrs.get("device_class", "")
+    fname = (attrs.get("friendly_name", "") or "").lower()
+
+    if not eid.startswith(domain + "."):
+        return False, ""
+
+    eid_lower = eid.lower()
+    kw_match = any(kw in eid_lower or kw in fname for kw in keywords)
+    dc_match = dc in device_classes if device_classes else False
+
+    if kw_match and dc_match:
+        return True, "high"
+    if kw_match:
+        return True, "medium"
+    if dc_match and device_classes:
+        return True, "low"
+    return False, ""
+
+
+@app.get("/api/config/auto-detect")
+async def auto_detect_entities():
+    """Auto-detect HA entities for configuration fields."""
+    all_states = await app_state.ha.get_all_states()
+    suggestions = {}
+
+    for field_name, domain, device_classes, keywords in _AUTO_DETECT_RULES:
+        best = None
+        best_conf_rank = 0  # high=3, medium=2, low=1
+        conf_ranks = {"high": 3, "medium": 2, "low": 1}
+
+        for entity in all_states:
+            matched, confidence = _match_entity(
+                entity, domain, device_classes, keywords)
+            if matched and conf_ranks.get(confidence, 0) > best_conf_rank:
+                attrs = entity.get("attributes", {})
+                unit = attrs.get("unit_of_measurement", "")
+                best = {
+                    "entity_id": entity["entity_id"],
+                    "confidence": confidence,
+                    "friendly_name": attrs.get("friendly_name", ""),
+                    "current_value": f"{entity.get('state', '')} {unit}".strip(),
+                }
+                best_conf_rank = conf_ranks[confidence]
+
+        if best:
+            suggestions[field_name] = best
+
+    return {
+        "suggestions": suggestions,
+        "found_count": len(suggestions),
+        "total_fields": len(_AUTO_DETECT_RULES),
+    }
+
+
+# ---------------------------------------------------------------------------
 # HA Entity API (for entity picker in GUI)
 # ---------------------------------------------------------------------------
 
