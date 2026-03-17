@@ -290,7 +290,7 @@ class GeneticPlanner:
                 battery_charge_w=bat_ch_w,
                 battery_discharge_w=bat_dis_w,
                 ev_charge_w=ev_ch_w,
-                ev_current_a=int(ev_ch_w / (cfg.goe_phases * 230)) if ev_ch_w > 0 else 0,
+                ev_current_a=int(ev_ch_w / (max(1, cfg.goe_phases) * 230)) if ev_ch_w > 0 else 0,
                 grid_import_w=imp,
                 grid_export_w=exp,
                 battery_soc_end=bat_soc * 100.0,

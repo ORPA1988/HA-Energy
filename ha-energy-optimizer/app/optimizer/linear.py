@@ -214,7 +214,12 @@ class LinearOptimizer:
             row_dur = np.zeros(n_total)
             for t in range(N):
                 hour = (datetime.now().hour + t) % 24
-                if load.earliest_start_h <= hour and hour < load.latest_end_h:
+                # Handle midnight wrap-around (e.g. earliest=22, latest=8)
+                if load.earliest_start_h <= load.latest_end_h:
+                    in_window = load.earliest_start_h <= hour < load.latest_end_h
+                else:
+                    in_window = hour >= load.earliest_start_h or hour < load.latest_end_h
+                if in_window:
                     row_dur[base + t] = -1.0
             ineq_rows.append(row_dur)
             ineq_b.append(-duration_slots)

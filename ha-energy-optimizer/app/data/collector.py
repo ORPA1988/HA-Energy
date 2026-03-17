@@ -45,10 +45,11 @@ class DataCollector:
             decomposer = self._get_decomposer()
             house_load = await decomposer.get_base_load_w()
         else:
-            # House load: PV - grid_export - battery_charge (simplified energy balance)
-            # grid positive = import, negative = export
-            # battery positive = charging, negative = discharging
-            house_load = max(0.0, pv_w + max(0.0, grid_power) - max(0.0, battery_power))
+            # Energy balance: PV + grid_import = house + battery_charge + grid_export
+            # grid_power: positive = import, negative = export
+            # battery_power: positive = charging, negative = discharging
+            # Therefore: house = PV + grid_power - battery_power
+            house_load = max(0.0, pv_w + grid_power - battery_power)
 
         # Solar surplus: what's available beyond house load and battery charging
         surplus = max(0.0, pv_w - house_load - max(0.0, battery_power))

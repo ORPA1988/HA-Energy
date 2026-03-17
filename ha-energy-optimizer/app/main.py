@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections
 import json
 import logging
 import logging.handlers
@@ -92,7 +93,7 @@ class AppState:
         # WebSocket connections
         self._ws_clients: list[WebSocket] = []
         self._ws_client_limit: int = 100  # Prevent memory leak
-        self._history: list[dict] = []  # Last 24h snapshots
+        self._history: collections.deque[dict] = collections.deque(maxlen=2880)  # Last 24h at 30s intervals
 
     # ------------------------------------------------------------------
     # Helper methods
@@ -246,7 +247,11 @@ class AppState:
                 # Multi-window support requires LP/genetic algorithm enhancement
                 w = self.cfg.ev_charging_windows[0]
                 target_soc = w.target_soc_percent
-                departure_h = int(w.must_finish_by.split(":")[0])
+                try:
+                    departure_h = int(w.must_finish_by.split(":")[0])
+                except (ValueError, IndexError):
+                    logger.warning("Invalid must_finish_by format '%s', using default 07:00", w.must_finish_by)
+                    departure_h = 7
                 if len(self.cfg.ev_charging_windows) > 1:
                     logger.info("Multiple EV windows configured, using first: %s", w.name)
 
@@ -309,8 +314,12 @@ class AppState:
             # Note: Currently evaluates first window only
             w = self.cfg.ev_charging_windows[0]
             now = datetime.now()
-            start_h = int(w.available_from.split(":")[0])
-            end_h = int(w.available_until.split(":")[0])
+            try:
+                start_h = int(w.available_from.split(":")[0])
+                end_h = int(w.available_until.split(":")[0])
+            except (ValueError, IndexError):
+                logger.warning("Invalid time format in EV window '%s', skipping", w.name)
+                return
 
             window_start = now.replace(hour=start_h, minute=0, second=0)
             if window_start < now:
@@ -401,9 +410,6 @@ class AppState:
             "price_ct": state.price_total_ct_kwh,
             "savings_eur": actions.estimated_savings_eur,
         })
-        # Keep last 24h = 2880 entries at 30s interval
-        if len(self._history) > 2880:
-            self._history = self._history[-2880:]
 
     # ------------------------------------------------------------------
     # WebSocket
@@ -504,7 +510,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="HA Energy Optimizer",
-    version="1.0.1",
+    version="1.0.2",
     lifespan=lifespan,
 )
 
@@ -575,8 +581,10 @@ async def set_ev_mode(body: dict):
 @app.post("/api/optimize")
 async def trigger_optimization():
     """Trigger immediate re-optimization."""
-    asyncio.create_task(app_state.run_linear_optimization())
-    asyncio.create_task(app_state.run_ev_strategy())
+    task_lp = asyncio.create_task(app_state.run_linear_optimization())
+    task_ev = asyncio.create_task(app_state.run_ev_strategy())
+    task_lp.add_done_callback(lambda t: t.exception() if not t.cancelled() and t.exception() else None)
+    task_ev.add_done_callback(lambda t: t.exception() if not t.cancelled() and t.exception() else None)
     return {"status": "triggered"}
 
 
@@ -612,7 +620,8 @@ async def stop_balancing():
 @app.get("/api/history")
 async def get_history(hours: int = 24):
     cutoff_count = hours * 120  # 30s intervals → 120 per hour
-    return {"history": app_state._history[-cutoff_count:]}
+    history_list = list(app_state._history)
+    return {"history": history_list[-cutoff_count:]}
 
 
 # ---------------------------------------------------------------------------
@@ -635,6 +644,9 @@ async def get_config_api():
             data[f] = val
     # Remove sensitive fields from response
     data.pop("supervisor_token", None)
+    data.pop("goe_cloud_token", None)
+    data.pop("tibber_token", None)
+    data.pop("entso_e_token", None)
     # Add runtime info
     data["_emhass_available"] = is_emhass_available()
     data["_optimizer_active"] = "emhass" if (cfg.optimizer_backend == "emhass" and is_emhass_available()) else "builtin"

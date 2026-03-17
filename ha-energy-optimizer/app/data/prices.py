@@ -211,6 +211,9 @@ class PriceFetcher:
             return await self._fetch_fixed()
 
         # Return 48h worth
+        if not prices_ct:
+            logger.warning("ENTSO-E returned empty price list after parsing")
+            return await self._fetch_fixed()
         return prices_ct[:48] if len(prices_ct) >= 48 else prices_ct + [prices_ct[-1]] * (48 - len(prices_ct))
 
     async def _fetch_awattar(self) -> list[float]:

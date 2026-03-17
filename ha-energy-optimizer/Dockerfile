@@ -1,7 +1,8 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-python:3.11-alpine3.18
-FROM ${BUILD_FROM}
 
-# Install build dependencies for scipy/numpy
+# Stage 1: Build dependencies (scipy/numpy need compilation)
+FROM ${BUILD_FROM} AS builder
+
 RUN apk add --no-cache \
     gcc \
     g++ \
@@ -12,9 +13,23 @@ RUN apk add --no-cache \
     openblas-dev \
     lapack-dev
 
-# Copy requirements first for layer caching
 COPY app/requirements.txt /app/requirements.txt
-RUN pip3 install --no-cache-dir --break-system-packages -r /app/requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages --prefix=/usr/local -r /app/requirements.txt
+
+# Stage 2: Runtime image (no build tools)
+FROM ${BUILD_FROM}
+
+# Only runtime dependencies for scipy/numpy
+RUN apk add --no-cache \
+    libffi \
+    openssl \
+    openblas \
+    lapack \
+    libstdc++ \
+    libgfortran
+
+# Copy installed Python packages from builder
+COPY --from=builder /usr/local /usr/local
 
 # Copy application
 COPY app/ /app/
