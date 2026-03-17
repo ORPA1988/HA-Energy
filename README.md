@@ -702,6 +702,11 @@ ha-energy-optimizer/
 | **Container** | Docker, Alpine Linux 3.18 |
 | **HA-Integration** | Supervisor API, Ingress, Add-on Schema |
 
+### Branch Protection & Automatisierung
+
+Für automatisierte Commits (z.B. durch GitHub Copilot/Claude) kann es notwendig sein, die Branch Protection auf dem `main` Branch temporär zu entfernen. Eine detaillierte Anleitung findest du in:
+➡️ [BRANCH_PROTECTION_REMOVAL.md](BRANCH_PROTECTION_REMOVAL.md)
+
 ### Fehler melden / Feature-Requests
 
 Bitte Issues direkt auf GitHub erstellen:
