@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import logging.handlers
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -19,10 +20,19 @@ from fastapi.staticfiles import StaticFiles
 # Add app directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+LOG_FILE = Path("/data/energy_optimizer.log")
+_log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+_handlers: list[logging.Handler] = [logging.StreamHandler()]
+try:
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _file_handler = logging.handlers.RotatingFileHandler(
+        LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8",
+    )
+    _file_handler.setFormatter(logging.Formatter(_log_format))
+    _handlers.append(_file_handler)
+except (OSError, PermissionError):
+    pass  # No file logging in dev environments
+logging.basicConfig(level=logging.INFO, format=_log_format, handlers=_handlers)
 logger = logging.getLogger(__name__)
 
 from config import get_config, save_config, update_config, reload_config
@@ -172,7 +182,7 @@ class AppState:
             # Balancing tick
             await self.balancer.tick(state.battery_soc_percent)
             state.balancing_status = self.balancer.current_state
-            state.is_balancing = self.balancer.is_active
+            state.battery_is_balancing = self.balancer.is_active
 
             # Get coordinator actions
             actions = self.coordinator.get_actions(
@@ -218,6 +228,17 @@ class AppState:
             bat_soc = state.battery_soc_percent if state else 50.0
             ev_soc = state.ev_soc_percent if state else None
 
+            # Read Multi-EV SOCs from HA sensors
+            ev_soc_map = {}
+            for ev in self.cfg.ev_configs:
+                if ev.soc_sensor:
+                    try:
+                        val = await self.ha.get_state(ev.soc_sensor)
+                        if val is not None:
+                            ev_soc_map[ev.name] = float(val)
+                    except Exception:
+                        pass
+
             target_soc = 80
             departure_h = 7
             if self.cfg.ev_charging_windows:
@@ -238,6 +259,7 @@ class AppState:
                 ev_target_soc=target_soc,
                 ev_departure_h=departure_h,
                 goal=OptimizationGoal(self.cfg.optimization_goal),
+                ev_soc_map=ev_soc_map,
             )
             logger.info("LP optimization complete. Cost: €%.3f", self.current_schedule.total_cost_eur)
 
@@ -429,7 +451,8 @@ class AppState:
             "ev_soc": state.ev_soc_percent,
             "ev_list": ev_list,
             "price_ct": round(state.price_total_ct_kwh, 2),
-            "is_balancing": state.is_balancing,
+            "is_balancing": state.battery_is_balancing,
+            "read_only": self.cfg.read_only,
             "optimizer_backend": self.cfg.optimizer_backend,
             "ts": state.timestamp.isoformat(),
         }
@@ -555,6 +578,23 @@ async def trigger_optimization():
     asyncio.create_task(app_state.run_linear_optimization())
     asyncio.create_task(app_state.run_ev_strategy())
     return {"status": "triggered"}
+
+
+@app.get("/api/mode")
+async def get_mode():
+    """Get current operation mode."""
+    cfg = get_config()
+    return {"read_only": cfg.read_only, "mode": "read_only" if cfg.read_only else "active"}
+
+
+@app.post("/api/mode")
+async def set_mode_api(body: dict):
+    """Toggle read-only mode. Body: {"read_only": true/false}"""
+    read_only = body.get("read_only", False)
+    cfg = update_config({"read_only": read_only})
+    mode = "read_only" if cfg.read_only else "active"
+    logger.info("Operation mode changed to: %s", mode)
+    return {"status": "ok", "read_only": cfg.read_only, "mode": mode}
 
 
 @app.post("/api/balance/start")

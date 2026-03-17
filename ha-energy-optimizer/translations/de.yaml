@@ -83,6 +83,9 @@ configuration:
   ev_configs:
     name: E-Auto/Wallbox-Konfigurationen
     description: "Liste aller konfigurierten E-Autos und Wallboxen"
+  read_only:
+    name: "Nur-Lese-Modus (Read-Only)"
+    description: "Wenn aktiviert: System liest nur Sensoren, führt keine Schalt- oder Regelvorgänge aus. Ideal zum Testen."
   optimizer_backend:
     name: Optimizer-Backend
     description: "Optimierungsengine: eingebaut (scipy LP/HiGHS) oder EMHASS (ML + CVXPY)"

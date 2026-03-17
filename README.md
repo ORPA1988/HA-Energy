@@ -35,8 +35,11 @@ Ein vollständiges **Home-Energy-Management-System (HEMS)** als Home Assistant A
 10. [API-Endpunkte](#api-endpunkte)
 11. [Fehlerbehebung](#fehlerbehebung)
 12. [Performance-Empfehlungen für Raspberry Pi 4](#performance-empfehlungen-für-raspberry-pi-4)
-13. [Changelog](#changelog)
-14. [Entwicklung & Beitrag](#entwicklung--beitrag)
+13. [Read-Only Modus (Test-Modus)](#read-only-modus-test-modus)
+14. [MCP-Server (Claude Code / KI-Integration)](#mcp-server-claude-code--ki-integration)
+15. [Direkte Einbindung als HA Add-on](#direkte-einbindung-als-ha-add-on)
+16. [Changelog](#changelog)
+17. [Entwicklung & Beitrag](#entwicklung--beitrag)
 
 ---
 
@@ -54,6 +57,9 @@ Ein vollständiges **Home-Energy-Management-System (HEMS)** als Home Assistant A
 | 📱 **Live-Dashboard** | Echtzeit-Visualisierung aller Energieflüsse, Preise und Zeitpläne via WebSocket |
 | 🔔 **Benachrichtigungen** | Push-Nachrichten bei günstigen Ladezeiten, Balancing-Ereignissen und vollem EV |
 | 🏠 **HA-Integration** | Native Integration mit Ingress-Panel, Supervisor-API und allen HA-Entitäten |
+| 🔒 **Read-Only Modus** | Sicheres Testen des Setups ohne aktive Schalt- und Regelvorgänge |
+| 🤖 **MCP-Server** | KI-gestützte Konfiguration und Analyse via Claude Code, Cursor oder andere MCP-Clients |
+| 📊 **Lastzerlegung** | Visualisierung der Grundlast vs. steuerbare Lasten im Dashboard |
 
 ---
 
@@ -680,14 +686,18 @@ ha-energy-optimizer/
     │   ├── linear.py       # 24h Kostenoptimierung (scipy.linprog)
     │   ├── genetic.py      # 48h Energieplanung (genetischer Algorithmus)
     │   ├── ev_strategy.py  # EV-Ladestrategie
-    │   └── coordinator.py  # Optimizer-Koordination
+    │   ├── coordinator.py  # Optimizer-Koordination
+    │   └── emhass_backend.py  # Optionaler EMHASS-LP-Solver
     ├── data/
     │   ├── collector.py    # HA-Sensor-Erfassung
     │   ├── prices.py       # Strompreisabfrage
-    │   └── forecast.py     # PV-Ertragsprognose
-    └── devices/
-        ├── goe.py          # go-e Wallbox Integration
-        └── battery_balancer.py  # Batterie-Zellenausgleich
+    │   ├── forecast.py     # PV-Ertragsprognose
+    │   └── load_decomposition.py  # Lastzerlegung
+    ├── devices/
+    │   ├── goe.py          # go-e Wallbox Integration
+    │   ├── wallbox.py      # Abstrakte Wallbox-Schnittstelle
+    │   └── battery_balancer.py  # Batterie-Zellenausgleich
+    └── mcp_server.py       # MCP-Server (Claude Code / KI-Tools)
 ```
 
 ### Technologie-Stack
@@ -701,6 +711,248 @@ ha-energy-optimizer/
 | **Frontend** | HTML/CSS/JS, Chart.js, WebSocket |
 | **Container** | Docker, Alpine Linux 3.18 |
 | **HA-Integration** | Supervisor API, Ingress, Add-on Schema |
+
+---
+
+## Read-Only Modus (Test-Modus)
+
+Der Read-Only Modus erlaubt es, das gesamte System zu testen, ohne dass aktive Steuerungsvorgänge ausgeführt werden. **Ideal für die Ersteinrichtung und Debugging.**
+
+### Was passiert im Read-Only Modus?
+
+| Funktion | Read-Only | Aktiv |
+|---|---|---|
+| Sensoren lesen (PV, Batterie, Netz) | ✅ | ✅ |
+| Strompreise abrufen | ✅ | ✅ |
+| PV-Prognose berechnen | ✅ | ✅ |
+| LP-Optimierung berechnen | ✅ | ✅ |
+| Genetischer Algorithmus | ✅ | ✅ |
+| Dashboard / WebSocket | ✅ | ✅ |
+| EV-Ladesteuerung (Wallbox) | ❌ | ✅ |
+| Steuerbare Lasten schalten | ❌ | ✅ |
+| Batterie-Balancing starten | ❌ | ✅ |
+| HA-Entitäten schreiben | ❌ | ✅ |
+
+### Aktivierung
+
+**Option 1: Dashboard** — Klicke auf den Modus-Indikator in der Statusleiste (AKTIV/READ-ONLY)
+
+**Option 2: API**
+```bash
+# Aktivieren
+curl -X POST http://<IP>:8080/api/mode -H "Content-Type: application/json" -d '{"read_only": true}'
+
+# Status prüfen
+curl http://<IP>:8080/api/mode
+```
+
+**Option 3: Konfiguration** — In `config.yaml`:
+```yaml
+read_only: true
+```
+
+### Empfehlung
+
+1. Bei Erstinstallation: **Read-Only aktivieren**
+2. Alle Sensoren in den Einstellungen konfigurieren
+3. "Konfiguration prüfen" Button klicken — alle Fehler/Warnungen beheben
+4. Dashboard beobachten: PV, Batterie, Preise sollten korrekte Werte zeigen
+5. LP-Schedule und EV-Strategie prüfen
+6. Wenn alles korrekt: Read-Only deaktivieren
+
+---
+
+## MCP-Server (Claude Code / KI-Integration)
+
+Der integrierte MCP-Server erlaubt es, das Energy-Management-System direkt aus Claude Code, Cursor oder anderen MCP-kompatiblen KI-Tools zu steuern und zu analysieren.
+
+### Verfügbare Tools
+
+| Tool | Beschreibung |
+|---|---|
+| `get_state` | Aktueller Energiesystem-Status (PV, Batterie, Netz, EV, Preise) |
+| `get_schedule` | 24h LP-Optimierungsplan |
+| `get_plan` | 48h Genetischer Algorithmus Plan |
+| `get_prices` | 48h Strompreise aller Quellen |
+| `get_config` | Aktuelle Konfiguration |
+| `update_config` | Konfiguration live ändern |
+| `validate_config` | Konfiguration prüfen (Fehler/Warnungen) |
+| `get_logs` | Anwendungslogs lesen und filtern |
+| `get_ha_logs` | Home Assistant Systemlogs |
+| `get_history` | Historische Energiedaten (30s-Snapshots) |
+| `get_ev_strategy` | EV-Ladestrategie-Bewertung |
+| `trigger_optimization` | Sofortige Neuoptimierung |
+| `set_ev_mode` | EV-Lademodus setzen (solar/smart/fast/off) |
+| `set_read_only` | Read-Only Modus ein/ausschalten |
+| `get_ha_entity` | Einzelne HA-Entität lesen |
+| `list_ha_entities` | HA-Entitäten nach Domain auflisten |
+| `get_load_decomposition` | Lastzerlegung (Grundlast vs. steuerbar) |
+
+### Einrichtung in Claude Code
+
+Füge in deiner `~/.claude/settings.json` (oder Projekt-Settings) hinzu:
+
+```json
+{
+  "mcpServers": {
+    "ha-energy": {
+      "command": "python3",
+      "args": ["/path/to/ha-energy-optimizer/app/mcp_server.py", "--url", "http://<HA-IP>:8080"],
+      "env": {}
+    }
+  }
+}
+```
+
+Wenn das Add-on auf dem gleichen Rechner läuft:
+```json
+{
+  "mcpServers": {
+    "ha-energy": {
+      "command": "python3",
+      "args": ["mcp_server.py", "--url", "http://localhost:8080"],
+      "cwd": "/path/to/ha-energy-optimizer/app"
+    }
+  }
+}
+```
+
+### Einrichtung in Cursor
+
+In `.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "ha-energy": {
+      "command": "python3",
+      "args": ["/path/to/ha-energy-optimizer/app/mcp_server.py", "--url", "http://<HA-IP>:8080"]
+    }
+  }
+}
+```
+
+### Verwendungsbeispiele
+
+Nach der Einrichtung kannst du in Claude Code z.B. sagen:
+
+- *"Zeige mir den aktuellen PV-Ertrag und Batteriestand"*
+- *"Wie sieht der Optimierungsplan für heute aus?"*
+- *"Stelle den EV-Lademodus auf Solar-only"*
+- *"Aktiviere den Read-Only Modus zum Testen"*
+- *"Zeige mir die letzten Fehler im Log"*
+- *"Ändere den Batteriesensor auf sensor.my_battery_soc"*
+- *"Validiere die aktuelle Konfiguration"*
+
+---
+
+## Direkte Einbindung als HA Add-on
+
+### Methode 1: GitHub-Repository (empfohlen)
+
+Die einfachste Methode — HA lädt das Add-on direkt aus diesem Repository:
+
+1. **Repository hinzufügen**:
+   - Home Assistant → Einstellungen → Add-ons → Add-on Store
+   - Oben rechts: ⋮ → Repositories
+   - URL einfügen: `https://github.com/ORPA1988/HA-Energy`
+   - "Hinzufügen" klicken
+
+2. **Add-on installieren**:
+   - Im Add-on Store erscheint "HA Energy Optimizer"
+   - "Installieren" klicken (Kompilierung dauert 5-15 Min auf RPi4)
+
+3. **Starten**:
+   - Konfiguration in der Add-on-Seite anpassen
+   - "Starten" klicken
+   - Dashboard öffnet sich automatisch im HA-Seitenmenü
+
+### Methode 2: Lokale Installation (für Entwickler)
+
+```bash
+# Repository klonen
+git clone https://github.com/ORPA1988/HA-Energy.git
+
+# In das HA Add-on Verzeichnis kopieren
+cp -r HA-Energy/ha-energy-optimizer /addons/ha-energy-optimizer
+
+# In HA: Einstellungen → Add-ons → Lokale Add-ons → Neu laden
+# "HA Energy Optimizer" installieren
+```
+
+### Methode 3: Docker (ohne HA Add-on)
+
+Für Standalone-Betrieb oder Tests ohne Home Assistant:
+
+```bash
+# Image bauen
+cd HA-Energy/ha-energy-optimizer
+docker build -t ha-energy-optimizer .
+
+# Container starten
+docker run -d \
+  --name energy-optimizer \
+  -p 8080:8080 \
+  -e HA_URL=http://<HA-IP>:8123 \
+  -e SUPERVISOR_TOKEN=<long-lived-access-token> \
+  -v /opt/energy-data:/data \
+  ha-energy-optimizer
+```
+
+> **Hinweis**: Ohne HA Supervisor muss ein [Long-Lived Access Token](https://www.home-assistant.io/docs/authentication/#your-account-profile) als `SUPERVISOR_TOKEN` übergeben werden.
+
+### Methode 4: Docker Compose
+
+```yaml
+version: '3.8'
+services:
+  energy-optimizer:
+    build: ./ha-energy-optimizer
+    ports:
+      - "8080:8080"
+    environment:
+      - HA_URL=http://homeassistant:8123
+      - SUPERVISOR_TOKEN=${HA_TOKEN}
+    volumes:
+      - energy-data:/data
+    restart: unless-stopped
+
+volumes:
+  energy-data:
+```
+
+### Add-on Konfiguration (config.yaml)
+
+Die vollständige Add-on-Konfiguration wird in der HA-Oberfläche vorgenommen:
+
+```yaml
+# Minimal-Konfiguration zum Starten
+pv_power_sensor: sensor.solar_power
+battery_soc_sensor: sensor.battery_soc
+grid_power_sensor: sensor.grid_power
+price_source: epex_entity
+epex_import_entity: sensor.epex_spot_de_price
+read_only: true  # Empfohlen beim ersten Start!
+```
+
+### Netzwerk & Ports
+
+| Port | Protokoll | Beschreibung |
+|---|---|---|
+| 8080 | HTTP | Web-Dashboard + REST-API |
+| 8080 | WebSocket | Live-Updates (`/ws`) |
+
+Der Port 8080 wird über HA Ingress automatisch gemappt. Bei direktem Zugriff: `http://<HA-IP>:8080`
+
+### Unterstützte Architekturen
+
+| Architektur | Getestet | Empfohlen |
+|---|---|---|
+| amd64 | ✅ | Ideal für NUC/Server |
+| aarch64 | ✅ | Raspberry Pi 4/5 |
+| armv7 | ✅ | Ältere RPi |
+| armhf | ⚠️ | Begrenzt (wenig RAM) |
+
+---
 
 ### Fehler melden / Feature-Requests
 

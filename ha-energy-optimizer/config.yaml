@@ -112,6 +112,8 @@ options:
       earliest_start_h: 22
       min_soc_battery: 20
       price_limit_ct_kwh: 20.0
+  # --- Operation Mode ---
+  read_only: false  # true = monitoring only, no active control
   # --- Optimization ---
   optimizer_backend: "builtin"  # "builtin" or "emhass"
   optimization_goal: "cost"
@@ -203,6 +205,7 @@ schema:
       earliest_start_h: int
       min_soc_battery: int
       price_limit_ct_kwh: float
+  read_only: bool
   optimizer_backend: list(builtin|emhass)
   optimization_goal: list(cost|self_consumption|balanced)
   optimization_interval_minutes: int

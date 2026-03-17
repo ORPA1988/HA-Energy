@@ -99,7 +99,11 @@ class Coordinator:
         return actions
 
     async def apply_load_actions(self, actions: Actions) -> None:
-        """Turn deferrable loads on/off as scheduled."""
+        """Turn deferrable loads on/off as scheduled. Skipped in read-only mode."""
+        if self._cfg.read_only:
+            logger.info("[READ-ONLY] Skipping load actions: %s",
+                       {k: v for k, v in actions.deferrable_loads_state.items() if v})
+            return
         for switch_entity, should_be_on in actions.deferrable_loads_state.items():
             if should_be_on:
                 await self._ha.turn_on(switch_entity)

@@ -111,7 +111,7 @@ class PriceFetcher:
             not force_refresh
             and self._cache
             and self._cache_ts
-            and (datetime.now() - self._cache_ts).seconds < 3600
+            and (datetime.now() - self._cache_ts).total_seconds() < 3600
         ):
             return self._cache
 
