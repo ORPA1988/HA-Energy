@@ -559,53 +559,102 @@
     <div class="form-grid">
       <div class="form-group">
         <label>Wallbox aktiviert</label>
-        <select id="cfg-goe-enabled">
+        <select id="cfg-goe-enabled" onchange="toggleGoeSection()">
           <option value="true">Ja</option>
           <option value="false">Nein</option>
         </select>
       </div>
-      <div class="form-group">
-        <label>Verbindungstyp</label>
-        <select id="cfg-goe-conn">
-          <option value="local">Lokal (IP)</option>
-          <option value="cloud">Cloud (API)</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Lokale IP</label>
-        <input type="text" id="cfg-goe-ip" placeholder="192.168.1.100">
-      </div>
-      <div class="form-group">
-        <label>Max. Ladestrom (A)</label>
-        <input type="number" id="cfg-goe-max-a" value="16">
-      </div>
-      <div class="form-group">
-        <label>Phasen</label>
-        <select id="cfg-goe-phases">
-          <option value="1">1-phasig</option>
-          <option value="3">3-phasig</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>E-Auto SOC-Sensor</label>
-        <div class="entity-picker">
-          <input type="text" id="cfg-ev-soc-sensor" placeholder="sensor.ev_battery_soc" oninput="entitySearch(this, 'sensor')">
-          <div class="entity-dropdown" id="cfg-ev-soc-sensor-dropdown"></div>
+    </div>
+    <div id="goe-detail-section">
+      <div class="form-grid" style="margin-top:12px">
+        <div class="form-group">
+          <label>Verbindungstyp</label>
+          <select id="cfg-goe-conn" onchange="toggleGoeConnectionFields()">
+            <option value="local">Lokal (IP)</option>
+            <option value="cloud">Cloud (API)</option>
+          </select>
         </div>
-      </div>
-      <div class="form-group">
-        <label>Batterie-Kapazit&auml;t (kWh)</label>
-        <input type="number" id="cfg-ev-cap" value="60">
-      </div>
-      <div class="form-group">
-        <label>Lademodus</label>
-        <select id="cfg-ev-mode">
-          <option value="smart">Smart (LP-optimiert)</option>
-          <option value="solar">Nur Solar</option>
-          <option value="min_solar">Min + Solar</option>
-          <option value="fast">Schnellladen</option>
-          <option value="off">Aus</option>
-        </select>
+        <div class="form-group" id="goe-local-group">
+          <label>Lokale IP</label>
+          <input type="text" id="cfg-goe-ip" placeholder="192.168.1.100">
+        </div>
+        <div class="form-group" id="goe-cloud-serial-group" style="display:none">
+          <label>Cloud Serial</label>
+          <input type="text" id="cfg-goe-cloud-serial" placeholder="012345">
+        </div>
+        <div class="form-group" id="goe-cloud-token-group" style="display:none">
+          <label>Cloud Token</label>
+          <input type="password" id="cfg-goe-cloud-token" placeholder="Dein go-e Cloud Token">
+        </div>
+        <div class="form-group">
+          <label>Max. Ladestrom (A)</label>
+          <input type="number" id="cfg-goe-max-a" value="16">
+        </div>
+        <div class="form-group">
+          <label>Phasen</label>
+          <select id="cfg-goe-phases">
+            <option value="1">1-phasig</option>
+            <option value="3">3-phasig</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>E-Auto SOC-Sensor</label>
+          <div class="entity-picker">
+            <input type="text" id="cfg-ev-soc-sensor" placeholder="sensor.ev_battery_soc" oninput="entitySearch(this, 'sensor')">
+            <div class="entity-dropdown" id="cfg-ev-soc-sensor-dropdown"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Batterie-Kapazit&auml;t (kWh)</label>
+          <input type="number" id="cfg-ev-cap" value="60">
+        </div>
+        <div class="form-group">
+          <label>Lademodus</label>
+          <select id="cfg-ev-mode">
+            <option value="smart">Smart (LP-optimiert)</option>
+            <option value="solar">Nur Solar</option>
+            <option value="min_solar">Min + Solar</option>
+            <option value="fast">Schnellladen</option>
+            <option value="off">Aus</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Min. Ladestrom (A)</label>
+          <input type="number" id="cfg-ev-min-a" min="0" max="32" value="6">
+        </div>
+        <div class="form-group">
+          <label>Max. Ladestrom (A)</label>
+          <input type="number" id="cfg-ev-max-a" min="6" max="32" value="16">
+        </div>
+        <div class="form-group">
+          <label>Batterie darf E-Auto laden</label>
+          <select id="cfg-ev-allow-bat">
+            <option value="true">Ja</option>
+            <option value="false">Nein</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Netz darf E-Auto laden</label>
+          <select id="cfg-ev-allow-grid">
+            <option value="true">Ja</option>
+            <option value="false">Nein</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Kombinierter Ladeschwellwert (ct/kWh)</label>
+          <input type="number" id="cfg-ev-combined-threshold" step="0.1" value="15.0">
+          <span class="hint">Unter diesem Preis wird aus Netz+Batterie geladen</span>
+        </div>
+        <div class="form-group">
+          <label>&Uuml;berschuss Start-Schwelle (W)</label>
+          <input type="number" id="cfg-ev-surplus-start" value="1400">
+          <span class="hint">Solar&uuml;berschuss ab dem geladen wird (~6A bei 230V)</span>
+        </div>
+        <div class="form-group">
+          <label>&Uuml;berschuss Stop-Schwelle (W)</label>
+          <input type="number" id="cfg-ev-surplus-stop" value="1000">
+          <span class="hint">Solar&uuml;berschuss unter dem Ladung stoppt</span>
+        </div>
       </div>
     </div>
     <div style="margin-top:12px">
@@ -842,6 +891,58 @@
       </div>
     </div>
 
+    <!-- aWATTar Section -->
+    <div id="price-awattar-section" class="config-section" style="display:none;margin-top:16px">
+      <div class="config-section-title">aWATTar API</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Land</label>
+          <select id="cfg-awattar-country">
+            <option value="AT">&Ouml;sterreich (AT)</option>
+            <option value="DE">Deutschland (DE)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tibber Section -->
+    <div id="price-tibber-section" class="config-section" style="display:none;margin-top:16px">
+      <div class="config-section-title">Tibber API</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>API-Token</label>
+          <input type="password" id="cfg-tibber-token" placeholder="Dein Tibber API-Token">
+          <span class="hint">Erh&auml;ltlich unter developer.tibber.com</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- EPEX Spot / SMARD Section -->
+    <div id="price-epex-spot-section" class="config-section" style="display:none;margin-top:16px">
+      <div class="config-section-title">EPEX Spot (SMARD.de)</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Marktgebiet</label>
+          <input type="text" id="cfg-epex-spot-area" value="DE-LU" placeholder="z.B. DE-LU, AT, FR">
+        </div>
+      </div>
+    </div>
+
+    <!-- Sensor Section -->
+    <div id="price-sensor-section" class="config-section" style="display:none;margin-top:16px">
+      <div class="config-section-title">HA-Sensor (Einzelwert)</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Preis-Sensor Entit&auml;t</label>
+          <div class="entity-picker">
+            <input type="text" id="cfg-price-sensor-entity" placeholder="sensor.electricity_price" oninput="entitySearch(this, 'sensor')">
+            <div class="entity-dropdown" id="cfg-price-sensor-entity-dropdown"></div>
+          </div>
+          <span class="hint">Ein einzelner Sensor, der den aktuellen Strompreis enth&auml;lt</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Price Calculation Section -->
     <div class="config-section" style="margin-top:16px">
       <div class="config-section-title">Preisberechnung (Aufschl&auml;ge auf B&ouml;rsenpreis)</div>
@@ -858,8 +959,22 @@
           <input type="number" id="cfg-vat" step="0.1" value="19.0">
         </div>
         <div class="form-group">
+          <label>Netzentgelt-Quelle</label>
+          <select id="cfg-grid-fee-source" onchange="toggleGridFeeFields()">
+            <option value="fixed">Fester Wert</option>
+            <option value="entity">HA-Entit&auml;t</option>
+          </select>
+        </div>
+        <div class="form-group" id="grid-fee-fixed-group">
           <label>Netzentgelt (ct/kWh)</label>
           <input type="number" id="cfg-grid-fee" step="0.1" value="7.5">
+        </div>
+        <div class="form-group" id="grid-fee-entity-group" style="display:none">
+          <label>Netzentgelt-Entit&auml;t</label>
+          <div class="entity-picker">
+            <input type="text" id="cfg-grid-fee-entity" placeholder="sensor.grid_fee" oninput="entitySearch(this, 'sensor')">
+            <div class="entity-dropdown" id="cfg-grid-fee-entity-dropdown"></div>
+          </div>
         </div>
         <div class="form-group">
           <label>Versorger-Aufschlag (ct/kWh)</label>
@@ -927,6 +1042,35 @@
         <label>L&auml;ngengrad</label>
         <input type="number" id="cfg-pv-lon" step="0.001" value="11.0">
       </div>
+      <div class="form-group">
+        <label>Prognose-Quelle</label>
+        <select id="cfg-pv-forecast-source" onchange="togglePVForecastSection()">
+          <option value="auto">Automatisch</option>
+          <option value="solcast">Solcast (via HA-Entit&auml;t)</option>
+          <option value="open_meteo">Open-Meteo</option>
+        </select>
+      </div>
+    </div>
+    <!-- Solcast fields (conditional) -->
+    <div id="pv-solcast-section" style="display:none;margin-top:12px">
+      <div class="config-section-title">Solcast-Konfiguration</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Solcast Entit&auml;t</label>
+          <div class="entity-picker">
+            <input type="text" id="cfg-solcast-entity" placeholder="sensor.solcast_pv_forecast_forecast_today" oninput="entitySearch(this, 'sensor')">
+            <div class="entity-dropdown" id="cfg-solcast-entity-dropdown"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Sch&auml;tzungstyp</label>
+          <select id="cfg-solcast-estimate-type">
+            <option value="pv_estimate">pv_estimate (Mittel)</option>
+            <option value="pv_estimate10">pv_estimate10 (Pessimistisch)</option>
+            <option value="pv_estimate90">pv_estimate90 (Optimistisch)</option>
+          </select>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -946,6 +1090,20 @@
         <div class="entity-picker">
           <input type="text" id="cfg-bat-power-sensor" placeholder="sensor.battery_power" oninput="entitySearch(this, 'sensor')">
           <div class="entity-dropdown" id="cfg-bat-power-sensor-dropdown"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Lade-Switch</label>
+        <div class="entity-picker">
+          <input type="text" id="cfg-bat-charge-switch" placeholder="switch.battery_charge" oninput="entitySearch(this, 'switch')">
+          <div class="entity-dropdown" id="cfg-bat-charge-switch-dropdown"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Entlade-Switch</label>
+        <div class="entity-picker">
+          <input type="text" id="cfg-bat-discharge-switch" placeholder="switch.battery_discharge" oninput="entitySearch(this, 'switch')">
+          <div class="entity-dropdown" id="cfg-bat-discharge-switch-dropdown"></div>
         </div>
       </div>
       <div class="form-group">
@@ -971,6 +1129,69 @@
       <div class="form-group">
         <label>Effizienz</label>
         <input type="number" id="cfg-bat-eff" step="0.01" min="0.5" max="1.0" value="0.95">
+      </div>
+    </div>
+  </div>
+
+  <!-- Battery Balancing Config -->
+  <div class="card full-width">
+    <div class="card-title">Batterie-Balancing</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Balancing aktiviert</label>
+        <select id="cfg-bal-enabled" onchange="toggleBalancingSection()">
+          <option value="true">Ja</option>
+          <option value="false">Nein</option>
+        </select>
+      </div>
+    </div>
+    <div id="balancing-section" style="margin-top:12px">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Modus</label>
+          <select id="cfg-bal-mode">
+            <option value="auto">Automatisch</option>
+            <option value="scheduled">Geplant</option>
+            <option value="manual">Manuell</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>H&auml;ufigkeit</label>
+          <select id="cfg-bal-frequency" onchange="toggleBalancingCustomDays()">
+            <option value="daily">T&auml;glich</option>
+            <option value="weekly">W&ouml;chentlich</option>
+            <option value="monthly">Monatlich</option>
+            <option value="custom">Benutzerdefiniert</option>
+          </select>
+        </div>
+        <div class="form-group" id="bal-custom-days-group" style="display:none">
+          <label>Intervall (Tage)</label>
+          <input type="number" id="cfg-bal-custom-days" min="1" max="365" value="30">
+        </div>
+        <div class="form-group">
+          <label>Ziel-SOC (%)</label>
+          <input type="number" id="cfg-bal-target-soc" min="80" max="100" value="100">
+        </div>
+        <div class="form-group">
+          <label>Haltezeit (h)</label>
+          <input type="number" id="cfg-bal-hold-h" min="1" max="24" value="2">
+        </div>
+        <div class="form-group">
+          <label>Bevorzugte Uhrzeit</label>
+          <input type="time" id="cfg-bal-time" value="10:00">
+        </div>
+        <div class="form-group">
+          <label>Auto-Trigger SOC-Abweichung (%)</label>
+          <input type="number" id="cfg-bal-deviation" min="1" max="20" value="5">
+          <span class="hint">Balancing startet automatisch bei dieser Zellabweichung</span>
+        </div>
+        <div class="form-group">
+          <label>Nur Solar verwenden</label>
+          <select id="cfg-bal-solar-only">
+            <option value="true">Ja (nur bei PV-&Uuml;berschuss)</option>
+            <option value="false">Nein (auch aus Netz)</option>
+          </select>
+        </div>
       </div>
     </div>
   </div>
@@ -1060,6 +1281,49 @@
       <button class="btn btn-secondary" onclick="loadAllConfig()" style="margin-left:8px">Zur&uuml;cksetzen</button>
       <button class="btn btn-secondary" onclick="validateConfig()" style="margin-left:8px">Konfiguration pr&uuml;fen</button>
     </div>
+  </div>
+
+  <!-- Notifications Config -->
+  <div class="card full-width">
+    <div class="card-title">Benachrichtigungen</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Benachrichtigungsziel</label>
+        <input type="text" id="cfg-notify-target" placeholder="notify.mobile_app" value="notify.mobile_app">
+        <span class="hint">z.B. notify.mobile_app, notify.alexa_media</span>
+      </div>
+      <div class="form-group">
+        <label>Bei Balancing benachrichtigen</label>
+        <select id="cfg-notify-balancing">
+          <option value="true">Ja</option>
+          <option value="false">Nein</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Bei g&uuml;nstigem Stromfenster</label>
+        <select id="cfg-notify-cheap">
+          <option value="true">Ja</option>
+          <option value="false">Nein</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Wenn E-Auto geladen</label>
+        <select id="cfg-notify-ev">
+          <option value="true">Ja</option>
+          <option value="false">Nein</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auto-Detection -->
+  <div class="card full-width">
+    <div class="card-title">Automatische Erkennung</div>
+    <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">
+      Durchsucht Home Assistant nach passenden Sensoren und Switches und f&uuml;llt die Konfigurationsfelder automatisch aus.
+    </p>
+    <button class="btn btn-primary" onclick="autoDetectEntities()">Entit&auml;ten automatisch erkennen</button>
+    <div id="auto-detect-result" style="margin-top:12px;display:none"></div>
   </div>
 
 </div>
@@ -1779,11 +2043,24 @@ async function loadEVConfig() {
     document.getElementById('cfg-goe-enabled').value = String(cfg.goe_enabled);
     document.getElementById('cfg-goe-conn').value = cfg.goe_connection_type || 'local';
     document.getElementById('cfg-goe-ip').value = cfg.goe_local_ip || '';
+    document.getElementById('cfg-goe-cloud-serial').value = cfg.goe_cloud_serial || '';
+    const goeTokenEl = document.getElementById('cfg-goe-cloud-token');
+    goeTokenEl.value = '';
+    goeTokenEl.placeholder = cfg._has_goe_cloud_token ? '*** konfiguriert ***' : 'Dein go-e Cloud Token';
     document.getElementById('cfg-goe-max-a').value = cfg.goe_max_current_a || 16;
     document.getElementById('cfg-goe-phases').value = cfg.goe_phases || 1;
     document.getElementById('cfg-ev-soc-sensor').value = cfg.ev_soc_sensor || '';
     document.getElementById('cfg-ev-cap').value = cfg.ev_battery_capacity_kwh || 60;
     document.getElementById('cfg-ev-mode').value = cfg.ev_charge_mode || 'smart';
+    document.getElementById('cfg-ev-min-a').value = cfg.ev_min_charge_current_a || 6;
+    document.getElementById('cfg-ev-max-a').value = cfg.ev_max_charge_current_a || 16;
+    document.getElementById('cfg-ev-allow-bat').value = String(cfg.ev_allow_battery_to_charge_ev !== false);
+    document.getElementById('cfg-ev-allow-grid').value = String(cfg.ev_allow_grid_to_charge_ev !== false);
+    document.getElementById('cfg-ev-combined-threshold').value = cfg.ev_combined_charge_threshold_ct || 15;
+    document.getElementById('cfg-ev-surplus-start').value = cfg.ev_surplus_start_threshold_w || 1400;
+    document.getElementById('cfg-ev-surplus-stop').value = cfg.ev_surplus_stop_threshold_w || 1000;
+    toggleGoeSection();
+    toggleGoeConnectionFields();
   } catch (e) {}
 }
 
@@ -1792,12 +2069,24 @@ async function saveEVConfig() {
     goe_enabled: document.getElementById('cfg-goe-enabled').value === 'true',
     goe_connection_type: document.getElementById('cfg-goe-conn').value,
     goe_local_ip: document.getElementById('cfg-goe-ip').value,
+    goe_cloud_serial: document.getElementById('cfg-goe-cloud-serial').value,
+    goe_cloud_token: document.getElementById('cfg-goe-cloud-token').value,
     goe_max_current_a: parseInt(document.getElementById('cfg-goe-max-a').value),
     goe_phases: parseInt(document.getElementById('cfg-goe-phases').value),
     ev_soc_sensor: document.getElementById('cfg-ev-soc-sensor').value,
     ev_battery_capacity_kwh: parseFloat(document.getElementById('cfg-ev-cap').value),
     ev_charge_mode: document.getElementById('cfg-ev-mode').value,
+    ev_min_charge_current_a: parseInt(document.getElementById('cfg-ev-min-a').value),
+    ev_max_charge_current_a: parseInt(document.getElementById('cfg-ev-max-a').value),
+    ev_allow_battery_to_charge_ev: document.getElementById('cfg-ev-allow-bat').value === 'true',
+    ev_allow_grid_to_charge_ev: document.getElementById('cfg-ev-allow-grid').value === 'true',
+    ev_combined_charge_threshold_ct: parseFloat(document.getElementById('cfg-ev-combined-threshold').value),
+    ev_surplus_start_threshold_w: parseInt(document.getElementById('cfg-ev-surplus-start').value),
+    ev_surplus_stop_threshold_w: parseInt(document.getElementById('cfg-ev-surplus-stop').value),
   };
+  // Don't overwrite tokens with empty strings
+  if (!body.goe_cloud_serial) delete body.goe_cloud_serial;
+  if (!body.goe_cloud_token) delete body.goe_cloud_token;
   try {
     const r = await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (r.ok) showToast('Wallbox-Einstellungen gespeichert');
@@ -1948,9 +2237,56 @@ function cancelEVConfigForm() {
 // ============================================================================
 function togglePriceSections() {
   const source = document.getElementById('cfg-price-source').value;
-  document.getElementById('price-epex-entity-section').style.display = source === 'epex_entity' ? 'block' : 'none';
-  document.getElementById('price-entsoe-section').style.display = source === 'entso-e' ? 'block' : 'none';
+  const sections = {
+    'epex_entity': 'price-epex-entity-section',
+    'entso-e': 'price-entsoe-section',
+    'awattar': 'price-awattar-section',
+    'tibber': 'price-tibber-section',
+    'epex_spot': 'price-epex-spot-section',
+    'sensor': 'price-sensor-section',
+  };
+  Object.values(sections).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  if (sections[source]) {
+    const el = document.getElementById(sections[source]);
+    if (el) el.style.display = 'block';
+  }
   document.getElementById('price-fixed-group').style.display = source === 'fixed' ? 'block' : 'none';
+}
+
+function togglePVForecastSection() {
+  const source = document.getElementById('cfg-pv-forecast-source').value;
+  document.getElementById('pv-solcast-section').style.display = source === 'solcast' ? 'block' : 'none';
+}
+
+function toggleBalancingSection() {
+  const enabled = document.getElementById('cfg-bal-enabled').value === 'true';
+  document.getElementById('balancing-section').style.display = enabled ? 'block' : 'none';
+}
+
+function toggleBalancingCustomDays() {
+  const freq = document.getElementById('cfg-bal-frequency').value;
+  document.getElementById('bal-custom-days-group').style.display = freq === 'custom' ? 'block' : 'none';
+}
+
+function toggleGoeSection() {
+  const enabled = document.getElementById('cfg-goe-enabled').value === 'true';
+  document.getElementById('goe-detail-section').style.display = enabled ? 'block' : 'none';
+}
+
+function toggleGoeConnectionFields() {
+  const connType = document.getElementById('cfg-goe-conn').value;
+  document.getElementById('goe-local-group').style.display = connType === 'local' ? 'block' : 'none';
+  document.getElementById('goe-cloud-serial-group').style.display = connType === 'cloud' ? 'block' : 'none';
+  document.getElementById('goe-cloud-token-group').style.display = connType === 'cloud' ? 'block' : 'none';
+}
+
+function toggleGridFeeFields() {
+  const source = document.getElementById('cfg-grid-fee-source').value;
+  document.getElementById('grid-fee-fixed-group').style.display = source === 'fixed' ? 'block' : 'none';
+  document.getElementById('grid-fee-entity-group').style.display = source === 'entity' ? 'block' : 'none';
 }
 
 async function loadPriceConfig() {
@@ -1962,11 +2298,28 @@ async function loadPriceConfig() {
     document.getElementById('cfg-epex-import').value = cfg.epex_import_entity || '';
     document.getElementById('cfg-epex-export').value = cfg.epex_export_entity || '';
     document.getElementById('cfg-epex-unit').value = cfg.epex_unit || 'ct/kWh';
-    document.getElementById('cfg-entsoe-token').value = cfg.entso_e_token || '';
+    // Token fields: show placeholder if configured, don't expose value
+    const entsoeEl = document.getElementById('cfg-entsoe-token');
+    entsoeEl.value = '';
+    entsoeEl.placeholder = cfg._has_entso_e_token ? '*** konfiguriert ***' : 'Dein ENTSO-E Token';
     document.getElementById('cfg-entsoe-area').value = cfg.entso_e_area || '10YDE-EON------1';
+    // aWATTar
+    document.getElementById('cfg-awattar-country').value = cfg.awattar_country || 'AT';
+    // Tibber
+    const tibberEl = document.getElementById('cfg-tibber-token');
+    tibberEl.value = '';
+    tibberEl.placeholder = cfg._has_tibber_token ? '*** konfiguriert ***' : 'Dein Tibber API-Token';
+    // EPEX Spot
+    document.getElementById('cfg-epex-spot-area').value = cfg.epex_spot_area || 'DE-LU';
+    // Sensor
+    document.getElementById('cfg-price-sensor-entity').value = cfg.price_sensor_entity || '';
+    // Price calculation
     document.getElementById('cfg-price-netto').value = String(cfg.price_input_is_netto);
     document.getElementById('cfg-vat').value = cfg.price_vat_percent || 19;
+    document.getElementById('cfg-grid-fee-source').value = cfg.price_grid_fee_source || 'fixed';
     document.getElementById('cfg-grid-fee').value = cfg.price_grid_fee_fixed_ct_kwh || 7.5;
+    document.getElementById('cfg-grid-fee-entity').value = cfg.price_grid_fee_entity || '';
+    toggleGridFeeFields();
     document.getElementById('cfg-markup').value = cfg.price_supplier_markup_ct_kwh || 2;
     document.getElementById('cfg-other-taxes').value = cfg.price_other_taxes_ct_kwh || 0;
     document.getElementById('cfg-feed-in').value = cfg.price_feed_in_ct_kwh || 8;
@@ -1981,15 +2334,24 @@ async function savePriceConfig() {
     epex_import_entity: document.getElementById('cfg-epex-import').value,
     epex_export_entity: document.getElementById('cfg-epex-export').value,
     epex_unit: document.getElementById('cfg-epex-unit').value,
-    entso_e_token: document.getElementById('cfg-entsoe-token').value,
     entso_e_area: document.getElementById('cfg-entsoe-area').value,
+    awattar_country: document.getElementById('cfg-awattar-country').value,
+    epex_spot_area: document.getElementById('cfg-epex-spot-area').value,
+    price_sensor_entity: document.getElementById('cfg-price-sensor-entity').value,
     price_input_is_netto: document.getElementById('cfg-price-netto').value === 'true',
     price_vat_percent: parseFloat(document.getElementById('cfg-vat').value),
+    price_grid_fee_source: document.getElementById('cfg-grid-fee-source').value,
     price_grid_fee_fixed_ct_kwh: parseFloat(document.getElementById('cfg-grid-fee').value),
+    price_grid_fee_entity: document.getElementById('cfg-grid-fee-entity').value,
     price_supplier_markup_ct_kwh: parseFloat(document.getElementById('cfg-markup').value),
     price_other_taxes_ct_kwh: parseFloat(document.getElementById('cfg-other-taxes').value),
     price_feed_in_ct_kwh: parseFloat(document.getElementById('cfg-feed-in').value),
   };
+  // Only send tokens when user entered a value (don't overwrite with empty)
+  const entsoeToken = document.getElementById('cfg-entsoe-token').value;
+  const tibberToken = document.getElementById('cfg-tibber-token').value;
+  if (entsoeToken) body.entso_e_token = entsoeToken;
+  if (tibberToken) body.tibber_token = tibberToken;
   try {
     const r = await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (r.ok) showToast('Preiskonfiguration gespeichert');
@@ -2083,15 +2445,34 @@ async function loadAllConfig() {
     document.getElementById('cfg-pv-tilt').value = cfg.pv_tilt || 30;
     document.getElementById('cfg-pv-lat').value = cfg.pv_latitude || 48;
     document.getElementById('cfg-pv-lon').value = cfg.pv_longitude || 11;
+    // PV Forecast
+    document.getElementById('cfg-pv-forecast-source').value = cfg.pv_forecast_source || 'auto';
+    document.getElementById('cfg-solcast-entity').value = cfg.solcast_entity || '';
+    document.getElementById('cfg-solcast-estimate-type').value = cfg.solcast_estimate_type || 'pv_estimate';
+    togglePVForecastSection();
     // Battery
     document.getElementById('cfg-bat-soc-sensor').value = cfg.battery_soc_sensor || '';
     document.getElementById('cfg-bat-power-sensor').value = cfg.battery_power_sensor || '';
+    document.getElementById('cfg-bat-charge-switch').value = cfg.battery_charge_switch || '';
+    document.getElementById('cfg-bat-discharge-switch').value = cfg.battery_discharge_switch || '';
     document.getElementById('cfg-bat-cap').value = cfg.battery_capacity_kwh || 10;
     document.getElementById('cfg-bat-max-ch').value = cfg.battery_max_charge_w || 3000;
     document.getElementById('cfg-bat-max-dis').value = cfg.battery_max_discharge_w || 3000;
     document.getElementById('cfg-bat-min-soc').value = cfg.battery_min_soc || 10;
     document.getElementById('cfg-bat-reserve').value = cfg.battery_reserve_soc || 20;
     document.getElementById('cfg-bat-eff').value = cfg.battery_efficiency || 0.95;
+    // Balancing
+    document.getElementById('cfg-bal-enabled').value = String(cfg.battery_balancing_enabled !== false);
+    document.getElementById('cfg-bal-mode').value = cfg.battery_balancing_mode || 'auto';
+    document.getElementById('cfg-bal-frequency').value = cfg.battery_balancing_frequency || 'monthly';
+    document.getElementById('cfg-bal-custom-days').value = cfg.battery_balancing_custom_days || 30;
+    document.getElementById('cfg-bal-target-soc').value = cfg.battery_balancing_target_soc || 100;
+    document.getElementById('cfg-bal-hold-h').value = cfg.battery_balancing_hold_duration_h || 2;
+    document.getElementById('cfg-bal-time').value = cfg.battery_balancing_preferred_time || '10:00';
+    document.getElementById('cfg-bal-deviation').value = cfg.battery_balancing_auto_trigger_soc_deviation || 5;
+    document.getElementById('cfg-bal-solar-only').value = String(cfg.battery_balancing_use_solar_only !== false);
+    toggleBalancingSection();
+    toggleBalancingCustomDays();
     // Grid
     document.getElementById('cfg-grid-sensor').value = cfg.grid_power_sensor || '';
     document.getElementById('cfg-total-power-sensor').value = cfg.total_power_sensor || '';
@@ -2110,6 +2491,11 @@ async function loadAllConfig() {
     document.getElementById('cfg-opt-goal').value = cfg.optimization_goal || 'cost';
     document.getElementById('cfg-opt-interval').value = cfg.optimization_interval_minutes || 60;
     document.getElementById('cfg-opt-long').value = cfg.long_term_plan_interval_hours || 6;
+    // Notifications
+    document.getElementById('cfg-notify-target').value = cfg.notify_target || 'notify.mobile_app';
+    document.getElementById('cfg-notify-balancing').value = String(cfg.notify_on_balancing !== false);
+    document.getElementById('cfg-notify-cheap').value = String(cfg.notify_on_cheap_window !== false);
+    document.getElementById('cfg-notify-ev').value = String(cfg.notify_on_ev_charged !== false);
   } catch (e) { console.warn('Config load error:', e); }
 }
 
@@ -2121,14 +2507,28 @@ async function saveAllConfig() {
     pv_tilt: parseInt(document.getElementById('cfg-pv-tilt').value),
     pv_latitude: parseFloat(document.getElementById('cfg-pv-lat').value),
     pv_longitude: parseFloat(document.getElementById('cfg-pv-lon').value),
+    pv_forecast_source: document.getElementById('cfg-pv-forecast-source').value,
+    solcast_entity: document.getElementById('cfg-solcast-entity').value,
+    solcast_estimate_type: document.getElementById('cfg-solcast-estimate-type').value,
     battery_soc_sensor: document.getElementById('cfg-bat-soc-sensor').value,
     battery_power_sensor: document.getElementById('cfg-bat-power-sensor').value,
+    battery_charge_switch: document.getElementById('cfg-bat-charge-switch').value,
+    battery_discharge_switch: document.getElementById('cfg-bat-discharge-switch').value,
     battery_capacity_kwh: parseFloat(document.getElementById('cfg-bat-cap').value),
     battery_max_charge_w: parseInt(document.getElementById('cfg-bat-max-ch').value),
     battery_max_discharge_w: parseInt(document.getElementById('cfg-bat-max-dis').value),
     battery_min_soc: parseInt(document.getElementById('cfg-bat-min-soc').value),
     battery_reserve_soc: parseInt(document.getElementById('cfg-bat-reserve').value),
     battery_efficiency: parseFloat(document.getElementById('cfg-bat-eff').value),
+    battery_balancing_enabled: document.getElementById('cfg-bal-enabled').value === 'true',
+    battery_balancing_mode: document.getElementById('cfg-bal-mode').value,
+    battery_balancing_frequency: document.getElementById('cfg-bal-frequency').value,
+    battery_balancing_custom_days: parseInt(document.getElementById('cfg-bal-custom-days').value),
+    battery_balancing_target_soc: parseInt(document.getElementById('cfg-bal-target-soc').value),
+    battery_balancing_hold_duration_h: parseInt(document.getElementById('cfg-bal-hold-h').value),
+    battery_balancing_preferred_time: document.getElementById('cfg-bal-time').value,
+    battery_balancing_auto_trigger_soc_deviation: parseInt(document.getElementById('cfg-bal-deviation').value),
+    battery_balancing_use_solar_only: document.getElementById('cfg-bal-solar-only').value === 'true',
     grid_power_sensor: document.getElementById('cfg-grid-sensor').value,
     total_power_sensor: document.getElementById('cfg-total-power-sensor').value,
     grid_max_import_w: parseInt(document.getElementById('cfg-grid-max').value),
@@ -2138,6 +2538,10 @@ async function saveAllConfig() {
     optimization_goal: document.getElementById('cfg-opt-goal').value,
     optimization_interval_minutes: parseInt(document.getElementById('cfg-opt-interval').value),
     long_term_plan_interval_hours: parseInt(document.getElementById('cfg-opt-long').value),
+    notify_target: document.getElementById('cfg-notify-target').value,
+    notify_on_balancing: document.getElementById('cfg-notify-balancing').value === 'true',
+    notify_on_cheap_window: document.getElementById('cfg-notify-cheap').value === 'true',
+    notify_on_ev_charged: document.getElementById('cfg-notify-ev').value === 'true',
   };
   try {
     const r = await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
@@ -2160,6 +2564,71 @@ async function validateConfig() {
       data.valid && data.warnings.length === 0 ? '\u2705 Konfiguration ist vollst\u00e4ndig' :
       data.valid ? '\u2705 Konfiguration ist g\u00fcltig (mit Hinweisen)' : '';
   } catch (e) { showToast('Validierung fehlgeschlagen', true); }
+}
+
+// ============================================================================
+// Auto-Detection
+// ============================================================================
+const _autoDetectFieldMap = {
+  pv_power_sensor: 'cfg-pv-sensor',
+  battery_soc_sensor: 'cfg-bat-soc-sensor',
+  battery_power_sensor: 'cfg-bat-power-sensor',
+  battery_charge_switch: 'cfg-bat-charge-switch',
+  battery_discharge_switch: 'cfg-bat-discharge-switch',
+  grid_power_sensor: 'cfg-grid-sensor',
+  total_power_sensor: 'cfg-total-power-sensor',
+  ev_soc_sensor: 'cfg-ev-soc-sensor',
+  epex_import_entity: 'cfg-epex-import',
+  price_sensor_entity: 'cfg-price-sensor-entity',
+};
+
+async function autoDetectEntities() {
+  const resultEl = document.getElementById('auto-detect-result');
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<div style="color:var(--muted);font-size:0.8rem">Suche Entit\u00e4ten...</div>';
+
+  try {
+    const r = await fetch('/api/config/auto-detect');
+    const data = await r.json();
+    const suggestions = data.suggestions || {};
+    const count = data.found_count || 0;
+    const total = data.total_fields || 0;
+
+    // Fill in detected values
+    let filled = 0;
+    for (const [field, inputId] of Object.entries(_autoDetectFieldMap)) {
+      if (suggestions[field]) {
+        const input = document.getElementById(inputId);
+        if (input && !input.value) {
+          input.value = suggestions[field].entity_id;
+          input.style.borderColor = suggestions[field].confidence === 'high' ? 'var(--green)' :
+            suggestions[field].confidence === 'medium' ? 'var(--yellow)' : 'var(--muted)';
+          filled++;
+        }
+      }
+    }
+
+    // Show results
+    const confColors = { high: '#22c55e', medium: '#eab308', low: '#94a3b8' };
+    let html = `<div style="font-size:0.85rem;margin-bottom:8px;font-weight:600">${count} von ${total} Entit\u00e4ten erkannt, ${filled} eingetragen</div>`;
+    html += '<div style="font-size:0.8rem">';
+    for (const [field, info] of Object.entries(suggestions)) {
+      const color = confColors[info.confidence] || '#94a3b8';
+      const label = field.replace(/_/g, ' ');
+      html += `<div style="display:flex;justify-content:space-between;padding:2px 0">
+        <span>${label}</span>
+        <span style="color:${color};font-weight:600">${info.entity_id} (${info.current_value})</span>
+      </div>`;
+    }
+    html += '</div>';
+    if (filled > 0) {
+      html += '<div style="font-size:0.75rem;color:var(--muted);margin-top:8px">Pr\u00fcfe die Werte und klicke "Alle Einstellungen speichern" zum \u00dcbernehmen.</div>';
+    }
+    resultEl.innerHTML = html;
+
+  } catch (e) {
+    resultEl.innerHTML = '<div style="color:var(--red);font-size:0.8rem">Auto-Erkennung fehlgeschlagen. Ist Home Assistant erreichbar?</div>';
+  }
 }
 
 // ============================================================================
