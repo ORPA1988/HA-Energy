@@ -360,6 +360,8 @@
         </div>
       </div>
     </div>
+    <!-- Multi-EV list (from ev_configs) -->
+    <div id="ev-multi-list" style="margin-top:8px;display:none"></div>
     <div style="margin-top:8px">
       <div style="font-size:0.75rem;color:var(--muted);margin-bottom:4px">Lademodus:</div>
       <div class="mode-buttons">
@@ -369,6 +371,33 @@
         <button class="mode-btn" onclick="setMode('fast')">⚡ Schnell</button>
         <button class="mode-btn" onclick="setMode('off')">⏹ Aus</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Load Decomposition Card -->
+  <div class="card" id="decomp-card" style="display:none">
+    <div class="card-title">📊 Lastzerlegung</div>
+    <div style="display:flex;gap:16px;align-items:center">
+      <div style="flex:1">
+        <div style="font-size:0.8rem;margin-bottom:4px">
+          <span style="color:var(--muted)">Gesamtlast:</span>
+          <span id="decomp-total" style="font-weight:700">-- W</span>
+        </div>
+        <div style="font-size:0.8rem;margin-bottom:4px">
+          <span style="color:var(--muted)">Grundlast:</span>
+          <span id="decomp-base" style="font-weight:700;color:var(--green)">-- W</span>
+        </div>
+        <div style="font-size:0.8rem;margin-bottom:4px">
+          <span style="color:var(--muted)">Steuerbar:</span>
+          <span id="decomp-ctrl" style="font-weight:700;color:var(--yellow)">-- W</span>
+        </div>
+      </div>
+      <div id="decomp-loads-list" style="flex:1;font-size:0.75rem"></div>
+    </div>
+    <!-- Stacked bar for decomposition -->
+    <div style="margin-top:8px;height:16px;border-radius:4px;overflow:hidden;display:flex" id="decomp-bar">
+      <div id="decomp-bar-base" style="background:var(--green);height:100%"></div>
+      <div id="decomp-bar-ctrl" style="background:var(--yellow);height:100%"></div>
     </div>
   </div>
 
@@ -1000,9 +1029,16 @@
         <input type="number" id="cfg-opt-long" value="6">
       </div>
     </div>
+    <!-- Config Validation -->
+    <div id="config-validation" style="margin-top:12px;display:none">
+      <div id="config-errors" style="color:#ef4444;font-size:0.8rem;margin-bottom:4px"></div>
+      <div id="config-warnings" style="color:#eab308;font-size:0.8rem;margin-bottom:4px"></div>
+      <div id="config-ok" style="color:#22c55e;font-size:0.8rem;margin-bottom:4px"></div>
+    </div>
     <div style="margin-top:12px">
       <button class="btn btn-primary" onclick="saveAllConfig()">Alle Einstellungen speichern</button>
       <button class="btn btn-secondary" onclick="loadAllConfig()" style="margin-left:8px">Zur&uuml;cksetzen</button>
+      <button class="btn btn-secondary" onclick="validateConfig()" style="margin-left:8px">Konfiguration pr&uuml;fen</button>
     </div>
   </div>
 
@@ -1076,9 +1112,46 @@ function updateState(d) {
   document.getElementById('stop-bal-btn').style.display = d.is_balancing ? 'inline-block' : 'none';
 
   // EV detail
-  const carStates = {0: 'Kein Fahrzeug', 1: 'Lädt', 2: 'Fertig', 3: 'Bereit'};
+  const carStates = {0: 'Kein Fahrzeug', 1: 'L\u00e4dt', 2: 'Fertig', 3: 'Bereit'};
   setText('ev-state-label', carStates[d.ev_car_state] || '--');
   setText('ev-charge-w', fmt(d.ev_power_w) + ' W');
+
+  // Multi-EV list
+  const evMulti = document.getElementById('ev-multi-list');
+  if (d.ev_list && d.ev_list.length > 0) {
+    evMulti.style.display = 'block';
+    let html = '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:4px">Weitere Wallboxen:</div>';
+    for (const ev of d.ev_list) {
+      const st = {0: '\u25CB', 1: '\u26A1', 2: '\u2713', 3: '\u25CF'}[ev.car_state] || '\u25CB';
+      html += `<div style="font-size:0.8rem;display:flex;justify-content:space-between;padding:2px 0">
+        <span>${st} ${ev.name}</span>
+        <span style="font-weight:700">${fmt(ev.power_w)} W / ${ev.current_a} A</span>
+      </div>`;
+    }
+    evMulti.innerHTML = html;
+  } else {
+    evMulti.style.display = 'none';
+  }
+
+  // Load decomposition
+  const decompCard = document.getElementById('decomp-card');
+  if (d.decomposition) {
+    decompCard.style.display = 'block';
+    const dc = d.decomposition;
+    setText('decomp-total', fmt(dc.total_w) + ' W');
+    setText('decomp-base', fmt(dc.base_w) + ' W');
+    setText('decomp-ctrl', fmt(dc.controllable_w) + ' W');
+    // Load list
+    let loadsHtml = '';
+    for (const [name, watts] of Object.entries(dc.loads || {})) {
+      loadsHtml += `<div style="display:flex;justify-content:space-between"><span>${name}</span><span>${fmt(watts)} W</span></div>`;
+    }
+    document.getElementById('decomp-loads-list').innerHTML = loadsHtml;
+    // Stacked bar
+    const total = dc.total_w || 1;
+    document.getElementById('decomp-bar-base').style.width = ((dc.base_w / total) * 100) + '%';
+    document.getElementById('decomp-bar-ctrl').style.width = ((dc.controllable_w / total) * 100) + '%';
+  }
 
   // Draw gauges
   drawGauge('bat-gauge', d.battery_soc, d.battery_soc < 20 ? '#ef4444' : d.battery_soc < 50 ? '#eab308' : '#22c55e');
@@ -2027,6 +2100,22 @@ async function saveAllConfig() {
     if (r.ok) showToast('Einstellungen gespeichert');
     else showToast('Fehler beim Speichern', true);
   } catch (e) { showToast('Netzwerkfehler', true); }
+}
+
+async function validateConfig() {
+  try {
+    const r = await fetch('/api/config/validate');
+    const data = await r.json();
+    const el = document.getElementById('config-validation');
+    el.style.display = 'block';
+    document.getElementById('config-errors').innerHTML =
+      data.errors.map(e => '\u274C ' + e).join('<br>');
+    document.getElementById('config-warnings').innerHTML =
+      data.warnings.map(w => '\u26A0\uFE0F ' + w).join('<br>');
+    document.getElementById('config-ok').innerHTML =
+      data.valid && data.warnings.length === 0 ? '\u2705 Konfiguration ist vollst\u00e4ndig' :
+      data.valid ? '\u2705 Konfiguration ist g\u00fcltig (mit Hinweisen)' : '';
+  } catch (e) { showToast('Validierung fehlgeschlagen', true); }
 }
 
 // ============================================================================
