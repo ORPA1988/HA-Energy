@@ -390,19 +390,57 @@ class AppState:
     async def _broadcast_state(self, state: EnergyState) -> None:
         if not self._ws_clients:
             return
-        msg = json.dumps({
+
+        # Multi-EV status from wallbox instances
+        ev_list = []
+        wallboxes = self.realtime._get_wallboxes()
+        for name, wb in wallboxes.items():
+            try:
+                st = await wb.get_status()
+                if st:
+                    ev_list.append({
+                        "name": name,
+                        "power_w": round(st.power_w, 0),
+                        "current_a": st.current_a,
+                        "car_state": st.car_state.value,
+                        "session_kwh": round(st.energy_kwh_session, 2),
+                    })
+            except Exception:
+                pass
+
+        # Load decomposition summary
+        decomp = None
+        try:
+            from data.load_decomposition import get_load_decomposer
+            decomposer = get_load_decomposer()
+            decomp = await decomposer.get_decomposition()
+        except Exception:
+            pass
+
+        data = {
             "type": "state",
             "pv_w": round(state.pv_power_w, 0),
             "battery_soc": round(state.battery_soc_percent, 1),
             "grid_w": round(state.grid_power_w, 0),
             "surplus_w": round(state.surplus_w, 0),
+            "house_load_w": round(state.house_load_w, 0),
             "ev_car_state": state.ev_car_state.value,
             "ev_power_w": round(state.ev_charge_power_w, 0),
             "ev_soc": state.ev_soc_percent,
+            "ev_list": ev_list,
             "price_ct": round(state.price_total_ct_kwh, 2),
             "is_balancing": state.is_balancing,
+            "optimizer_backend": self.cfg.optimizer_backend,
             "ts": state.timestamp.isoformat(),
-        })
+        }
+        if decomp:
+            data["decomposition"] = {
+                "total_w": round(decomp.get("total_power_w", 0), 0),
+                "base_w": round(decomp.get("base_load_w", 0), 0),
+                "controllable_w": round(decomp.get("controllable_total_w", 0), 0),
+                "loads": {k: round(v, 0) for k, v in decomp.get("loads", {}).items()},
+            }
+        msg = json.dumps(data)
         dead = []
         for ws in self._ws_clients:
             try:
@@ -571,6 +609,61 @@ async def update_config_api(body: dict):
     body.pop("ha_url", None)
     cfg = update_config(body)
     return {"status": "ok", "message": "Config updated"}
+
+
+@app.get("/api/config/validate")
+async def validate_config():
+    """Validate current configuration and return warnings/errors."""
+    cfg = get_config()
+    warnings = []
+    errors = []
+
+    # Check critical sensors
+    if not cfg.pv_power_sensor:
+        errors.append("PV-Leistungssensor nicht konfiguriert")
+    if not cfg.battery_soc_sensor:
+        warnings.append("Batterie-SOC-Sensor nicht konfiguriert")
+    if not cfg.grid_power_sensor:
+        warnings.append("Netz-Leistungssensor nicht konfiguriert")
+
+    # Check price config
+    if cfg.price_source == "epex_entity" and not cfg.epex_import_entity:
+        errors.append("EPEX-Entity als Preisquelle gewählt aber keine Import-Entität konfiguriert")
+    if cfg.price_source == "entso-e" and not cfg.entso_e_token:
+        errors.append("ENTSO-E als Preisquelle gewählt aber kein API-Token konfiguriert")
+    if cfg.price_source == "tibber" and not cfg.tibber_token:
+        errors.append("Tibber als Preisquelle gewählt aber kein Token konfiguriert")
+
+    # Check battery config
+    if cfg.battery_capacity_kwh <= 0:
+        warnings.append("Batteriekapazität ist 0 — Batterieoptimierung deaktiviert")
+    if cfg.battery_min_soc >= 100:
+        errors.append("Minimaler SOC >= 100% — Batterie kann nie entladen werden")
+
+    # Check EV config
+    if cfg.goe_enabled and not cfg.goe_local_ip and cfg.goe_connection_type == "local":
+        warnings.append("go-e Charger aktiviert aber keine lokale IP konfiguriert")
+
+    # Check deferrable loads
+    for i, dl in enumerate(cfg.deferrable_loads):
+        if not dl.switch:
+            errors.append(f"Steuerbare Last '{dl.name}' hat keine Switch-Entität")
+        if dl.power_w <= 0 and not dl.power_sensor:
+            warnings.append(f"Steuerbare Last '{dl.name}' hat weder Leistung noch Sensor")
+
+    # Check load decomposition
+    if any(dl.subtract_from_total for dl in cfg.deferrable_loads) and not cfg.total_power_sensor:
+        warnings.append("Lastzerlegung aktiviert aber kein Gesamtverbrauch-Sensor konfiguriert")
+
+    # Check EMHASS
+    if cfg.optimizer_backend == "emhass" and not is_emhass_available():
+        warnings.append("EMHASS als Backend gewählt aber nicht installiert — Fallback auf eingebauten LP")
+
+    return {
+        "valid": len(errors) == 0,
+        "errors": errors,
+        "warnings": warnings,
+    }
 
 
 # ---------------------------------------------------------------------------
