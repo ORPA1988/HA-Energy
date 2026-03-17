@@ -156,6 +156,7 @@ class Config:
     deferrable_loads: list[DeferrableLoad] = field(default_factory=list)
 
     # Optimization
+    optimizer_backend: str = "builtin"  # "builtin" (scipy LP) or "emhass"
     optimization_goal: str = "cost"
     optimization_interval_minutes: int = 60
     long_term_plan_interval_hours: int = 6
@@ -226,7 +227,7 @@ def load_config() -> Config:
         "ev_min_charge_current_a", "ev_max_charge_current_a",
         "ev_allow_battery_to_charge_ev", "ev_allow_grid_to_charge_ev",
         "ev_combined_charge_threshold_ct",
-        "optimization_goal", "optimization_interval_minutes",
+        "optimizer_backend", "optimization_goal", "optimization_interval_minutes",
         "long_term_plan_interval_hours", "peak_shaving_limit_w",
         "notify_target", "notify_on_balancing",
         "notify_on_cheap_window", "notify_on_ev_charged",

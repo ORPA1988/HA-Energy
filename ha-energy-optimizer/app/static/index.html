@@ -976,6 +976,14 @@
     <div class="card-title">Optimierung</div>
     <div class="form-grid">
       <div class="form-group">
+        <label>Optimizer-Backend</label>
+        <select id="cfg-opt-backend">
+          <option value="builtin">Eingebaut (scipy LP/HiGHS)</option>
+          <option value="emhass">EMHASS (ML + CVXPY)</option>
+        </select>
+        <div id="emhass-status" style="font-size:0.75rem;margin-top:4px"></div>
+      </div>
+      <div class="form-group">
         <label>Optimierungsziel</label>
         <select id="cfg-opt-goal">
           <option value="cost">Kosten minimieren</option>
@@ -1975,6 +1983,14 @@ async function loadAllConfig() {
     document.getElementById('cfg-grid-max').value = cfg.grid_max_import_w || 0;
     document.getElementById('cfg-peak-shaving').value = cfg.peak_shaving_limit_w || 0;
     // Optimization
+    document.getElementById('cfg-opt-backend').value = cfg.optimizer_backend || 'builtin';
+    const emhassEl = document.getElementById('emhass-status');
+    if (cfg._emhass_available) {
+      emhassEl.innerHTML = '<span style="color:var(--green)">\u2713 EMHASS installiert</span>' +
+        (cfg._optimizer_active === 'emhass' ? ' (aktiv)' : '');
+    } else {
+      emhassEl.innerHTML = '<span style="color:var(--muted)">\u2717 EMHASS nicht installiert (pip install emhass)</span>';
+    }
     document.getElementById('cfg-opt-goal').value = cfg.optimization_goal || 'cost';
     document.getElementById('cfg-opt-interval').value = cfg.optimization_interval_minutes || 60;
     document.getElementById('cfg-opt-long').value = cfg.long_term_plan_interval_hours || 6;
@@ -2001,6 +2017,7 @@ async function saveAllConfig() {
     total_power_sensor: document.getElementById('cfg-total-power-sensor').value,
     grid_max_import_w: parseInt(document.getElementById('cfg-grid-max').value),
     peak_shaving_limit_w: parseInt(document.getElementById('cfg-peak-shaving').value),
+    optimizer_backend: document.getElementById('cfg-opt-backend').value,
     optimization_goal: document.getElementById('cfg-opt-goal').value,
     optimization_interval_minutes: parseInt(document.getElementById('cfg-opt-interval').value),
     long_term_plan_interval_hours: parseInt(document.getElementById('cfg-opt-long').value),

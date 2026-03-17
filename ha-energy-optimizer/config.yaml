@@ -113,6 +113,7 @@ options:
       min_soc_battery: 20
       price_limit_ct_kwh: 20.0
   # --- Optimization ---
+  optimizer_backend: "builtin"  # "builtin" or "emhass"
   optimization_goal: "cost"
   optimization_interval_minutes: 60
   long_term_plan_interval_hours: 6
@@ -202,6 +203,7 @@ schema:
       earliest_start_h: int
       min_soc_battery: int
       price_limit_ct_kwh: float
+  optimizer_backend: list(builtin|emhass)
   optimization_goal: list(cost|self_consumption|balanced)
   optimization_interval_minutes: int
   long_term_plan_interval_hours: int

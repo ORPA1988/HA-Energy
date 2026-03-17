@@ -42,6 +42,7 @@ from models import (
 from optimizer.coordinator import get_coordinator
 from optimizer.ev_strategy import get_ev_strategy_solver
 from optimizer.genetic import get_genetic_planner
+from optimizer.emhass_backend import get_emhass_optimizer, is_emhass_available
 from optimizer.linear import get_linear_optimizer
 from optimizer.realtime import get_realtime_controller
 from scheduler import get_scheduler, setup_jobs
@@ -59,7 +60,15 @@ class AppState:
         self.price_fetcher = get_price_fetcher()
         self.pv_forecast = get_pv_forecast()
         self.realtime = get_realtime_controller()
-        self.lp = get_linear_optimizer()
+        # Select optimizer backend
+        if self.cfg.optimizer_backend == "emhass" and is_emhass_available():
+            self.lp = get_emhass_optimizer()
+            logger.info("Using EMHASS optimizer backend")
+        else:
+            self.lp = get_linear_optimizer()
+            if self.cfg.optimizer_backend == "emhass":
+                logger.warning("EMHASS requested but not installed, using built-in LP")
+            logger.info("Using built-in LP optimizer backend")
         self.genetic = get_genetic_planner()
         self.ev_solver = get_ev_strategy_solver()
         self.coordinator = get_coordinator()
@@ -548,6 +557,9 @@ async def get_config_api():
             data[f] = val
     # Remove sensitive fields from response
     data.pop("supervisor_token", None)
+    # Add runtime info
+    data["_emhass_available"] = is_emhass_available()
+    data["_optimizer_active"] = "emhass" if (cfg.optimizer_backend == "emhass" and is_emhass_available()) else "builtin"
     return data
 
 

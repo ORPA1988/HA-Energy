@@ -83,6 +83,9 @@ configuration:
   ev_configs:
     name: E-Auto/Wallbox-Konfigurationen
     description: "Liste aller konfigurierten E-Autos und Wallboxen"
+  optimizer_backend:
+    name: Optimizer-Backend
+    description: "Optimierungsengine: eingebaut (scipy LP/HiGHS) oder EMHASS (ML + CVXPY)"
   optimization_goal:
     name: Optimierungsziel
     description: "Wof\u00fcr optimiert werden soll: Kosten, Eigenverbrauch oder ausgewogen"
