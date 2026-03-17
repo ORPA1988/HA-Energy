@@ -145,7 +145,12 @@ class Coordinator:
                 ],
                 "total_cost_eur": round(lp.total_cost_eur, 3),
             }
-            await ha.publish_sensor("schedule_json", json.dumps(schedule_json), "")
+            await ha.publish_sensor(
+                "schedule_json",
+                f"{len(lp.slots)} slots, {round(lp.total_cost_eur, 2)} EUR",
+                "",
+                attributes={"schedule": schedule_json},
+            )
 
 
 # Global singleton
