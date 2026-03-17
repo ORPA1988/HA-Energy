@@ -1,5 +1,5 @@
 name: "HA Energy Optimizer"
-version: "1.0.2"
+version: "1.0.3"
 slug: "ha_energy_optimizer"
 description: "Unified home energy optimization: combines EVCC + EOS + EMHASS concepts into one intelligent platform with 3-layer optimization, live dashboard and MCP server"
 url: "https://github.com/ORPA1988/HA-Energy"
@@ -27,6 +27,9 @@ options:
   pv_latitude: 48.0
   pv_longitude: 11.0
   pv_efficiency: 0.18
+  pv_forecast_source: "auto"
+  solcast_entity: ""
+  solcast_estimate_type: "pv_estimate"
   # --- Home Battery ---
   battery_soc_sensor: "sensor.battery_soc"
   battery_power_sensor: "sensor.battery_power"
@@ -90,6 +93,8 @@ options:
   ev_allow_battery_to_charge_ev: true
   ev_allow_grid_to_charge_ev: true
   ev_combined_charge_threshold_ct: 15.0
+  ev_surplus_start_threshold_w: 1400
+  ev_surplus_stop_threshold_w: 1000
   # --- EV Charging Windows ---
   ev_charging_windows:
     - name: "Nacht"
@@ -137,6 +142,9 @@ schema:
   pv_latitude: float
   pv_longitude: float
   pv_efficiency: float
+  pv_forecast_source: list(auto|solcast|open_meteo)
+  solcast_entity: str
+  solcast_estimate_type: list(pv_estimate|pv_estimate10|pv_estimate90)
   battery_soc_sensor: str
   battery_power_sensor: str
   battery_capacity_kwh: float
@@ -193,6 +201,8 @@ schema:
   ev_allow_battery_to_charge_ev: bool
   ev_allow_grid_to_charge_ev: bool
   ev_combined_charge_threshold_ct: float
+  ev_surplus_start_threshold_w: int
+  ev_surplus_stop_threshold_w: int
   ev_charging_windows:
     - name: str
       available_from: str

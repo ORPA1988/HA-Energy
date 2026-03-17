@@ -222,11 +222,11 @@ class GeneticPlanner:
     ) -> LongTermPlan:
         cfg = self._cfg
         bat_soc = bat_soc_init / 100.0
-        bat_cap = cfg.battery_capacity_kwh * 1000.0
+        bat_cap = max(1.0, cfg.battery_capacity_kwh * 1000.0)
         bat_eff = cfg.battery_efficiency
         bat_min = cfg.battery_min_soc / 100.0
         ev_soc = (ev_soc_init or 0.0) / 100.0
-        ev_cap = cfg.ev_battery_capacity_kwh * 1000.0
+        ev_cap = max(1.0, cfg.ev_battery_capacity_kwh * 1000.0)
         ev_max_ch = cfg.ev_max_charge_current_a * cfg.goe_phases * 230.0
 
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
@@ -236,6 +236,7 @@ class GeneticPlanner:
         in_cheap = False
         cheap_start: Optional[datetime] = None
         avg_prices: list[float] = []
+        price_threshold = sorted(prices)[len(prices) // 4] if prices else 0.0
 
         for t in range(N_HOURS):
             gene = chrom.genes[t]
@@ -266,7 +267,7 @@ class GeneticPlanner:
             total_cost += cost_eur
 
             # Track cheap windows
-            threshold = sorted(prices)[len(prices) // 4]  # 25th percentile
+            threshold = price_threshold
             slot_hour = now + timedelta(hours=t)
             if price_ct <= threshold:
                 if not in_cheap:
@@ -290,7 +291,7 @@ class GeneticPlanner:
                 battery_charge_w=bat_ch_w,
                 battery_discharge_w=bat_dis_w,
                 ev_charge_w=ev_ch_w,
-                ev_current_a=int(ev_ch_w / (cfg.goe_phases * 230)) if ev_ch_w > 0 else 0,
+                ev_current_a=int(ev_ch_w / (max(1, cfg.goe_phases) * 230)) if ev_ch_w > 0 else 0,
                 grid_import_w=imp,
                 grid_export_w=exp,
                 battery_soc_end=bat_soc * 100.0,

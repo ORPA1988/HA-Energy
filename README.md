@@ -2,7 +2,7 @@
 
 > **Energiesteuerung mit Dashboard zur Optimierung des Stromverbrauches**
 
-[![Version](https://img.shields.io/badge/Version-1.0.1-blue)](https://github.com/ORPA1988/HA-Energy)
+[![Version](https://img.shields.io/badge/Version-1.0.2-blue)](https://github.com/ORPA1988/HA-Energy)
 [![Plattform](https://img.shields.io/badge/Plattform-Home%20Assistant-41BDF5)](https://www.home-assistant.io/)
 [![Architektur](https://img.shields.io/badge/Arch-amd64%20%7C%20aarch64%20%7C%20armv7%20%7C%20armhf-green)](#installation)
 [![Lizenz](https://img.shields.io/badge/Lizenz-MIT-yellow)](LICENSE)

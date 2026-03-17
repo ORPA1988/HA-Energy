@@ -75,6 +75,9 @@ class Config:
     pv_latitude: float = 48.0
     pv_longitude: float = 11.0
     pv_efficiency: float = 0.18
+    pv_forecast_source: str = "auto"  # "auto" | "solcast" | "open_meteo"
+    solcast_entity: str = ""  # e.g. "sensor.solcast_pv_forecast_forecast_today"
+    solcast_estimate_type: str = "pv_estimate"  # "pv_estimate" | "pv_estimate10" | "pv_estimate90"
 
     # Battery
     battery_soc_sensor: str = "sensor.battery_soc"
@@ -156,6 +159,10 @@ class Config:
     # Deferrable Loads
     deferrable_loads: list[DeferrableLoad] = field(default_factory=list)
 
+    # EV surplus thresholds (hysteresis to prevent flapping)
+    ev_surplus_start_threshold_w: int = 1400  # ~6A at 230V, start solar charging
+    ev_surplus_stop_threshold_w: int = 1000   # stop solar charging below this
+
     # Operation mode
     read_only: bool = True  # Default: safe mode on first start, no switching/control
 
@@ -206,6 +213,7 @@ def load_config() -> Config:
     simple_fields = [
         "pv_power_sensor", "pv_forecast_kwp", "pv_orientation", "pv_tilt",
         "pv_latitude", "pv_longitude", "pv_efficiency",
+        "pv_forecast_source", "solcast_entity", "solcast_estimate_type",
         "battery_soc_sensor", "battery_power_sensor", "battery_capacity_kwh",
         "battery_charge_switch", "battery_discharge_switch",
         "battery_max_charge_w", "battery_max_discharge_w",
@@ -231,6 +239,7 @@ def load_config() -> Config:
         "ev_min_charge_current_a", "ev_max_charge_current_a",
         "ev_allow_battery_to_charge_ev", "ev_allow_grid_to_charge_ev",
         "ev_combined_charge_threshold_ct",
+        "ev_surplus_start_threshold_w", "ev_surplus_stop_threshold_w",
         "read_only",
         "optimizer_backend", "optimization_goal", "optimization_interval_minutes",
         "long_term_plan_interval_hours", "peak_shaving_limit_w",
@@ -269,7 +278,19 @@ def load_config() -> Config:
             logger.error("Invalid deferrable load configuration: %s", e)
             cfg.deferrable_loads = []
 
-    logger.info("Configuration loaded from %s", OPTIONS_FILE)
+    # Validate critical value ranges
+    cfg.battery_min_soc = max(0, min(100, cfg.battery_min_soc))
+    cfg.battery_reserve_soc = max(0, min(100, cfg.battery_reserve_soc))
+    cfg.price_vat_percent = max(0.0, min(100.0, cfg.price_vat_percent))
+    cfg.battery_efficiency = max(0.1, min(1.0, cfg.battery_efficiency))
+    cfg.goe_max_current_a = max(6, min(32, cfg.goe_max_current_a))
+    cfg.goe_phases = max(1, min(3, cfg.goe_phases))
+    cfg.ev_min_charge_current_a = max(0, min(32, cfg.ev_min_charge_current_a))
+    cfg.ev_max_charge_current_a = max(cfg.ev_min_charge_current_a, min(32, cfg.ev_max_charge_current_a))
+    cfg.battery_capacity_kwh = max(0.1, cfg.battery_capacity_kwh)
+    cfg.ev_battery_capacity_kwh = max(0.1, cfg.ev_battery_capacity_kwh)
+
+    logger.info("Configuration loaded successfully")
     return cfg
 
 

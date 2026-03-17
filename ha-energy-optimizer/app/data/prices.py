@@ -104,6 +104,13 @@ class PriceFetcher:
         self._calc = PriceCalculator()
         self._cache: Optional[PriceForecast] = None
         self._cache_ts: Optional[datetime] = None
+        self._http: Optional[httpx.AsyncClient] = None
+
+    async def _get_http(self) -> httpx.AsyncClient:
+        """Reuse a single httpx client for all price fetches."""
+        if self._http is None or self._http.is_closed:
+            self._http = httpx.AsyncClient(timeout=30)
+        return self._http
 
     async def get_prices_48h(self, force_refresh: bool = False) -> PriceForecast:
         """Return 48h price forecast, using cache if < 1h old."""
@@ -189,9 +196,9 @@ class PriceFetcher:
             "periodStart": period_start.strftime("%Y%m%d%H00"),
             "periodEnd": period_end.strftime("%Y%m%d%H00"),
         }
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.get(url, params=params)
-            r.raise_for_status()
+        client = await self._get_http()
+        r = await client.get(url, params=params)
+        r.raise_for_status()
 
         root = ElementTree.fromstring(r.text)
         ns = {"ns": "urn:iec62325.351:tc57wg16:451-3:publicationdocument:7:0"}
@@ -211,6 +218,9 @@ class PriceFetcher:
             return await self._fetch_fixed()
 
         # Return 48h worth
+        if not prices_ct:
+            logger.warning("ENTSO-E returned empty price list after parsing")
+            return await self._fetch_fixed()
         return prices_ct[:48] if len(prices_ct) >= 48 else prices_ct + [prices_ct[-1]] * (48 - len(prices_ct))
 
     async def _fetch_awattar(self) -> list[float]:
@@ -222,19 +232,21 @@ class PriceFetcher:
         start_ms = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
         end_ms = start_ms + 48 * 3600 * 1000
 
-        async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.get(
-                f"{base}/v1/marketdata",
-                params={"start": start_ms, "end": end_ms},
-            )
-            r.raise_for_status()
+        client = await self._get_http()
+        r = await client.get(
+            f"{base}/v1/marketdata",
+            params={"start": start_ms, "end": end_ms},
+        )
+        r.raise_for_status()
 
         data = r.json()
         # aWATTar gives EUR/MWh, positive only during cheap hours
         prices_ct = []
         for entry in data.get("data", []):
             # marketprice in EUR/MWh → ct/kWh
-            prices_ct.append(entry["marketprice"] / 10.0)
+            mp = entry.get("marketprice")
+            if mp is not None:
+                prices_ct.append(float(mp) / 10.0)
 
         if not prices_ct:
             return await self._fetch_fixed()
@@ -264,13 +276,13 @@ class PriceFetcher:
           }
         }
         """
-        async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.post(
-                "https://api.tibber.com/v1-beta/gql",
-                json={"query": query},
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            r.raise_for_status()
+        client = await self._get_http()
+        r = await client.post(
+            "https://api.tibber.com/v1-beta/gql",
+            json={"query": query},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        r.raise_for_status()
 
         data = r.json()
         price_info = (
@@ -284,7 +296,9 @@ class PriceFetcher:
         for day in ["today", "tomorrow"]:
             for entry in price_info.get(day, []):
                 # Tibber gives EUR/kWh → ct/kWh
-                prices_ct.append(entry["total"] * 100.0)
+                total = entry.get("total")
+                if total is not None:
+                    prices_ct.append(float(total) * 100.0)
 
         if not prices_ct:
             return await self._fetch_fixed()
@@ -302,25 +316,24 @@ class PriceFetcher:
         series_id = area_map.get(self._cfg.epex_spot_area, 4169)
 
         # Get available timestamps
-        async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.get(
-                f"https://www.smard.de/app/chart_data/{series_id}/DE/index_quarterhour.json"
-            )
-            r.raise_for_status()
-            timestamps = r.json().get("timestamps", [])
+        client = await self._get_http()
+        r = await client.get(
+            f"https://www.smard.de/app/chart_data/{series_id}/DE/index_quarterhour.json"
+        )
+        r.raise_for_status()
+        timestamps = r.json().get("timestamps", [])
 
         if not timestamps:
             return await self._fetch_fixed()
 
         # Use the latest available period
         latest_ts = timestamps[-1]
-        async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.get(
-                f"https://www.smard.de/app/chart_data/{series_id}/DE/"
-                f"{series_id}_DE_quarterhour_{latest_ts}.json"
-            )
-            r.raise_for_status()
-            raw_data = r.json().get("series", [])
+        r = await client.get(
+            f"https://www.smard.de/app/chart_data/{series_id}/DE/"
+            f"{series_id}_DE_quarterhour_{latest_ts}.json"
+        )
+        r.raise_for_status()
+        raw_data = r.json().get("series", [])
 
         # Each entry: [timestamp_ms, price_eur_mwh or None]
         # Average 4 quarter-hours to get hourly price

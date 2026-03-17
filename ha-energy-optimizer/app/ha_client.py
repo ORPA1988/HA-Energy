@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections
 import logging
 from datetime import datetime
 from typing import Any, Optional
@@ -31,15 +32,16 @@ class HAClient:
         # Rate limiting: max 100 requests per minute to protect HA instance
         self._rate_limit_max = 100
         self._rate_limit_window = 60.0  # seconds
-        self._request_times: list[float] = []
+        self._request_times: collections.deque[float] = collections.deque(maxlen=self._rate_limit_max + 10)
 
     async def _check_rate_limit(self) -> None:
         """Enforce rate limiting to protect HA from overload."""
         now = datetime.now().timestamp()
         
         # Remove requests older than window
-        self._request_times = [t for t in self._request_times if now - t < self._rate_limit_window]
-        
+        while self._request_times and now - self._request_times[0] >= self._rate_limit_window:
+            self._request_times.popleft()
+
         # If at limit, wait until oldest request expires
         if len(self._request_times) >= self._rate_limit_max:
             oldest = self._request_times[0]
@@ -51,7 +53,8 @@ class HAClient:
                              self._rate_limit_max, int(self._rate_limit_window), sleep_time)
                 await asyncio.sleep(sleep_time)
                 now = datetime.now().timestamp()
-                self._request_times = [t for t in self._request_times if now - t < self._rate_limit_window]
+                while self._request_times and now - self._request_times[0] >= self._rate_limit_window:
+                    self._request_times.popleft()
         
         # Record this request
         self._request_times.append(now)

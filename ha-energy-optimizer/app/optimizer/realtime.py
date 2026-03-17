@@ -13,9 +13,9 @@ from models import CarState, EnergyState, EVChargeMode, GoeStatus
 
 logger = logging.getLogger(__name__)
 
-# Minimum surplus to start solar charging (hysteresis prevents flapping)
-_SURPLUS_START_THRESHOLD_W = 1400  # ~6A at 230V
-_SURPLUS_STOP_THRESHOLD_W = 1000
+# Default surplus thresholds (overridden by config if set)
+_DEFAULT_SURPLUS_START_W = 1400  # ~6A at 230V
+_DEFAULT_SURPLUS_STOP_W = 1000
 
 
 class RealtimeController:
@@ -124,6 +124,8 @@ class RealtimeController:
         if mode == EVChargeMode.FAST:
             return max_a
 
+        phases = max(1, phases)  # Guard against div/0
+
         if mode == EVChargeMode.MIN_SOLAR:
             # Always charge at minimum; boost with surplus
             surplus_current = int(surplus_w / (phases * 230))
@@ -131,13 +133,15 @@ class RealtimeController:
 
         if mode == EVChargeMode.SOLAR:
             surplus_current = int(surplus_w / (phases * 230))
+            start_threshold = cfg.ev_surplus_start_threshold_w or _DEFAULT_SURPLUS_START_W
+            stop_threshold = cfg.ev_surplus_stop_threshold_w or _DEFAULT_SURPLUS_STOP_W
             if not self._charging_active:
                 # Start only if surplus > start threshold
-                if surplus_w < _SURPLUS_START_THRESHOLD_W:
+                if surplus_w < start_threshold:
                     return 0
             else:
                 # Keep charging if still above stop threshold
-                if surplus_w < _SURPLUS_STOP_THRESHOLD_W:
+                if surplus_w < stop_threshold:
                     return 0
             return min(max_a, max(min_a, surplus_current))
 

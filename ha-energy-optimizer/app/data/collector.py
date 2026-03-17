@@ -1,6 +1,7 @@
 """Collect current energy system state from Home Assistant sensors."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 
@@ -34,10 +35,13 @@ class DataCollector:
         cfg = self._cfg
         ha = self._ha
 
-        pv_w = await ha.get_state_value(cfg.pv_power_sensor, 0.0)
-        battery_soc = await ha.get_state_value(cfg.battery_soc_sensor, 50.0)
-        battery_power = await ha.get_state_value(cfg.battery_power_sensor, 0.0)
-        grid_power = await ha.get_state_value(cfg.grid_power_sensor, 0.0)
+        # Fetch all sensor values in parallel
+        pv_w, battery_soc, battery_power, grid_power = await asyncio.gather(
+            ha.get_state_value(cfg.pv_power_sensor, 0.0),
+            ha.get_state_value(cfg.battery_soc_sensor, 50.0),
+            ha.get_state_value(cfg.battery_power_sensor, 0.0),
+            ha.get_state_value(cfg.grid_power_sensor, 0.0),
+        )
 
         # Use load decomposition if any loads are marked for subtraction
         has_subtractable = any(dl.subtract_from_total for dl in cfg.deferrable_loads)
@@ -45,10 +49,11 @@ class DataCollector:
             decomposer = self._get_decomposer()
             house_load = await decomposer.get_base_load_w()
         else:
-            # House load: PV - grid_export - battery_charge (simplified energy balance)
-            # grid positive = import, negative = export
-            # battery positive = charging, negative = discharging
-            house_load = max(0.0, pv_w + max(0.0, grid_power) - max(0.0, battery_power))
+            # Energy balance: PV + grid_import = house + battery_charge + grid_export
+            # grid_power: positive = import, negative = export
+            # battery_power: positive = charging, negative = discharging
+            # Therefore: house = PV + grid_power - battery_power
+            house_load = max(0.0, pv_w + grid_power - battery_power)
 
         # Solar surplus: what's available beyond house load and battery charging
         surplus = max(0.0, pv_w - house_load - max(0.0, battery_power))

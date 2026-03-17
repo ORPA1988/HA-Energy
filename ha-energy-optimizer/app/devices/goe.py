@@ -41,6 +41,14 @@ class GoeCharger:
         self._phases = cfg.goe_phases
         self._ha = get_ha_client()
         self._last_status: Optional[GoeStatus] = None
+        self._http: Optional[httpx.AsyncClient] = None
+
+    async def _get_http(self) -> httpx.AsyncClient:
+        """Return a reusable httpx client (singleton)."""
+        if self._http is None or self._http.is_closed:
+            timeout = 5.0 if self._conn_type == "local" else 10.0
+            self._http = httpx.AsyncClient(timeout=timeout)
+        return self._http
 
     @property
     def available(self) -> bool:
@@ -66,21 +74,19 @@ class GoeCharger:
             return self._last_status
 
     async def _get_status_local(self) -> GoeStatus:
-        async with httpx.AsyncClient(timeout=5) as client:
-            r = await client.get(self._local_url("status"))
-            r.raise_for_status()
-            data = r.json()
-        return self._parse_status(data)
+        client = await self._get_http()
+        r = await client.get(self._local_url("status"))
+        r.raise_for_status()
+        return self._parse_status(r.json())
 
     async def _get_status_cloud(self) -> GoeStatus:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(
-                "https://api.go-e.io/api/status",
-                params=self._cloud_params(),
-            )
-            r.raise_for_status()
-            data = r.json()
-        return self._parse_status(data)
+        client = await self._get_http()
+        r = await client.get(
+            "https://api.go-e.io/api/status",
+            params=self._cloud_params(),
+        )
+        r.raise_for_status()
+        return self._parse_status(r.json())
 
     def _parse_status(self, data: dict) -> GoeStatus:
         """Parse go-e API v2 status response."""
@@ -116,26 +122,25 @@ class GoeCharger:
         active = sum(1 for i in range(4, 7) if nrg[i] > 5)  # >0.5A
         return max(1, active)
 
+    async def _api_set(self, params: dict) -> bool:
+        """Send a set command to go-e charger (local or cloud)."""
+        client = await self._get_http()
+        if self._conn_type == "local":
+            r = await client.get(self._local_url("set"), params=params)
+        else:
+            r = await client.get(
+                "https://api.go-e.io/api/set",
+                params={**self._cloud_params(), **params},
+            )
+        r.raise_for_status()
+
     async def set_current(self, current_a: int) -> bool:
         """Set charging current in Amperes (0 or min_current..max_current)."""
         if not self._enabled:
             return False
         current_a = max(0, min(current_a, self._max_current))
         try:
-            if self._conn_type == "local":
-                async with httpx.AsyncClient(timeout=5) as client:
-                    r = await client.get(
-                        self._local_url("set"),
-                        params={"amp": current_a},
-                    )
-                    r.raise_for_status()
-            else:
-                async with httpx.AsyncClient(timeout=10) as client:
-                    r = await client.get(
-                        "https://api.go-e.io/api/set",
-                        params={**self._cloud_params(), "amp": current_a},
-                    )
-                    r.raise_for_status()
+            await self._api_set({"amp": current_a})
             logger.debug("go-e: set current to %dA", current_a)
             return True
         except Exception as e:
@@ -146,22 +151,8 @@ class GoeCharger:
         """Allow or disallow charging."""
         if not self._enabled:
             return False
-        val = 1 if enabled else 0
         try:
-            if self._conn_type == "local":
-                async with httpx.AsyncClient(timeout=5) as client:
-                    r = await client.get(
-                        self._local_url("set"),
-                        params={"alw": val},
-                    )
-                    r.raise_for_status()
-            else:
-                async with httpx.AsyncClient(timeout=10) as client:
-                    r = await client.get(
-                        "https://api.go-e.io/api/set",
-                        params={**self._cloud_params(), "alw": val},
-                    )
-                    r.raise_for_status()
+            await self._api_set({"alw": 1 if enabled else 0})
             logger.debug("go-e: set enabled=%s", enabled)
             return True
         except Exception as e:
@@ -177,20 +168,7 @@ class GoeCharger:
             return False
         mode = min(2, max(0, phases))
         try:
-            if self._conn_type == "local":
-                async with httpx.AsyncClient(timeout=5) as client:
-                    r = await client.get(
-                        self._local_url("set"),
-                        params={"psm": mode},
-                    )
-                    r.raise_for_status()
-            else:
-                async with httpx.AsyncClient(timeout=10) as client:
-                    r = await client.get(
-                        "https://api.go-e.io/api/set",
-                        params={**self._cloud_params(), "psm": mode},
-                    )
-                    r.raise_for_status()
+            await self._api_set({"psm": mode})
             logger.debug("go-e: set phase_mode=%d", mode)
             return True
         except Exception as e:
