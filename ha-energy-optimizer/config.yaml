@@ -1,19 +1,23 @@
 name: "HA Energy Optimizer"
-version: "1.0.1"
+version: "1.0.2"
 slug: "ha_energy_optimizer"
-description: "Unified home energy optimization: combines EVCC + EOS + EMHASS"
+description: "Unified home energy optimization: combines EVCC + EOS + EMHASS concepts into one intelligent platform with 3-layer optimization, live dashboard and MCP server"
 url: "https://github.com/ORPA1988/HA-Energy"
 arch:
   - aarch64
   - amd64
   - armhf
   - armv7
+startup: application
+boot: auto
 init: false
 ingress: true
 ingress_port: 8080
 panel_icon: mdi:lightning-bolt-circle
 panel_title: "Energy Optimizer"
 homeassistant_api: true
+map:
+  - config:rw
 options:
   # --- PV System ---
   pv_power_sensor: "sensor.solar_power"
