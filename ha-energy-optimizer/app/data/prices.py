@@ -398,8 +398,19 @@ class PriceFetcher:
         if epex_data and isinstance(epex_data, list):
             for entry in epex_data:
                 if isinstance(entry, dict):
-                    price = entry.get("price_ct_per_kwh") or entry.get("price") or 0.0
-                    prices_ct.append(self._convert_price_to_ct_kwh(float(price), unit))
+                    # Support multiple attribute names used by different EPEX integrations
+                    price = (
+                        entry.get("price_ct_per_kwh")
+                        or entry.get("price_per_kwh")
+                        or entry.get("price")
+                        or 0.0
+                    )
+                    # Detect unit from attribute name: price_per_kwh is always EUR/kWh
+                    if entry.get("price_per_kwh") is not None and "price_ct_per_kwh" not in entry:
+                        entry_unit = "EUR/kWh"
+                    else:
+                        entry_unit = unit
+                    prices_ct.append(self._convert_price_to_ct_kwh(float(price), entry_unit))
             if prices_ct:
                 logger.info("EPEX entity: read %d prices from 'data' attribute", len(prices_ct))
 
