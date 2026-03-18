@@ -63,8 +63,9 @@ class EnergyState(BaseModel):
     battery_power_w: float = 0.0  # positive=charging, negative=discharging
     battery_capacity_kwh: float = 10.0
     battery_is_balancing: bool = False
-    # Grid
+    # Grid / Inverter
     grid_power_w: float = 0.0  # positive=import, negative=export
+    inverter_powerloss_w: float = 0.0  # inverter conversion losses
     # House load
     house_load_w: float = 0.0
     surplus_w: float = 0.0  # solar - house_load - battery_charging

@@ -342,10 +342,20 @@ class AppState:
             bat_soc = state.battery_soc_percent if state else 50.0
             ev_soc = state.ev_soc_percent if state else 20.0
 
+            # Ensure we have valid prices for cost calculation
+            price_ct = prices.total_ct
+            if not price_ct:
+                logger.warning("No price data available for EV strategy, using fixed price fallback")
+                price_ct = [self.cfg.fixed_price_ct_kwh] * 48
+
+            logger.debug("EV strategy: ev_soc=%.1f, bat_soc=%.1f, prices=%d entries (avg=%.1f ct)",
+                        ev_soc or 20.0, bat_soc, len(price_ct),
+                        sum(price_ct) / len(price_ct) if price_ct else 0)
+
             self.current_ev_strategy = self.ev_solver.solve(
                 ev_soc=ev_soc or 20.0,
                 battery_soc=bat_soc,
-                price_forecast_ct=prices.total_ct,
+                price_forecast_ct=price_ct,
                 pv_forecast_w=pv.power_w,
                 window_start=window_start,
                 window_end=window_end,
@@ -458,6 +468,7 @@ class AppState:
             "battery_soc": round(state.battery_soc_percent, 1),
             "battery_power_w": round(state.battery_power_w, 0),
             "grid_w": round(state.grid_power_w, 0),
+            "inverter_powerloss_w": round(state.inverter_powerloss_w, 0),
             "surplus_w": round(state.surplus_w, 0),
             "house_load_w": round(state.house_load_w, 0),
             "ev_car_state": state.ev_car_state.value,
@@ -869,6 +880,9 @@ _AUTO_DETECT_RULES: list[tuple[str, str, list[str], list[str]]] = [
     ("total_power_sensor", "sensor", ["power"],
      ["total_power", "house_power", "gesamtverbrauch", "hausverbrauch",
       "total_consumption", "load_power"]),
+    ("inverter_powerloss_sensor", "sensor", ["power"],
+     ["power_loss", "powerloss", "inverter_loss", "wechselrichter_verlust",
+      "conversion_loss", "eigenverbrauch_wr"]),
     ("ev_soc_sensor", "sensor", ["battery"],
      ["ev_battery", "car_soc", "fahrzeug", "ev_soc", "vehicle_battery",
       "auto_soc", "car_battery"]),

@@ -20,7 +20,8 @@ class PriceCalculator:
 
     def __init__(self):
         cfg = get_config()
-        self.input_is_netto = cfg.price_input_is_netto
+        self.input_mode = cfg.price_input_mode
+        self.input_is_netto = cfg.price_input_is_netto  # deprecated fallback
         self.vat_percent = cfg.price_vat_percent
         self.grid_fee_source = cfg.price_grid_fee_source
         self.grid_fee_fixed = cfg.price_grid_fee_fixed_ct_kwh
@@ -38,18 +39,36 @@ class PriceCalculator:
         """
         Convert raw market price to all-in consumer price.
 
-        Formula:
-          net_ct  = raw_ct (if input already netto)
-          gross_ct = net_ct * (1 + vat/100)   [if input is netto]
-                   or net_ct                   [if already brutto]
-          total_ct = gross_ct + grid_fee + supplier_markup + other_taxes
+        Modes:
+          netto:       raw = net price, add VAT + fees
+          brutto:      raw = gross price (incl. VAT), add fees
+          total_gross: raw = final all-in price, no additions
         """
-        if self.input_is_netto:
+        if self.input_mode == "total_gross":
+            # Input is already the complete end-consumer price
+            total_ct = raw_ct
+            gross_ct = raw_ct
+            net_ct = raw_ct / (1.0 + self.vat_percent / 100.0) if self.vat_percent else raw_ct
+            return PriceResult(
+                raw_ct=raw_ct,
+                net_ct=net_ct,
+                gross_ct=gross_ct,
+                total_ct=total_ct,
+                breakdown={
+                    "raw_market": raw_ct,
+                    "vat": 0.0,
+                    "grid_fee": 0.0,
+                    "supplier_markup": 0.0,
+                    "other_taxes": 0.0,
+                },
+            )
+
+        if self.input_mode == "netto":
             net_ct = raw_ct
             gross_ct = raw_ct * (1.0 + self.vat_percent / 100.0)
-        else:
+        else:  # "brutto"
             gross_ct = raw_ct
-            net_ct = raw_ct / (1.0 + self.vat_percent / 100.0)
+            net_ct = raw_ct / (1.0 + self.vat_percent / 100.0) if self.vat_percent else raw_ct
 
         total_ct = gross_ct + grid_fee_ct + self.supplier_markup + self.other_taxes
 
