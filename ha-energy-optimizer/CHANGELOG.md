@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- **Versionsanhebung**: Version auf 0.2.2 aktualisiert in allen Dateien (config.yaml, build.yaml, main.py, mcp_server.py, README)
+
 ## 0.2.0
 
 - **Versionsbereinigung**: Konsistente Version 0.2.0 in allen Dateien (config.yaml, build.yaml, main.py, mcp_server.py, README)

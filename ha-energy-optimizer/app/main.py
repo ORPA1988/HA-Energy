@@ -575,7 +575,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="HA Energy Optimizer",
-    version="0.2.0",
+    version="0.2.2",
     lifespan=lifespan,
 )
 
