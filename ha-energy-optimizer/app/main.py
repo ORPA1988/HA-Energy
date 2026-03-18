@@ -340,7 +340,7 @@ class AppState:
             state = self.current_state
 
             bat_soc = state.battery_soc_percent if state else 50.0
-            ev_soc = state.ev_soc_percent if state else 20.0
+            ev_soc = state.ev_soc_percent if state and state.ev_soc_percent is not None else 20.0
 
             # Ensure we have valid prices for cost calculation
             price_ct = prices.total_ct
@@ -349,11 +349,11 @@ class AppState:
                 price_ct = [self.cfg.fixed_price_ct_kwh] * 48
 
             logger.debug("EV strategy: ev_soc=%.1f, bat_soc=%.1f, prices=%d entries (avg=%.1f ct)",
-                        ev_soc or 20.0, bat_soc, len(price_ct),
+                        ev_soc, bat_soc, len(price_ct),
                         sum(price_ct) / len(price_ct) if price_ct else 0)
 
             self.current_ev_strategy = self.ev_solver.solve(
-                ev_soc=ev_soc or 20.0,
+                ev_soc=ev_soc,
                 battery_soc=bat_soc,
                 price_forecast_ct=price_ct,
                 pv_forecast_w=pv.power_w,

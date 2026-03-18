@@ -1418,9 +1418,9 @@ function updateState(d) {
   setText('grid-power', fmt(d.grid_w) + ' W');
   setClass('grid-power', d.grid_w > 0 ? 'stat-value red' : 'stat-value green');
   setText('ev-power', fmt(d.ev_power_w) + ' W');
-  setText('price-ct', (d.price_ct || 0).toFixed(1) + ' ct');
+  setText('price-ct', (d.price_ct ?? 0).toFixed(1) + ' ct');
   setClass('price-ct', d.price_ct < 15 ? 'stat-value green' : d.price_ct < 25 ? 'stat-value yellow' : 'stat-value red');
-  setText('surplus-w', fmt(d.surplus_w || 0) + ' W');
+  setText('surplus-w', fmt(d.surplus_w ?? 0) + ' W');
 
   // Operation mode + read-only indicator
   const modeEl = document.getElementById('mode-indicator');
@@ -2807,6 +2807,9 @@ drawGauge('ev-gauge', 0, '#3b82f6');
 
 // Start
 connect();
+// Pre-load all config sections (not just active tab)
+loadPriceConfig();
+loadEVConfig();
 </script>
 
 </body>
