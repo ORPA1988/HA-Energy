@@ -12,7 +12,7 @@
 > Intelligentes Home-Energy-Management-System (HEMS) als Home Assistant Add-on.
 > Kombiniert die besten Konzepte aus EVCC, EOS und EMHASS in einer einheitlichen Plattform mit dreistufiger Optimierung und Live-Dashboard.
 
-**Version 0.2.0** · [Changelog](#changelog) · [Installation](#installation) · [Konfiguration](#konfiguration)
+**Version 0.2.1** · [Changelog](#changelog) · [Installation](#installation) · [Konfiguration](#konfiguration)
 
 ---
 
