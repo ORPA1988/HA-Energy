@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ha-energy": {
+      "command": "python",
+      "args": ["-m", "app.mcp_server", "--url", "http://localhost:8080"],
+      "cwd": "ha-energy-optimizer"
+    }
+  }
+}

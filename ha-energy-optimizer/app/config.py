@@ -102,10 +102,11 @@ class Config:
     battery_balancing_auto_trigger_soc_deviation: int = 5
     battery_balancing_use_solar_only: bool = True
 
-    # Grid
+    # Grid / Inverter
     grid_power_sensor: str = "sensor.grid_power"
     grid_max_import_w: int = 0
     total_power_sensor: str = ""  # Total house consumption sensor for load decomposition
+    inverter_powerloss_sensor: str = ""  # Optional: inverter power loss sensor (added to total consumption)
 
     # Prices
     price_source: str = "entso-e"
@@ -122,7 +123,8 @@ class Config:
     epex_unit: str = "ct/kWh"  # "ct/kWh", "EUR/MWh", "EUR/kWh"
 
     # Price calculation
-    price_input_is_netto: bool = True
+    price_input_is_netto: bool = True  # Deprecated: use price_input_mode instead
+    price_input_mode: str = "netto"  # "netto", "brutto", "total_gross"
     price_vat_percent: float = 19.0
     price_grid_fee_source: str = "fixed"
     price_grid_fee_fixed_ct_kwh: float = 7.5
@@ -226,11 +228,12 @@ def load_config() -> Config:
         "battery_balancing_auto_trigger_soc_deviation",
         "battery_balancing_use_solar_only",
         "grid_power_sensor", "grid_max_import_w", "total_power_sensor",
+        "inverter_powerloss_sensor",
         "price_source", "entso_e_token", "entso_e_area",
         "tibber_token", "awattar_country", "epex_spot_area",
         "price_sensor_entity", "fixed_price_ct_kwh",
         "epex_import_entity", "epex_export_entity", "epex_unit",
-        "price_input_is_netto", "price_vat_percent",
+        "price_input_is_netto", "price_input_mode", "price_vat_percent",
         "price_grid_fee_source", "price_grid_fee_fixed_ct_kwh",
         "price_grid_fee_entity", "price_supplier_markup_ct_kwh",
         "price_other_taxes_ct_kwh", "price_feed_in_ct_kwh",
@@ -278,6 +281,12 @@ def load_config() -> Config:
         except Exception as e:
             logger.error("Invalid deferrable load configuration: %s", e)
             cfg.deferrable_loads = []
+
+    # Migrate deprecated price_input_is_netto to price_input_mode
+    if "price_input_mode" not in opts and "price_input_is_netto" in opts:
+        cfg.price_input_mode = "netto" if cfg.price_input_is_netto else "brutto"
+    if cfg.price_input_mode not in ("netto", "brutto", "total_gross"):
+        cfg.price_input_mode = "netto"
 
     # Validate critical value ranges
     cfg.battery_min_soc = max(0, min(100, cfg.battery_min_soc))

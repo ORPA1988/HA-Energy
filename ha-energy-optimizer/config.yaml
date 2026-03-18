@@ -55,6 +55,7 @@ options:
   grid_power_sensor: "sensor.grid_power"
   grid_max_import_w: 0
   total_power_sensor: ""
+  inverter_powerloss_sensor: ""
   # --- Electricity Pricing ---
   price_source: "entso-e"
   entso_e_token: ""
@@ -69,6 +70,7 @@ options:
   epex_unit: "ct/kWh"
   # --- Price Calculation ---
   price_input_is_netto: true
+  price_input_mode: "netto"
   price_vat_percent: 19.0
   price_grid_fee_source: "fixed"
   price_grid_fee_fixed_ct_kwh: 7.5
@@ -168,6 +170,7 @@ schema:
   grid_power_sensor: str
   grid_max_import_w: int
   total_power_sensor: str
+  inverter_powerloss_sensor: str
   price_source: list(entso-e|awattar|tibber|epex_spot|epex_entity|sensor|fixed)
   entso_e_token: str
   entso_e_area: str
@@ -180,6 +183,7 @@ schema:
   epex_export_entity: str
   epex_unit: list(ct/kWh|EUR/MWh|EUR/kWh)
   price_input_is_netto: bool
+  price_input_mode: "list(netto|brutto|total_gross)?"
   price_vat_percent: float
   price_grid_fee_source: list(fixed|entity)
   price_grid_fee_fixed_ct_kwh: float

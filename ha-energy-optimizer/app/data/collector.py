@@ -37,12 +37,18 @@ class DataCollector:
         ha = self._ha
 
         # Fetch all sensor values in parallel
-        pv_w, battery_soc, battery_power, grid_power = await asyncio.gather(
+        coros = [
             ha.get_state_value(cfg.pv_power_sensor, 0.0),
             ha.get_state_value(cfg.battery_soc_sensor, 50.0),
             ha.get_state_value(cfg.battery_power_sensor, 0.0),
             ha.get_state_value(cfg.grid_power_sensor, 0.0),
-        )
+        ]
+        has_powerloss = bool(cfg.inverter_powerloss_sensor)
+        if has_powerloss:
+            coros.append(ha.get_state_value(cfg.inverter_powerloss_sensor, 0.0))
+        results = await asyncio.gather(*coros)
+        pv_w, battery_soc, battery_power, grid_power = results[:4]
+        powerloss = results[4] if has_powerloss else 0.0
 
         # Use load decomposition if any loads are marked for subtraction
         has_subtractable = any(dl.subtract_from_total for dl in cfg.deferrable_loads)
@@ -50,11 +56,12 @@ class DataCollector:
             decomposer = self._get_decomposer()
             house_load = await decomposer.get_base_load_w()
         else:
-            # Energy balance: PV + grid_import = house + battery_charge + grid_export
+            # Energy balance: PV + grid_import = house + battery_charge + grid_export + powerloss
             # grid_power: positive = import, negative = export
             # battery_power: positive = charging, negative = discharging
-            # Therefore: house = PV + grid_power - battery_power
-            house_load = max(0.0, pv_w + grid_power - battery_power)
+            # powerloss: inverter conversion losses (always positive)
+            # Therefore: house = PV + grid_power - battery_power - powerloss
+            house_load = max(0.0, pv_w + grid_power - battery_power - powerloss)
 
         # Solar surplus: what's available beyond house load and battery charging
         surplus = max(0.0, pv_w - house_load - max(0.0, battery_power))
@@ -85,6 +92,7 @@ class DataCollector:
             battery_power_w=battery_power,
             battery_capacity_kwh=cfg.battery_capacity_kwh,
             grid_power_w=grid_power,
+            inverter_powerloss_w=powerloss,
             house_load_w=house_load,
             surplus_w=surplus,
             ev_soc_percent=ev_soc,
