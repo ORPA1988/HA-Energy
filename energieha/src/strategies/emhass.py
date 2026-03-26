@@ -67,13 +67,19 @@ def plan_emhass(
         soc_final=soc_final,
     )
 
-    # Read EMHASS result sensors from HA
+    # Read EMHASS result sensors from HA (reuse same client credentials)
     from ..ha_client import HaClient
-    import os
     ha = HaClient()
 
     batt_forecast = _read_forecast_sensor(ha, "sensor.p_batt_forecast", num_slots)
     soc_forecast = _read_forecast_sensor(ha, "sensor.soc_batt_forecast", num_slots)
+
+    logger.info("EMHASS results: %d batt points, %d soc points",
+                len(batt_forecast), len(soc_forecast))
+
+    # EMHASS uses hourly resolution — map to our slot resolution
+    # Each EMHASS hour covers (60/slot_minutes) slots
+    slots_per_emhass = max(1, 60 // slot_minutes)
 
     # Build plan from EMHASS output
     slots = []
@@ -85,8 +91,13 @@ def plan_emhass(
         load_w = load_w_list[i]
         price = price_list[i]
 
-        # Battery power from EMHASS (positive=charge, negative=discharge)
-        battery_w = batt_forecast[i] if i < len(batt_forecast) else 0.0
+        # Map slot index to EMHASS hourly index
+        # EMHASS convention: positive=discharge, negative=charge
+        # EnergieHA convention: positive=charge, negative=discharge
+        # → invert sign
+        emhass_idx = i // slots_per_emhass
+        raw_batt = batt_forecast[emhass_idx] if emhass_idx < len(batt_forecast) else 0.0
+        battery_w = -raw_batt  # Invert: EMHASS positive=discharge → our negative
 
         # Determine mode from power
         if battery_w > 50:
@@ -107,8 +118,9 @@ def plan_emhass(
         phev_w = calc_phev_power(surplus_w - max(0, battery_w), config, snapshot)
 
         # SOC from EMHASS if available, else simulate
-        if i < len(soc_forecast) and soc_forecast[i] > 0:
-            soc = soc_forecast[i]
+        soc_idx = i // slots_per_emhass
+        if soc_idx < len(soc_forecast) and soc_forecast[soc_idx] > 0:
+            soc = soc_forecast[soc_idx]
         else:
             soc = update_soc(soc, battery_w, slot_minutes, config)
 
@@ -131,32 +143,56 @@ def plan_emhass(
 
 
 def _read_forecast_sensor(ha, entity_id: str, expected_len: int) -> list[float]:
-    """Read a forecast sensor published by EMHASS. Returns list of float values."""
+    """Read a forecast sensor published by EMHASS. Returns list of float values.
+
+    EMHASS publishes data in various attribute formats:
+    - battery_scheduled_power: [{"date": ..., "p_batt_forecast": "-360.23"}, ...]
+    - battery_scheduled_soc:   [{"date": ..., "soc_batt_forecast": "59.92"}, ...]
+    - forecast_data / forecasts / data: generic formats
+    """
     data = ha.get_state(entity_id)
     if not data:
         logger.warning("EMHASS sensor %s not found", entity_id)
         return []
 
-    # Try to read forecast array from attributes
     attrs = data.get("attributes", {})
-    forecast_data = (attrs.get("forecast_data")
-                     or attrs.get("forecasts")
-                     or attrs.get("data")
-                     or [])
 
-    if isinstance(forecast_data, list) and forecast_data:
+    # Try all known EMHASS attribute names
+    forecast_data = None
+    for attr_name in ("battery_scheduled_power", "battery_scheduled_soc",
+                      "forecast_data", "forecasts", "data"):
+        if attr_name in attrs and isinstance(attrs[attr_name], list):
+            forecast_data = attrs[attr_name]
+            logger.debug("EMHASS %s: using attribute '%s' with %d entries",
+                         entity_id, attr_name, len(forecast_data))
+            break
+
+    if forecast_data:
         values = []
         for item in forecast_data:
             if isinstance(item, (int, float)):
                 values.append(float(item))
             elif isinstance(item, dict):
-                val = item.get("value", item.get("state", 0))
-                values.append(float(val))
-        return values
+                # EMHASS uses the sensor name as value key (e.g. "p_batt_forecast")
+                # Try all numeric-looking values in the dict
+                val = None
+                for k, v in item.items():
+                    if k == "date":
+                        continue
+                    try:
+                        val = float(v)
+                        break
+                    except (ValueError, TypeError):
+                        continue
+                if val is not None:
+                    values.append(val)
+        if values:
+            return values
 
     # Fallback: single state value repeated
     try:
         val = float(data.get("state", 0))
+        logger.debug("EMHASS %s: using state value %.1f as fallback", entity_id, val)
         return [val] * expected_len
     except (ValueError, TypeError):
         return []
