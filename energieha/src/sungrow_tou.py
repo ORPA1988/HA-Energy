@@ -1,13 +1,15 @@
 """Sungrow TOU (Time-of-Use) adapter: maps 24h plan to 6 inverter programs.
 
-IMPORTANT: The Sungrow inverter requires exactly 6 programs that run
-sequentially and cover the full day without gaps. Each program's end time
-must equal the next program's start time.
+Program layout (sequential, no gaps):
+  P1: 00:00 → charge_start   Disabled (idle/discharge, SOC=min)
+  P2: charge_start → charge_end   Grid (charge from grid, SOC=target)
+  P3: charge_end → 23:50     Disabled (idle/discharge, SOC=min)
+  P4: 23:50 → 23:52          Disabled (dummy)
+  P5: 23:52 → 23:54          Disabled (dummy)
+  P6: 23:54 → 23:56          Disabled (dummy)
 
-Mapping logic:
-  - charge  → charging="Grid", soc=target_soc%
-  - discharge/idle → charging="Disabled", soc=min_soc%
-    (Load First pattern automatically discharges to serve load)
+If no grid-charging is needed, P2 gets a 1-minute window and Disabled.
+End of P(n) always equals Start of P(n+1).
 """
 
 import logging
@@ -21,26 +23,6 @@ logger = logging.getLogger(__name__)
 
 MAX_PROGRAMS = 6
 
-# Fixed program boundaries: split the day into 6 x 4-hour blocks
-# Programs must be sequential and cover 24h
-DEFAULT_BOUNDARIES = ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"]
-
-
-class TouProgram:
-    """One of 6 sequential TOU programs."""
-
-    def __init__(self, start_hhmm: str, end_hhmm: str, charging: str,
-                 target_soc: int, power_w: int = 12000):
-        self.start_hhmm = start_hhmm
-        self.end_hhmm = end_hhmm
-        self.charging = charging  # "Grid" or "Disabled"
-        self.target_soc = target_soc
-        self.power_w = power_w
-
-    def __repr__(self):
-        return (f"TOU({self.start_hhmm}-{self.end_hhmm} "
-                f"{self.charging} SOC={self.target_soc}%)")
-
 
 class SungrowTouAdapter:
     """Maps a 24h Plan to 6 sequential Sungrow TOU programs."""
@@ -52,7 +34,6 @@ class SungrowTouAdapter:
         self._validated = False
 
     def _validate_entities(self) -> bool:
-        """Check that all required Sungrow TOU entities exist."""
         if self._validated:
             return True
 
@@ -74,7 +55,7 @@ class SungrowTouAdapter:
             return False
 
         self._validated = True
-        logger.info("Sungrow TOU: All %d program entities validated", MAX_PROGRAMS)
+        logger.info("Sungrow TOU: All program entities validated")
         return True
 
     def apply(self, plan: Plan, snapshot: Snapshot) -> None:
@@ -87,10 +68,10 @@ class SungrowTouAdapter:
             return
 
         tz = ZoneInfo(self._config.timezone)
-        programs = self._plan_to_programs(plan, tz)
+        programs = self._build_programs(plan, tz)
 
         # Change detection
-        prog_key = [(p.start_hhmm, p.end_hhmm, p.charging, p.target_soc)
+        prog_key = [(p["start"], p["end"], p["charging"], p["soc"])
                      for p in programs]
         if prog_key == self._last_programs:
             logger.debug("TOU: Programs unchanged, skipping write")
@@ -99,106 +80,115 @@ class SungrowTouAdapter:
         if self._config.dry_run:
             logger.info("TOU DRY RUN: Would write %d programs:", len(programs))
             for i, p in enumerate(programs):
-                logger.info("  Program %d: %s-%s charging=%s SOC=%d%%",
-                            i + 1, p.start_hhmm, p.end_hhmm,
-                            p.charging, p.target_soc)
+                logger.info("  P%d: %s-%s charging=%s SOC=%d%%",
+                            i + 1, p["start"], p["end"],
+                            p["charging"], p["soc"])
         else:
             self._write_programs(programs)
 
         self._last_programs = prog_key
 
-    def _plan_to_programs(self, plan: Plan, tz) -> list[TouProgram]:
-        """Convert plan slots into exactly 6 sequential programs covering 24h.
+    def _build_programs(self, plan: Plan, tz) -> list[dict]:
+        """Build 6 sequential programs from the plan.
 
-        Strategy:
-        1. Consolidate 96 slots into mode-blocks
-        2. Map blocks onto 6 fixed 4-hour time windows
-        3. For each window: determine dominant mode and SOC target
+        Finds the grid-charge window (if any) and frames it with
+        idle/discharge programs before and after.
         """
-        # Step 1: Build a per-hour summary from plan slots
-        # hour_data[0..23] = {"charge_slots": n, "discharge_slots": n, "idle_slots": n, "max_soc": x, "has_grid_charge": bool}
-        hour_data = {}
         from .strategies.helpers import is_grid_charging
 
+        # Find charge window: first and last slot where grid-charging happens
+        charge_start_hhmm = None
+        charge_end_hhmm = None
+        charge_max_soc = 0
+
         for slot in plan.slots:
-            local_start = slot.start.astimezone(tz)
-            h = local_start.hour
-            if h not in hour_data:
-                hour_data[h] = {"charge": 0, "discharge": 0, "idle": 0,
-                                "max_soc": 0, "has_grid_charge": False}
-            hour_data[h][slot.planned_battery_mode] += 1
-            hour_data[h]["max_soc"] = max(hour_data[h]["max_soc"],
-                                          round(slot.projected_soc))
-            if is_grid_charging(slot.pv_forecast_w, slot.load_estimate_w,
-                                slot.planned_battery_w):
-                hour_data[h]["has_grid_charge"] = True
+            local = slot.start.astimezone(tz)
+            local_end = local + timedelta(minutes=slot.duration_min)
+            hhmm = local.strftime("%H:%M")
+            end_hhmm = local_end.strftime("%H:%M")
 
-        # Step 2: Build 6 programs for 4-hour blocks
-        programs = []
-        boundaries = DEFAULT_BOUNDARIES + ["00:00"]  # wrap around
+            is_charge = (slot.planned_battery_mode == "charge"
+                         and slot.planned_battery_w > 50)
 
-        for i in range(MAX_PROGRAMS):
-            start = boundaries[i]
-            end = boundaries[i + 1]
-            sh = int(start.split(":")[0])
+            if is_charge:
+                if charge_start_hhmm is None:
+                    charge_start_hhmm = hhmm
+                charge_end_hhmm = end_hhmm
+                charge_max_soc = max(charge_max_soc, round(slot.projected_soc))
 
-            # Count modes across the 4 hours in this block
-            total_charge = 0
-            total_discharge = 0
-            total_idle = 0
-            block_max_soc = 0
-            block_grid_charge = False
+        # Apply grid-charge SOC limit
+        has_grid_charge = False
+        if charge_start_hhmm:
+            for slot in plan.slots:
+                if (slot.planned_battery_mode == "charge"
+                    and is_grid_charging(slot.pv_forecast_w, slot.load_estimate_w,
+                                         slot.planned_battery_w)):
+                    has_grid_charge = True
+                    break
 
-            for h_offset in range(4):
-                h = (sh + h_offset) % 24
-                if h in hour_data:
-                    total_charge += hour_data[h]["charge"]
-                    total_discharge += hour_data[h]["discharge"]
-                    total_idle += hour_data[h]["idle"]
-                    block_max_soc = max(block_max_soc, hour_data[h]["max_soc"])
-                    block_grid_charge = block_grid_charge or hour_data[h]["has_grid_charge"]
+        if has_grid_charge:
+            soc_limit = self._config.max_grid_charge_soc
+        else:
+            soc_limit = self._config.max_soc_percent
+        charge_target_soc = min(charge_max_soc, soc_limit) if charge_max_soc > 0 else 0
 
-            # Dominant mode
-            if total_charge > total_discharge and total_charge > total_idle:
-                charging = "Grid"
-                soc_limit = (self._config.max_grid_charge_soc if block_grid_charge
-                             else self._config.max_soc_percent)
-                target_soc = min(block_max_soc, soc_limit)
-            else:
-                charging = "Disabled"
-                target_soc = self._config.min_soc_percent
+        min_soc = self._config.min_soc_percent
 
-            programs.append(TouProgram(
-                start_hhmm=start, end_hhmm=end,
-                charging=charging, target_soc=target_soc,
-            ))
+        # Build programs
+        if charge_start_hhmm and charge_target_soc > min_soc:
+            # There is a charge window
+            p1_end = charge_start_hhmm
+            p2_start = charge_start_hhmm
+            p2_end = charge_end_hhmm
+            p3_start = charge_end_hhmm
+            p2_charging = "Grid"
+            p2_soc = charge_target_soc
+        else:
+            # No charge needed — P2 gets a minimal dummy window
+            p1_end = "23:44"
+            p2_start = "23:44"
+            p2_end = "23:46"
+            p3_start = "23:46"
+            p2_charging = "Disabled"
+            p2_soc = min_soc
+
+        programs = [
+            {"start": "00:00", "end": p1_end,   "charging": "Disabled", "soc": min_soc},
+            {"start": p2_start, "end": p2_end,   "charging": p2_charging, "soc": p2_soc},
+            {"start": p3_start, "end": "23:50",  "charging": "Disabled", "soc": min_soc},
+            {"start": "23:50",  "end": "23:52",  "charging": "Disabled", "soc": min_soc},
+            {"start": "23:52",  "end": "23:54",  "charging": "Disabled", "soc": min_soc},
+            {"start": "23:54",  "end": "23:56",  "charging": "Disabled", "soc": min_soc},
+        ]
+
+        logger.info("TOU: charge window %s-%s → Grid SOC=%d%% (grid_charge=%s)",
+                     charge_start_hhmm or "none", charge_end_hhmm or "none",
+                     charge_target_soc, has_grid_charge)
 
         return programs
 
-    def _write_programs(self, programs: list[TouProgram]) -> None:
+    def _write_programs(self, programs: list[dict]) -> None:
         """Write exactly 6 sequential TOU programs to Sungrow inverter."""
         for i, prog in enumerate(programs):
-            prog_num = i + 1
-
+            n = i + 1
             self._client.call_service("select", "select_option", {
-                "entity_id": f"select.inverter_program_{prog_num}_charging",
-                "option": prog.charging,
+                "entity_id": f"select.inverter_program_{n}_charging",
+                "option": prog["charging"],
             })
             self._client.call_service("number", "set_value", {
-                "entity_id": f"number.inverter_program_{prog_num}_soc",
-                "value": prog.target_soc,
+                "entity_id": f"number.inverter_program_{n}_soc",
+                "value": prog["soc"],
             })
             self._client.call_service("time", "set_value", {
-                "entity_id": f"time.inverter_program_{prog_num}_time",
-                "time": prog.start_hhmm,
+                "entity_id": f"time.inverter_program_{n}_time",
+                "time": prog["start"],
             })
             self._client.call_service("input_datetime", "set_datetime", {
-                "entity_id": f"input_datetime.inverter_program_{prog_num}_end",
-                "time": prog.end_hhmm,
+                "entity_id": f"input_datetime.inverter_program_{n}_end",
+                "time": prog["end"],
             })
 
-        logger.info("TOU: Wrote 6 sequential programs:")
+        logger.info("TOU: Wrote 6 programs:")
         for i, p in enumerate(programs):
-            logger.info("  Program %d: %s-%s charging=%s SOC=%d%%",
-                        i + 1, p.start_hhmm, p.end_hhmm,
-                        p.charging, p.target_soc)
+            logger.info("  P%d: %s-%s %s SOC=%d%%",
+                        i + 1, p["start"], p["end"], p["charging"], p["soc"])
