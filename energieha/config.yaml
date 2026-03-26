@@ -1,5 +1,5 @@
 name: "EnergieHA"
-version: "0.5.0"
+version: "0.6.0"
 slug: "energieha"
 description: "Lightweight energy management for PV, battery, grid and consumers"
 url: "https://github.com/ORPA1988/HA-Energy"
@@ -62,6 +62,10 @@ options:
 
   # EMHASS Optimierung (erfordert laufendes EMHASS Add-on)
   emhass_url: "http://localhost:5000"
+  export_price_eur: 0.10
+
+  # Executor
+  mode_hold_seconds: 120
 
 schema:
   strategy: "list(surplus|price|forecast|emhass)"
@@ -96,3 +100,5 @@ schema:
   max_grid_charge_soc: "int(0,100)"
   sungrow_tou_enabled: bool
   emhass_url: str
+  export_price_eur: "float(0,)"
+  mode_hold_seconds: "int(0,600)"

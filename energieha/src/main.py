@@ -7,7 +7,7 @@ import time
 
 from . import __version__
 from .collector import Collector
-from .config import load_config
+from .config import load_config, validate_config
 from .models import Config
 from .entities import EntityPublisher
 from .executor import Executor
@@ -53,6 +53,9 @@ def main():
     logger.info("Strategy: %s | Cycle: %ds | Slots: %dmin | Battery: %.0f kWh (SOC %d%%–%d%%)",
                 config.strategy, config.cycle_seconds, config.slot_duration_min,
                 config.battery_capacity_kwh, config.min_soc_percent, config.max_soc_percent)
+
+    if not validate_config(config):
+        logger.warning("Config validation failed — using values as-is, check settings")
 
     if config.dry_run:
         logger.info("*** DRY RUN MODE – no control commands will be sent ***")
@@ -108,23 +111,35 @@ def main():
         tou_adapter = SungrowTouAdapter(client, config)
         logger.info("Sungrow TOU adapter enabled")
 
-    # Main loop
+    # Main loop with circuit-breaker
     cycle = 0
+    consecutive_failures = 0
+    MAX_CONSECUTIVE_FAILURES = 3
+
     while _running:
         cycle += 1
         cycle_start = time.monotonic()
 
         try:
-            _run_cycle(collector, executor, publisher, config, cycle, tou_adapter)
+            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                logger.warning("SAFE MODE: %d consecutive failures — publishing idle only",
+                               consecutive_failures)
+                executor._publish_idle()
+            else:
+                _run_cycle(collector, executor, publisher, config, cycle, tou_adapter)
+            consecutive_failures = 0
         except Exception as e:
-            logger.error("Cycle %d failed: %s", cycle, e, exc_info=True)
-            # Write error to status entity so it's visible in HA
+            consecutive_failures += 1
+            logger.error("Cycle %d failed (%d/%d): %s", cycle,
+                         consecutive_failures, MAX_CONSECUTIVE_FAILURES,
+                         e, exc_info=True)
             try:
                 client.set_state("sensor.energieha_status", "error", {
                     "friendly_name": "EnergieHA Status",
                     "icon": "mdi:alert-circle",
                     "error": str(e),
                     "cycle": cycle,
+                    "consecutive_failures": consecutive_failures,
                     "version": __version__,
                 })
             except Exception:

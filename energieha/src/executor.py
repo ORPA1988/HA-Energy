@@ -30,8 +30,6 @@ MIN_POWER_THRESHOLD_W = 50
 class Executor:
     """Publishes control parameters as add-on-owned HA sensor entities."""
 
-    MIN_MODE_HOLD_SECONDS = 120  # Don't flip modes faster than 2 minutes
-
     def __init__(self, client: HaClient, config: Config):
         self._client = client
         self._config = config
@@ -55,9 +53,10 @@ class Executor:
         if (mode != self._last_mode and self._last_mode_change is not None):
             now_dt = datetime.now(ZoneInfo(self._config.timezone))
             elapsed = (now_dt - self._last_mode_change).total_seconds()
-            if elapsed < self.MIN_MODE_HOLD_SECONDS:
+            hold_seconds = self._config.mode_hold_seconds
+            if elapsed < hold_seconds:
                 logger.debug("Hysteresis: holding %s for %ds more",
-                             self._last_mode, self.MIN_MODE_HOLD_SECONDS - elapsed)
+                             self._last_mode, hold_seconds - elapsed)
                 mode = self._last_mode
 
         # Only write if values changed

@@ -50,13 +50,17 @@ class Collector:
         grid_charge_current = self._client.get_state_value(
             self._config.entity_grid_charge_current)
         if grid_charge_current and grid_charge_current > 0:
-            # Read battery voltage from SOC entity attributes
             bat_state = self._client.get_state(self._config.entity_battery_soc)
-            bat_voltage = 51.0  # nominal
+            bat_voltage = 52.0  # nominal (mid-range for 48V system)
             if bat_state:
                 bat_voltage = float(bat_state.get("attributes", {}).get(
-                    "BMS Voltage", 51.0))
+                    "BMS Voltage", 52.0))
             grid_charge_w = grid_charge_current * bat_voltage
+            # Plausibility check
+            if grid_charge_w < 1000 or grid_charge_w > 10000:
+                logger.warning("Grid charge power %.0fW seems implausible "
+                               "(%.0fA × %.1fV)", grid_charge_w,
+                               grid_charge_current, bat_voltage)
             logger.debug("Grid charge power: %.0fA × %.1fV = %.0fW",
                          grid_charge_current, bat_voltage, grid_charge_w)
 

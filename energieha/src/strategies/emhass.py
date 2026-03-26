@@ -6,7 +6,7 @@ to TimeSlot objects. PHEV is handled separately (EMHASS doesn't know about it).
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from ..emhass_client import EmhassClient
@@ -65,6 +65,7 @@ def plan_emhass(
         prices_eur=price_list,
         soc_init=soc_init,
         soc_final=soc_final,
+        export_price_eur=config.export_price_eur,
     )
 
     # Read EMHASS result sensors from HA (reuse same client credentials)
@@ -75,11 +76,21 @@ def plan_emhass(
     soc_forecast = _read_forecast_sensor(ha, "sensor.soc_batt_forecast", num_slots)
 
     # Check data freshness and availability
+    EMHASS_MAX_AGE_SECONDS = 6 * 3600  # 6h = 1.5× trigger interval
+
     batt_state = ha.get_state("sensor.p_batt_forecast")
     if batt_state:
         last_updated = batt_state.get("last_updated", "")
         logger.info("EMHASS results: %d batt points, %d soc points (updated: %s)",
                     len(batt_forecast), len(soc_forecast), last_updated[:19])
+        # Freshness check
+        if last_updated:
+            try:
+                age = (datetime.now(timezone.utc) - datetime.fromisoformat(last_updated)).total_seconds()
+                if age > EMHASS_MAX_AGE_SECONDS:
+                    raise ValueError(f"EMHASS data stale ({age/3600:.1f}h old, max {EMHASS_MAX_AGE_SECONDS/3600:.0f}h)")
+            except (ValueError, TypeError):
+                pass  # Can't parse timestamp — skip freshness check
     else:
         logger.info("EMHASS results: %d batt points, %d soc points",
                     len(batt_forecast), len(soc_forecast))

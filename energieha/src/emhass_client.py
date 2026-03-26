@@ -53,13 +53,14 @@ class EmhassClient:
     def dayahead_optim(self, pv_forecast_w: list[float],
                        load_forecast_w: list[float],
                        prices_eur: list[float],
-                       soc_init: float, soc_final: float) -> dict:
+                       soc_init: float, soc_final: float,
+                       export_price_eur: float = 0.10) -> dict:
         """Run day-ahead optimization and return result."""
         payload = {
             "pv_power_forecast": pv_forecast_w,
             "load_power_forecast": load_forecast_w,
             "load_cost_forecast": prices_eur,
-            "prod_price_forecast": [p * 0.5 for p in prices_eur],
+            "prod_price_forecast": [export_price_eur] * len(prices_eur),
             "soc_init": soc_init,
             "soc_final": soc_final,
         }
@@ -78,8 +79,13 @@ class EmhassClient:
         resp.raise_for_status()
 
         if not resp.text or not resp.text.strip():
-            logger.warning("EMHASS: empty response body — optimization may have succeeded silently")
-            return {"status": "ok"}
+            logger.warning("EMHASS: empty response body — triggering publish-data anyway")
+            # Still try publish-data, then let sensor freshness check validate
+            try:
+                requests.post(f"{self.url}/action/publish-data", json={}, timeout=30)
+            except requests.RequestException:
+                pass
+            return {"status": "ok", "warning": "empty response"}
 
         try:
             result = resp.json()

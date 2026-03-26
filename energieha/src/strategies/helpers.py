@@ -30,11 +30,17 @@ def calc_phev_power(surplus_w: float, config: Config, snapshot: Snapshot) -> flo
 
 def update_soc(soc: float, battery_w: float, slot_minutes: int,
                config: Config) -> float:
-    """Forward-simulate SOC for one slot, applying round-trip efficiency."""
+    """Forward-simulate SOC for one slot, applying round-trip efficiency.
+
+    Splits efficiency symmetrically: √η for charge, √η for discharge.
+    With η=0.85: √0.85≈0.922, so ~8% loss on each direction.
+    """
     energy_wh = battery_w * (slot_minutes / 60.0)
-    if energy_wh < 0:
-        # Discharge: account for losses
-        energy_wh *= config.round_trip_efficiency
+    eff_half = config.round_trip_efficiency ** 0.5
+    if energy_wh > 0:
+        energy_wh *= eff_half  # Charge losses
+    elif energy_wh < 0:
+        energy_wh *= eff_half  # Discharge losses
     soc += (energy_wh / config.battery_capacity_wh) * 100.0
     return max(config.min_soc_percent, min(config.max_soc_percent, soc))
 

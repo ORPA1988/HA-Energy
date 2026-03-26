@@ -132,8 +132,11 @@ class SungrowTouAdapter:
                 p2_soc = min(charge_max_soc, self._config.max_soc_percent)
 
             # Wrap-around protection: if end < start (crosses midnight),
-            # extend to end of day. Next cycle will handle tomorrow's plan.
+            # extend to end of day. SOC target remains → WR charges until reached.
             if charge_end <= charge_start:
+                logger.warning("TOU: Charge window crosses midnight (%s→%s), "
+                               "extending to 23:50. SOC target %d%% stays active.",
+                               charge_start, charge_end, p2_soc)
                 charge_end = "23:50"
 
             p1_end = charge_start

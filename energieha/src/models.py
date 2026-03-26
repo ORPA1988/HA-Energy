@@ -130,6 +130,10 @@ class Config:
 
     # EMHASS
     emhass_url: str = "http://localhost:5000"
+    export_price_eur: float = 0.10  # Feed-in tariff EUR/kWh (fix, not EPEX-dependent)
+
+    # Executor
+    mode_hold_seconds: int = 120  # Hysteresis: min seconds between mode changes
 
     # Timezone (set from HA config at startup)
     timezone: str = "Europe/Vienna"

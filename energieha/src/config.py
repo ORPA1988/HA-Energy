@@ -63,4 +63,24 @@ def load_config() -> Config:
         max_grid_charge_soc=int(data.get("max_grid_charge_soc", 80)),
         sungrow_tou_enabled=bool(data.get("sungrow_tou_enabled", False)),
         emhass_url=str(data.get("emhass_url", "http://localhost:5000")),
+        export_price_eur=float(data.get("export_price_eur", 0.10)),
+        mode_hold_seconds=int(data.get("mode_hold_seconds", 120)),
     )
+
+
+def validate_config(config: Config) -> bool:
+    """Validate config values. Returns True if valid."""
+    errors = []
+    if config.min_soc_percent >= config.max_soc_percent:
+        errors.append(f"min_soc ({config.min_soc_percent}) >= max_soc ({config.max_soc_percent})")
+    if config.max_grid_charge_soc > config.max_soc_percent:
+        errors.append(f"max_grid_charge_soc ({config.max_grid_charge_soc}) > max_soc ({config.max_soc_percent})")
+    if config.max_grid_charge_soc < config.min_soc_percent:
+        errors.append(f"max_grid_charge_soc ({config.max_grid_charge_soc}) < min_soc ({config.min_soc_percent})")
+    if not config.entity_battery_soc:
+        errors.append("entity_battery_soc is empty")
+    if config.round_trip_efficiency < 0.5 or config.round_trip_efficiency > 1.0:
+        errors.append(f"round_trip_efficiency ({config.round_trip_efficiency}) outside [0.5, 1.0]")
+    for e in errors:
+        logger.error("Config validation: %s", e)
+    return len(errors) == 0
