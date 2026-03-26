@@ -4,10 +4,10 @@
 
 ## Projekt-Ueberblick
 
-**EnergieHA** ist ein leichtgewichtiges Home Assistant Add-on fuer Energiemanagement. Es steuert eine Hausbatterie (Modus: charge/discharge/idle) und PHEV-Ladung (Leistung in W/A) basierend auf PV-Prognose (Solcast), Strompreisen (EPEX Spot) und aktuellem Verbrauch.
+**EnergieHA** ist ein leichtgewichtiges Home Assistant Add-on fuer Energiemanagement. Es steuert eine Hausbatterie ueber Sungrow TOU-Programme, basierend auf EMHASS LP-Optimierung, PV-Prognose (Solcast), Strompreisen (EPEX Spot) und aktuellem Verbrauch. PHEV-Ladung wird von evcc gesteuert.
 
 **Repository**: https://github.com/ORPA1988/HA-Energy
-**Version**: 0.3.1
+**Version**: 0.3.9
 **Sprache**: Python (kein Framework, nur `requests`)
 **Deployment**: HA Add-on Container (Alpine + Python)
 
@@ -134,28 +134,27 @@ WICHTIG: `pv_estimate` ist in **kW** (nicht W). Collector konvertiert automatisc
 String-Werte: `"Disconnected"`, `"InProgress"`, `"Connected"`, `"WaitScheduled"` etc.
 Collector erkennt `inprogress`, `charging`, `waitscheduled`, `connected` als "angeschlossen".
 
-## Status (v0.3.1, Stand 2026-03-26)
+## Status (v0.3.9, Stand 2026-03-26)
 
-**Laeuft im Dry-Run-Modus** (strategy=surplus). Alle Entities werden korrekt publiziert.
-EMHASS Add-on laeuft (v0.17.1), Sensoren vorhanden. Sungrow TOU Entities validiert.
+**LIVE-Betrieb** mit `strategy=emhass`, `sungrow_tou_enabled=true`, `dry_run=false`.
+Batterie wird aktiv gesteuert: Netzladung bei guenstigen Preisen (EMHASS LP-Optimierung).
+PHEV-Steuerung deaktiviert (wird ueber evcc gehandhabt).
 
-### Getestete Funktionen
-- [x] Surplus-Strategie: 96 Slots, SOC 15%→58%→52%, Preise korrekt
-- [x] Round-trip efficiency (85%) angewendet
-- [x] Dynamische Sunrise/Sunset von sun.sun (6:51/19:29 Wien)
-- [x] Modus-Hysterese (120s Mindesthaltezeit)
-- [x] SOC Safety Net im Planner
-- [x] Startup Entity-Validierung
-- [x] EMHASS Sensor-Format erkannt (battery_scheduled_power/soc)
-- [x] EMHASS Vorzeichen-Invertierung (+=discharge → -=charge)
-- [x] EMHASS Stunden→15min Slot-Mapping
-- [x] PHEV-Automation erstellt
+### Funktionierende Features
+- [x] EMHASS LP-Optimierung via REST API (auto-detect Docker URL)
+- [x] Sungrow TOU: 3 aktive + 3 Dummy-Programme, flexibel, Mitternacht-safe
+- [x] TOU P2: Grid nur bei Netzladung, Disabled+SOC fuer PV-Laden
+- [x] Surplus/Price/Forecast als Fallback-Strategien
+- [x] Round-trip efficiency (85%)
+- [x] Dynamische Sunrise/Sunset von sun.sun
+- [x] Modus-Hysterese (120s)
+- [x] SOC Safety Net + max_grid_charge_soc (80%)
+- [x] Startup Entity-Validierung + Error-Reporting in Status-Entity
+- [x] EMHASS Sensor-Format (battery_scheduled_power/soc), Vorzeichen, Stunden→15min
 
-### Naechste Schritte
-1. **Config aendern**: `strategy: "emhass"`, `sungrow_tou_enabled: true`, `dry_run: false`
-2. **EMHASS Live-Test**: Pruefen ob Optimierung aufgerufen wird
-3. **Sungrow TOU Live-Test**: Pruefen ob WR-Programme geschrieben werden
-4. **PHEV testen**: `phev_enabled: true` wenn Fahrzeug angeschlossen
+### PHEV
+PHEV wird NICHT von EnergieHA gesteuert. Das Auto wird ueber **evcc** (separates Add-on) gemanagt.
+PHEV-Code bleibt im Add-on (phev_enabled=false), wird aber nicht genutzt.
 
 ## Dateistruktur
 
