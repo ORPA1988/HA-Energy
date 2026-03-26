@@ -117,9 +117,9 @@ entity_phev_ampere_limit: "number.go_echarger_403613_set_max_ampere_limit"
 
 | Entity | Typ | Beschreibung |
 |---|---|---|
-| `sensor.energieha_status` | charge/discharge/idle | Aktueller Status |
-| `sensor.energieha_battery_plan` | W | Aktuelle Plan-Leistung + Timeline |
-| `sensor.energieha_planned_soc` | % | Projizierter End-SOC + Verlauf |
+| `sensor.energieha_status` | string | Aktueller Modus (charge/discharge/idle) + Strategie |
+| `sensor.energieha_battery_plan` | W | Aktuelle Plan-Leistung (Attr: Timeline als JSON) |
+| `sensor.energieha_planned_soc` | % | Projizierter End-SOC (Attr: Verlauf als JSON) |
 | `sensor.energieha_savings` | EUR | Geschaetzte Ersparnis vs. ohne Batterie |
 
 ### HA-Automation fuer PHEV (manuell erstellen)

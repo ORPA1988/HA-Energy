@@ -128,11 +128,7 @@ Collector erkennt `inprogress`, `charging`, `waitscheduled`, `connected` als "an
 
 ## Naechste Schritte (Prioritaet)
 
-1. **Add-on in HA installieren**: Repo in HA entfernen + neu hinzufuegen -> installieren -> starten
-2. **Ersten Dry-Run-Test** ausfuehren und Logs pruefen
-3. **Zeitzone-Fix**: Europe/Vienna statt UTC fuer Sonnenauf-/untergang
-4. **WR-Modus-Steuerung**: Welche Sungrow-Entities erlauben Modus-Aenderung?
-5. **PHEV-Automation**: HA-Automation erstellen die phev_target_ampere -> go-eCharger uebertraegt
+Siehe [DEVELOPMENT.md](DEVELOPMENT.md#was-nicht-funktioniert--noch-fehlt) fuer die vollstaendige priorisierte TODO-Liste (P0/P1/P2/P3).
 
 ## Dateistruktur
 
