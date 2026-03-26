@@ -5,7 +5,8 @@ PHEV: charge power tracks PV surplus, clamped to min/max charge limits.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from ..models import Config, ForecastPoint, Plan, PricePoint, Snapshot, TimeSlot
 
@@ -25,7 +26,8 @@ def plan_price_optimized(
     2. Pair cheapest grid-charge slots with most expensive discharge slots
     3. Forward-simulate SOC to enforce constraints
     """
-    now = datetime.now(timezone.utc)
+    tz = ZoneInfo(config.timezone)
+    now = datetime.now(tz)
     slot_minutes = config.slot_duration_min
     num_slots = (24 * 60) // slot_minutes
     slots = []
@@ -134,7 +136,7 @@ def plan_price_optimized(
                 sum(1 for s in slots if s.planned_battery_mode == "charge"),
                 sum(1 for s in slots if s.planned_battery_mode == "discharge"))
 
-    return Plan(created_at=now, strategy="price", slots=slots)
+    return Plan(created_at=now, strategy="price", slots=slots, tz=config.timezone)
 
 
 def _get_forecast_for_time(forecast: list[ForecastPoint], t: datetime) -> float:

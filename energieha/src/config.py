@@ -57,4 +57,5 @@ def load_config() -> Config:
         price_threshold_eur=data.get("price_threshold_eur", 0.15),
         estimated_daily_load_kwh=data.get("estimated_daily_load_kwh", 12.0),
         dry_run=data.get("dry_run", False),
+        sungrow_tou_enabled=data.get("sungrow_tou_enabled", False),
     )

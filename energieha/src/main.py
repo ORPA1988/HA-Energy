@@ -5,6 +5,7 @@ import signal
 import sys
 import time
 
+from . import __version__
 from .collector import Collector
 from .config import load_config
 from .entities import EntityPublisher
@@ -38,7 +39,7 @@ def main():
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 
-    logger.info("=== EnergieHA v0.1.0 starting ===")
+    logger.info("=== EnergieHA v%s starting ===", __version__)
 
     # Load configuration
     config = load_config()
@@ -66,6 +67,18 @@ def main():
         logger.error("Could not reach HA API after 10 attempts. Exiting.")
         sys.exit(1)
 
+    # Fetch timezone from HA config
+    ha_cfg = client.get_ha_config()
+    config.timezone = ha_cfg.get("time_zone", "Europe/Vienna")
+    logger.info("Timezone: %s", config.timezone)
+
+    # Sungrow TOU adapter (optional)
+    tou_adapter = None
+    if config.sungrow_tou_enabled:
+        from .sungrow_tou import SungrowTouAdapter
+        tou_adapter = SungrowTouAdapter(client, config)
+        logger.info("Sungrow TOU adapter enabled")
+
     # Main loop
     cycle = 0
     while _running:
@@ -73,7 +86,7 @@ def main():
         cycle_start = time.monotonic()
 
         try:
-            _run_cycle(collector, executor, publisher, config, cycle)
+            _run_cycle(collector, executor, publisher, config, cycle, tou_adapter)
         except Exception as e:
             logger.error("Cycle %d failed: %s", cycle, e, exc_info=True)
 
@@ -91,7 +104,7 @@ def main():
     logger.info("=== EnergieHA stopped ===")
 
 
-def _run_cycle(collector, executor, publisher, config, cycle_num):
+def _run_cycle(collector, executor, publisher, config, cycle_num, tou_adapter=None):
     """Execute one planning cycle."""
     # 1. Collect data
     snapshot = collector.get_snapshot()
@@ -111,10 +124,14 @@ def _run_cycle(collector, executor, publisher, config, cycle_num):
     # 2. Create plan
     plan = create_plan(snapshot, prices, pv_forecast, config)
 
-    # 3. Execute current slot
+    # 3. Execute current slot (publish sensor entities)
     executor.execute(plan)
 
-    # 4. Publish plan entities
+    # 4. Apply Sungrow TOU programs (if enabled)
+    if tou_adapter is not None:
+        tou_adapter.apply(plan, snapshot)
+
+    # 5. Publish plan entities
     publisher.publish(plan, snapshot)
 
 

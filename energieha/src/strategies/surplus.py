@@ -5,7 +5,8 @@ PHEV: charge power tracks PV surplus, clamped to min/max charge limits.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from ..models import Config, ForecastPoint, Plan, PricePoint, Snapshot, TimeSlot
 
@@ -26,7 +27,8 @@ def plan_surplus(
     3. Charge house battery (mode only, inverter sets power)
     4. Export to grid
     """
-    now = datetime.now(timezone.utc)
+    tz = ZoneInfo(config.timezone)
+    now = datetime.now(tz)
     slot_minutes = config.slot_duration_min
     num_slots = (24 * 60) // slot_minutes
     slots = []
@@ -96,7 +98,7 @@ def plan_surplus(
                 slots[-1].projected_soc if slots else soc,
                 "connected" if snapshot.phev_connected else "off")
 
-    return Plan(created_at=now, strategy="surplus", slots=slots)
+    return Plan(created_at=now, strategy="surplus", slots=slots, tz=config.timezone)
 
 
 def _get_forecast_for_time(forecast: list[ForecastPoint], t: datetime) -> float:

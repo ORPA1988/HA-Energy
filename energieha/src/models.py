@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 
 @dataclass
@@ -64,11 +65,12 @@ class Plan:
     created_at: datetime
     strategy: str
     slots: list = field(default_factory=list)  # list[TimeSlot]
+    tz: str = "Europe/Vienna"
 
     @property
     def current_slot(self) -> "TimeSlot | None":
         """Return the slot that covers the current time."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(ZoneInfo(self.tz))
         for slot in self.slots:
             end = slot.start + timedelta(minutes=slot.duration_min)
             if slot.start <= now < end:
@@ -116,6 +118,12 @@ class Config:
     estimated_daily_load_kwh: float = 12.0
 
     dry_run: bool = False
+
+    # Sungrow TOU Steuerung
+    sungrow_tou_enabled: bool = False
+
+    # Timezone (set from HA config at startup)
+    timezone: str = "Europe/Vienna"
 
     @property
     def battery_capacity_wh(self) -> float:

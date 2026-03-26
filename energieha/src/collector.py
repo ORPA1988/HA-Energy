@@ -161,14 +161,24 @@ class Collector:
 
     @staticmethod
     def _parse_timestamp(value) -> datetime | None:
-        """Parse a timestamp string to UTC datetime."""
+        """Parse a timestamp string to timezone-aware datetime."""
         if not value:
             return None
         if isinstance(value, datetime):
             return value
 
         value = str(value)
-        # Try ISO format variants
+
+        # Fast path: fromisoformat handles most HA timestamp formats
+        try:
+            dt = datetime.fromisoformat(value)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except ValueError:
+            pass
+
+        # Fallback: manual format parsing
         for fmt in ("%Y-%m-%dT%H:%M:%S%z",
                     "%Y-%m-%dT%H:%M:%S.%f%z",
                     "%Y-%m-%dT%H:%M:%S",

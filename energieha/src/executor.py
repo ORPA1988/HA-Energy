@@ -10,7 +10,8 @@ PHEV charge power is adjusted to PV surplus within configured min/max limits.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from .ha_client import HaClient
 from .models import Config, Plan
@@ -52,7 +53,7 @@ class Executor:
             logger.debug("Control unchanged (%s, PHEV %dW) – skipping", mode, phev_w)
             return
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(ZoneInfo(self._config.timezone)).isoformat()
 
         try:
             # Battery mode (inverter handles power)
@@ -124,7 +125,7 @@ class Executor:
 
     def _publish_idle(self) -> None:
         """Publish idle state for all control entities."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(ZoneInfo(self._config.timezone)).isoformat()
         try:
             self._client.set_state(f"{PREFIX}_battery_mode", MODE_IDLE, {
                 "friendly_name": "EnergieHA Battery Mode",

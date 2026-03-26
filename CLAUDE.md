@@ -7,20 +7,28 @@
 **EnergieHA** ist ein leichtgewichtiges Home Assistant Add-on fuer Energiemanagement. Es steuert eine Hausbatterie (Modus: charge/discharge/idle) und PHEV-Ladung (Leistung in W/A) basierend auf PV-Prognose (Solcast), Strompreisen (EPEX Spot) und aktuellem Verbrauch.
 
 **Repository**: https://github.com/ORPA1988/HA-Energy
-**Version**: 0.1.0
+**Version**: 0.2.0
 **Sprache**: Python (kein Framework, nur `requests`)
 **Deployment**: HA Add-on Container (Alpine + Python)
 
 ## Architektur-Entscheidungen
 
-### Batterie: Nur Modus, keine Leistung
-Die Ladeleistung der Hausbatterie wird durch den Sungrow-Wechselrichter bestimmt. Das Add-on gibt nur den Modus vor (charge/discharge/idle). Die `planned_battery_w` in TimeSlot ist rein informativ (geschaetzt).
+### Batterie: Modus + Sungrow TOU-Steuerung
+Die Ladeleistung der Hausbatterie wird durch den Sungrow-Wechselrichter bestimmt. Das Add-on gibt den Modus vor (charge/discharge/idle) und programmiert optional die 6 TOU-Programme des Wechselrichters direkt (`sungrow_tou_enabled: true`).
+
+**Sungrow TOU-Mapping:**
+- `charge` → `select.inverter_program_N_charging = "Grid"`, SOC-Ziel = geplanter SOC%
+- `discharge`/`idle` → `charging = "Disabled"`, SOC = min_soc% (Load First entlaedt automatisch)
+- Der 24h-Plan (96 Slots) wird auf max. 6 Programme konsolidiert
+- Change-Detection: Programme werden nur geschrieben wenn sich Werte aendern
 
 ### PHEV: Leistung folgt PV-Ueberschuss
-Die PHEV-Ladeleistung wird aktiv gesteuert. Das Add-on berechnet die optimale Leistung (W), konvertiert zu Ampere (W / 230V, clamp 6-16A) und publiziert `sensor.energieha_phev_target_ampere`. Eine HA-Automation muss erstellt werden, die diesen Wert auf `number.go_echarger_403613_set_max_ampere_limit` uebertraegt.
+Die PHEV-Ladeleistung wird aktiv gesteuert. Das Add-on berechnet die optimale Leistung (W), konvertiert zu Ampere (W / 230V, clamp 6-16A) und publiziert `sensor.energieha_phev_target_ampere`. Die HA-Automation `automation.energieha_phev_ampere_go_echarger` uebertraegt diesen Wert automatisch auf die go-eCharger Wallbox.
 
-### Steuerung indirekt via Entitaeten
-Das Add-on steuert KEINE Geraete direkt. Es publiziert Sollwerte als `sensor.energieha_*` Entitaeten. Der Benutzer erstellt HA-Automations die auf diese Entitaeten reagieren. Grund: Entkopplung vom spezifischen WR-/Wallbox-Hersteller.
+### Steuerung: Hybrid (indirekt + direkt)
+- **Sensoren**: Publiziert `sensor.energieha_*` Entitaeten fuer Dashboard-Sichtbarkeit
+- **Sungrow TOU**: Programmiert die WR TOU-Programme direkt (opt-in via Config)
+- **PHEV**: HA-Automation uebertraegt Ampere-Wert auf go-eCharger
 
 ### Ressourcenschonung
 - Change-Detection: API-Writes nur bei geaenderten Werten
@@ -128,7 +136,12 @@ Collector erkennt `inprogress`, `charging`, `waitscheduled`, `connected` als "an
 
 ## Naechste Schritte (Prioritaet)
 
-Siehe [DEVELOPMENT.md](DEVELOPMENT.md#was-nicht-funktioniert--noch-fehlt) fuer die vollstaendige priorisierte TODO-Liste (P0/P1/P2/P3).
+1. **Add-on in HA installieren**: Repo in HA entfernen + neu hinzufuegen -> v0.2.0 installieren -> starten
+2. **Ersten Dry-Run-Test**: `dry_run: true`, `sungrow_tou_enabled: true` -> Logs pruefen
+3. **Live-Test**: `dry_run: false` -> Inverter-Programme in HA Developer Tools pruefen
+4. **PHEV testen**: PHEV anschliessen, `phev_enabled: true` -> Ampere-Wert pruefen
+
+Siehe auch [DEVELOPMENT.md](DEVELOPMENT.md#was-nicht-funktioniert--noch-fehlt) fuer weitere Details.
 
 ## Dateistruktur
 
@@ -154,6 +167,7 @@ HA-Energy/
         |-- planner.py     <- Strategie-Dispatcher + Fallback
         |-- executor.py    <- Steuer-Entitaeten publizieren
         |-- entities.py    <- Info-Entitaeten publizieren
+        |-- sungrow_tou.py <- Sungrow TOU-Adapter (6 Programme)
         |-- strategies/
             |-- __init__.py
             |-- surplus.py    <- PV-Ueberschuss-Modus

@@ -1,5 +1,5 @@
 name: "EnergieHA"
-version: "0.1.0"
+version: "0.2.0"
 slug: "energieha"
 description: "Lightweight energy management for PV, battery, grid and consumers"
 url: "https://github.com/ORPA1988/HA-Energy"
@@ -53,6 +53,9 @@ options:
 
   dry_run: true
 
+  # Sungrow TOU Steuerung (programmiert die 6 TOU-Programme des Wechselrichters)
+  sungrow_tou_enabled: false
+
 schema:
   strategy: "list(surplus|price|forecast)"
   cycle_seconds: "int(60,900)"
@@ -82,3 +85,4 @@ schema:
   price_threshold_eur: "float(0,)"
   estimated_daily_load_kwh: "float(0,)"
   dry_run: bool
+  sungrow_tou_enabled: bool

@@ -5,12 +5,14 @@ PHEV: charge power tracks PV surplus, clamped to min/max charge limits.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from ..models import Config, ForecastPoint, Plan, PricePoint, Snapshot, TimeSlot
 
 logger = logging.getLogger(__name__)
 
+# Daytime boundaries in local time (approximate, good enough for Central Europe)
 SUNRISE_HOUR = 6
 SUNSET_HOUR = 20
 
@@ -29,7 +31,8 @@ def plan_forecast(
     3. House battery (mode only)
     4. Grid export
     """
-    now = datetime.now(timezone.utc)
+    tz = ZoneInfo(config.timezone)
+    now = datetime.now(tz)
     slot_minutes = config.slot_duration_min
     num_slots = (24 * 60) // slot_minutes
 
@@ -54,7 +57,7 @@ def plan_forecast(
     cheapest_night_price = float("inf")
     if prices:
         for pp in prices:
-            h = pp.start.hour
+            h = pp.start.astimezone(tz).hour
             if h < SUNRISE_HOUR or h >= SUNSET_HOUR:
                 cheapest_night_price = min(cheapest_night_price, pp.price_eur_kwh)
 
@@ -67,7 +70,8 @@ def plan_forecast(
         pv_w = _get_forecast_for_time(pv_forecast, slot_start)
         price = _get_price_for_time(prices, slot_start)
         load_w = snapshot.load_power_w if i == 0 else config.load_per_slot_w
-        hour = slot_start.hour
+        # Use local hour for day/night classification
+        hour = slot_start.astimezone(tz).hour
 
         surplus_w = pv_w - load_w
         battery_mode = "idle"
@@ -138,7 +142,7 @@ def plan_forecast(
                 pv_coverage * 100, snapshot.battery_soc,
                 slots[-1].projected_soc if slots else soc)
 
-    return Plan(created_at=now, strategy="forecast", slots=slots)
+    return Plan(created_at=now, strategy="forecast", slots=slots, tz=config.timezone)
 
 
 def _get_forecast_for_time(forecast: list[ForecastPoint], t: datetime) -> float:
