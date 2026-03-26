@@ -36,7 +36,7 @@ options:
   entity_phev_connected: "sensor.psa_charging_status"
   entity_phev_ampere_limit: "number.go_echarger_403613_set_max_ampere_limit"
 
-  # Sensor-Entitäten (Inverter / Netz / PV)
+  # Sensor-Entitaeten (Inverter / Netz / PV)
   entity_battery_soc: "sensor.inverter_battery"
   entity_battery_power: "sensor.inverter_battery_power"
   entity_pv_power: "sensor.inverter_pv_power"
@@ -51,7 +51,7 @@ options:
   price_threshold_eur: 0.15
   estimated_daily_load_kwh: 12.0
 
-  dry_run: false
+  dry_run: true
 
 schema:
   strategy: "list(surplus|price|forecast)"
