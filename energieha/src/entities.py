@@ -95,11 +95,16 @@ class EntityPublisher:
         })
 
     def _publish_savings(self, plan: Plan) -> None:
-        """Publish estimated cost savings."""
+        """Publish estimated cost savings.
+
+        Compares planned grid cost (with battery optimization) against
+        a baseline without battery (all load from grid when PV < load).
+        """
         grid_import_wh = 0.0
         grid_export_wh = 0.0
         cost_with_battery = 0.0
         cost_without_battery = 0.0
+        pv_self_consumed_wh = 0.0
 
         for slot in plan.slots:
             hours = slot.duration_min / 60.0
@@ -112,14 +117,21 @@ class EntityPublisher:
             else:
                 grid_export_wh += abs(grid_w) * hours
 
-            # Without battery (all deficit from grid)
+            # PV directly consumed by load (not exported, not stored)
+            pv_to_load = min(slot.pv_forecast_w, slot.load_estimate_w)
+            pv_self_consumed_wh += pv_to_load * hours
+
+            # Without battery: all deficit from grid, surplus exported
             deficit_w = max(0, slot.load_estimate_w - slot.pv_forecast_w)
             cost_without_battery += (deficit_w / 1000.0) * hours * slot.price_eur_kwh
 
         savings = max(0, cost_without_battery - cost_with_battery)
         total_load_wh = sum(s.load_estimate_w * s.duration_min / 60.0 for s in plan.slots)
-        self_consumption = ((total_load_wh - grid_import_wh) / total_load_wh * 100.0
+        # Self-consumption: % of load covered by PV + battery (not grid)
+        load_from_grid = max(0, grid_import_wh - max(0, grid_import_wh - total_load_wh))
+        self_consumption = ((total_load_wh - load_from_grid) / total_load_wh * 100.0
                             if total_load_wh > 0 else 0)
+        self_consumption = max(0, min(100, self_consumption))
 
         self._client.set_state(f"{PREFIX}_savings", str(round(savings, 2)), {
             "friendly_name": "EnergieHA Estimated Savings",

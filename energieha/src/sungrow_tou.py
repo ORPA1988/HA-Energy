@@ -88,42 +88,53 @@ class SungrowTouAdapter:
         """
         from .strategies.helpers import is_grid_charging
 
-        # Scan plan for charge window
+        # Scan plan for the FIRST contiguous charge block.
+        # Important: plan may span midnight (e.g. 23:15 today → 23:15 tomorrow).
+        # We only use the first charge block to avoid wrap-around issues.
         charge_start = None
         charge_end = None
         charge_max_soc = 0
         has_grid_charge = False
+        in_charge_block = False
 
         for slot in plan.slots:
-            if slot.planned_battery_mode != "charge" or slot.planned_battery_w <= 50:
-                continue
+            is_charge = (slot.planned_battery_mode == "charge"
+                         and slot.planned_battery_w > 50)
 
-            local = slot.start.astimezone(tz)
-            local_end = local + timedelta(minutes=slot.duration_min)
-            hhmm = local.strftime("%H:%M")
-            end_hhmm = local_end.strftime("%H:%M")
+            if is_charge:
+                local = slot.start.astimezone(tz)
+                local_end = local + timedelta(minutes=slot.duration_min)
 
-            if charge_start is None:
-                charge_start = hhmm
-            charge_end = end_hhmm
-            charge_max_soc = max(charge_max_soc, round(slot.projected_soc))
+                if charge_start is None:
+                    charge_start = local.strftime("%H:%M")
+                    in_charge_block = True
 
-            if is_grid_charging(slot.pv_forecast_w, slot.load_estimate_w,
-                                slot.planned_battery_w):
-                has_grid_charge = True
+                if in_charge_block:
+                    charge_end = local_end.strftime("%H:%M")
+                    charge_max_soc = max(charge_max_soc, round(slot.projected_soc))
+                    if is_grid_charging(slot.pv_forecast_w, slot.load_estimate_w,
+                                        slot.planned_battery_w):
+                        has_grid_charge = True
+
+            elif in_charge_block:
+                # First non-charge slot after charge block → block ended
+                break
 
         min_soc = self._config.min_soc_percent
 
         # Determine P2 charging mode and SOC target
         if charge_start and charge_max_soc > min_soc:
             if has_grid_charge:
-                # Grid-charging: battery charges from grid + PV
                 p2_charging = "Grid"
                 p2_soc = min(charge_max_soc, self._config.max_grid_charge_soc)
             else:
-                # PV-only: battery charges exclusively from PV, house from grid
                 p2_charging = "Disabled"
                 p2_soc = min(charge_max_soc, self._config.max_soc_percent)
+
+            # Wrap-around protection: if end < start (crosses midnight),
+            # extend to end of day. Next cycle will handle tomorrow's plan.
+            if charge_end <= charge_start:
+                charge_end = "23:50"
 
             p1_end = charge_start
             p2_start = charge_start
