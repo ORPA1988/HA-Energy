@@ -55,8 +55,8 @@ def plan_emhass(
     if not client.is_available():
         raise ConnectionError(f"EMHASS not reachable at {config.emhass_url}")
 
-    # Call EMHASS optimization
-    soc_init = max(snapshot.battery_soc, config.min_soc_percent)
+    # Call EMHASS optimization — use actual SOC (may be below min_soc)
+    soc_init = snapshot.battery_soc
     soc_final = config.max_grid_charge_soc  # Target: grid-charge limit
 
     client.dayahead_optim(

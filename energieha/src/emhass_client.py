@@ -88,8 +88,10 @@ class EmhassClient:
         if len(prices) < len(pv_forecast):
             errors.append(f"Too few price points: {len(prices)} < {len(pv_forecast)}")
 
-        if not (min_soc <= soc_init <= max_soc):
-            errors.append(f"SOC init {soc_init}% outside [{min_soc}-{max_soc}]%")
+        # SOC can be below min_soc in real operation (battery depleted)
+        # Only reject impossible values (negative or >100%)
+        if not (0 <= soc_init <= 100):
+            errors.append(f"SOC init {soc_init}% outside [0-100]%")
 
         if any(p < 0 for p in pv_forecast):
             errors.append("Negative PV forecast values")
