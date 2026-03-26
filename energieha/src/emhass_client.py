@@ -8,12 +8,39 @@ logger = logging.getLogger(__name__)
 
 TIMEOUT = 60  # EMHASS optimization can take a while on RPi
 
+# HA add-ons run in separate Docker containers.
+# localhost doesn't work — must use Docker hostname (slug with hyphens).
+EMHASS_URLS = [
+    "http://5b918bf2-emhass:5000",      # Docker hostname (slug with hyphens)
+    "http://5b918bf2_emhass:5000",       # Alternative with underscores
+    "http://addon_5b918bf2_emhass:5000", # Supervisor proxy format
+    "http://localhost:5000",              # Fallback if running on same host
+]
+
 
 class EmhassClient:
     """Calls EMHASS day-ahead optimization and reads results."""
 
-    def __init__(self, url: str = "http://localhost:5000"):
-        self.url = url.rstrip("/")
+    def __init__(self, url: str = None):
+        if url and url != "http://localhost:5000":
+            # User provided a specific URL
+            self.url = url.rstrip("/")
+        else:
+            # Auto-detect working URL
+            self.url = self._find_working_url()
+
+    def _find_working_url(self) -> str:
+        """Try known EMHASS URLs and return the first one that works."""
+        for url in EMHASS_URLS:
+            try:
+                resp = requests.get(f"{url}/", timeout=3)
+                if resp.status_code < 500:
+                    logger.info("EMHASS: found at %s", url)
+                    return url
+            except requests.RequestException:
+                continue
+        logger.warning("EMHASS: not reachable at any known URL, using default")
+        return EMHASS_URLS[0]
 
     def is_available(self) -> bool:
         """Check if EMHASS API is reachable."""
