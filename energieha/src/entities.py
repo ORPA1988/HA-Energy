@@ -33,14 +33,18 @@ class EntityPublisher:
         slot = plan.current_slot
         mode = slot.planned_battery_mode if slot else "idle"
 
-        self._client.set_state(f"{PREFIX}_status", mode, {
+        attrs = {
             "friendly_name": "EnergieHA Status",
             "strategy": plan.strategy,
             "last_plan_time": plan.created_at.isoformat(),
             "phev_active": slot.planned_phev_w > 0 if slot else False,
             "dry_run": self._config.dry_run,
             "icon": "mdi:battery-sync",
-        })
+        }
+        # Show strategy fallback error if present
+        if hasattr(plan, "strategy_error") and plan.strategy_error:
+            attrs["strategy_error"] = plan.strategy_error
+        self._client.set_state(f"{PREFIX}_status", mode, attrs)
 
     def _publish_battery_plan(self, plan: Plan) -> None:
         """Publish current battery plan with timeline."""

@@ -80,8 +80,10 @@ def create_plan(
         return plan
     except Exception as e:
         logger.error("Strategy '%s' failed: %s – falling back to surplus",
-                      strategy_name, e)
+                      strategy_name, e, exc_info=True)
+        # Store error for visibility in status entity
         plan = plan_surplus(snapshot, prices, pv_forecast, config)
+        plan.strategy_error = f"{strategy_name}: {e}"
         _enforce_soc_limits(plan, config)
         return plan
 
