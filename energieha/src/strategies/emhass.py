@@ -74,8 +74,18 @@ def plan_emhass(
     batt_forecast = _read_forecast_sensor(ha, "sensor.p_batt_forecast", num_slots)
     soc_forecast = _read_forecast_sensor(ha, "sensor.soc_batt_forecast", num_slots)
 
-    logger.info("EMHASS results: %d batt points, %d soc points",
-                len(batt_forecast), len(soc_forecast))
+    # Check data freshness and availability
+    batt_state = ha.get_state("sensor.p_batt_forecast")
+    if batt_state:
+        last_updated = batt_state.get("last_updated", "")
+        logger.info("EMHASS results: %d batt points, %d soc points (updated: %s)",
+                    len(batt_forecast), len(soc_forecast), last_updated[:19])
+    else:
+        logger.info("EMHASS results: %d batt points, %d soc points",
+                    len(batt_forecast), len(soc_forecast))
+
+    if not batt_forecast:
+        raise ValueError("EMHASS returned no battery forecast data")
 
     # EMHASS uses hourly resolution — map to our slot resolution
     # Each EMHASS hour covers (60/slot_minutes) slots

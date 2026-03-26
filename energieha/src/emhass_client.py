@@ -87,7 +87,16 @@ class EmhassClient:
             logger.warning("EMHASS: non-JSON response: %s", resp.text[:200])
             return {"status": "ok", "raw": resp.text[:200]}
 
-        logger.info("EMHASS: optimization complete")
+        logger.info("EMHASS: optimization complete, triggering publish-data")
+
+        # Force EMHASS to publish results to HA sensors
+        try:
+            pub_resp = requests.post(f"{self.url}/action/publish-data",
+                                      json={}, timeout=30)
+            logger.info("EMHASS: publish-data status=%d", pub_resp.status_code)
+        except requests.RequestException as e:
+            logger.warning("EMHASS: publish-data failed: %s", e)
+
         return result
 
     @staticmethod
