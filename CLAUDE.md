@@ -7,7 +7,7 @@
 **EnergieHA** ist ein leichtgewichtiges Home Assistant Add-on fuer Energiemanagement. Es steuert eine Hausbatterie (Modus: charge/discharge/idle) und PHEV-Ladung (Leistung in W/A) basierend auf PV-Prognose (Solcast), Strompreisen (EPEX Spot) und aktuellem Verbrauch.
 
 **Repository**: https://github.com/ORPA1988/HA-Energy
-**Version**: 0.2.0
+**Version**: 0.3.1
 **Sprache**: Python (kein Framework, nur `requests`)
 **Deployment**: HA Add-on Container (Alpine + Python)
 
@@ -134,14 +134,28 @@ WICHTIG: `pv_estimate` ist in **kW** (nicht W). Collector konvertiert automatisc
 String-Werte: `"Disconnected"`, `"InProgress"`, `"Connected"`, `"WaitScheduled"` etc.
 Collector erkennt `inprogress`, `charging`, `waitscheduled`, `connected` als "angeschlossen".
 
-## Naechste Schritte (Prioritaet)
+## Status (v0.3.1, Stand 2026-03-26)
 
-1. **Add-on in HA installieren**: Repo in HA entfernen + neu hinzufuegen -> v0.2.0 installieren -> starten
-2. **Ersten Dry-Run-Test**: `dry_run: true`, `sungrow_tou_enabled: true` -> Logs pruefen
-3. **Live-Test**: `dry_run: false` -> Inverter-Programme in HA Developer Tools pruefen
-4. **PHEV testen**: PHEV anschliessen, `phev_enabled: true` -> Ampere-Wert pruefen
+**Laeuft im Dry-Run-Modus** (strategy=surplus). Alle Entities werden korrekt publiziert.
+EMHASS Add-on laeuft (v0.17.1), Sensoren vorhanden. Sungrow TOU Entities validiert.
 
-Siehe auch [DEVELOPMENT.md](DEVELOPMENT.md#was-nicht-funktioniert--noch-fehlt) fuer weitere Details.
+### Getestete Funktionen
+- [x] Surplus-Strategie: 96 Slots, SOC 15%→58%→52%, Preise korrekt
+- [x] Round-trip efficiency (85%) angewendet
+- [x] Dynamische Sunrise/Sunset von sun.sun (6:51/19:29 Wien)
+- [x] Modus-Hysterese (120s Mindesthaltezeit)
+- [x] SOC Safety Net im Planner
+- [x] Startup Entity-Validierung
+- [x] EMHASS Sensor-Format erkannt (battery_scheduled_power/soc)
+- [x] EMHASS Vorzeichen-Invertierung (+=discharge → -=charge)
+- [x] EMHASS Stunden→15min Slot-Mapping
+- [x] PHEV-Automation erstellt
+
+### Naechste Schritte
+1. **Config aendern**: `strategy: "emhass"`, `sungrow_tou_enabled: true`, `dry_run: false`
+2. **EMHASS Live-Test**: Pruefen ob Optimierung aufgerufen wird
+3. **Sungrow TOU Live-Test**: Pruefen ob WR-Programme geschrieben werden
+4. **PHEV testen**: `phev_enabled: true` wenn Fahrzeug angeschlossen
 
 ## Dateistruktur
 
@@ -168,11 +182,14 @@ HA-Energy/
         |-- executor.py    <- Steuer-Entitaeten publizieren
         |-- entities.py    <- Info-Entitaeten publizieren
         |-- sungrow_tou.py <- Sungrow TOU-Adapter (6 Programme)
+        |-- emhass_client.py <- EMHASS REST API Client
         |-- strategies/
             |-- __init__.py
+            |-- helpers.py    <- Gemeinsame Funktionen (SOC, Grid, PHEV)
             |-- surplus.py    <- PV-Ueberschuss-Modus
             |-- price.py      <- Preisoptimiert (3-Pass Greedy)
             |-- forecast.py   <- PV-Prognose-basiert
+            |-- emhass.py     <- EMHASS LP-Optimierung
 ```
 
 ## Versionierung
