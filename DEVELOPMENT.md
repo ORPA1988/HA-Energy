@@ -123,34 +123,7 @@ sensor.psa_charging_status       -> "Disconnected" / "InProgress" / "Connected"
 
 ## Projektstruktur
 
-```
-HA-Energy/                        <- GitHub Repo Root
-|-- .gitignore
-|-- README.md                     <- Dieses Dokument
-|-- DEVELOPMENT.md                <- Entwicklungsplan (dieses Dokument)
-|-- CHANGELOG.md                  <- Versionshistorie
-|-- CLAUDE.md                     <- Kontext fuer Claude Code (naechster Chat)
-|-- repository.json               <- HA Add-on Repository Metadaten
-|-- energieha/                    <- Add-on Ordner (slug = energieha)
-|   |-- config.yaml               <- Add-on Definition + Schema + Defaults
-|   |-- Dockerfile                <- Alpine + Python + py3-requests
-|   |-- run.sh                    <- Startskript (bashio + python3 -m energieha.main)
-|   |-- src/                      <- Python-Paket (wird zu /app/energieha/ im Container)
-|       |-- __init__.py
-|       |-- main.py               <- Hauptschleife
-|       |-- config.py             <- Config-Loader
-|       |-- models.py             <- Dataclasses
-|       |-- ha_client.py          <- HA REST Client
-|       |-- collector.py          <- Sensor-Daten sammeln
-|       |-- planner.py            <- Strategie-Dispatcher
-|       |-- executor.py           <- Steuer-Entitaeten publizieren
-|       |-- entities.py           <- Info-Entitaeten publizieren
-|       |-- strategies/
-|           |-- __init__.py
-|           |-- surplus.py        <- PV-Ueberschuss-Modus
-|           |-- price.py          <- Preisoptimierter Modus
-|           |-- forecast.py       <- PV-Prognose-Modus
-```
+Siehe [CLAUDE.md](CLAUDE.md#dateistruktur) fuer die aktuelle Dateistruktur.
 
 ## Technische Details
 
