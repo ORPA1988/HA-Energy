@@ -109,6 +109,17 @@ def main():
             _run_cycle(collector, executor, publisher, config, cycle, tou_adapter)
         except Exception as e:
             logger.error("Cycle %d failed: %s", cycle, e, exc_info=True)
+            # Write error to status entity so it's visible in HA
+            try:
+                client.set_state("sensor.energieha_status", "error", {
+                    "friendly_name": "EnergieHA Status",
+                    "icon": "mdi:alert-circle",
+                    "error": str(e),
+                    "cycle": cycle,
+                    "version": __version__,
+                })
+            except Exception:
+                pass
 
         # Sleep until next cycle
         elapsed = time.monotonic() - cycle_start
