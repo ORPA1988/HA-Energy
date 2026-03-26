@@ -69,8 +69,23 @@ class EmhassClient:
 
         resp = requests.post(f"{self.url}/action/dayahead-optim",
                              json=payload, timeout=TIMEOUT)
+
+        logger.info("EMHASS: response status=%d, content-type=%s, body=%s",
+                     resp.status_code,
+                     resp.headers.get("content-type", "unknown"),
+                     resp.text[:500] if resp.text else "(empty)")
+
         resp.raise_for_status()
-        result = resp.json()
+
+        if not resp.text or not resp.text.strip():
+            logger.warning("EMHASS: empty response body — optimization may have succeeded silently")
+            return {"status": "ok"}
+
+        try:
+            result = resp.json()
+        except ValueError:
+            logger.warning("EMHASS: non-JSON response: %s", resp.text[:200])
+            return {"status": "ok", "raw": resp.text[:200]}
 
         logger.info("EMHASS: optimization complete")
         return result
