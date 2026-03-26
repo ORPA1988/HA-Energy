@@ -8,6 +8,7 @@ import time
 from . import __version__
 from .collector import Collector
 from .config import load_config
+from .models import Config
 from .entities import EntityPublisher
 from .executor import Executor
 from .ha_client import HaClient
@@ -40,9 +41,15 @@ def main():
     signal.signal(signal.SIGINT, _handle_signal)
 
     logger.info("=== EnergieHA v%s starting ===", __version__)
+    logger.info("Python %s", sys.version)
 
     # Load configuration
-    config = load_config()
+    try:
+        config = load_config()
+    except Exception as e:
+        logger.error("Failed to load config: %s", e, exc_info=True)
+        config = Config()
+
     logger.info("Strategy: %s | Cycle: %ds | Slots: %dmin | Battery: %.0f kWh (SOC %d%%–%d%%)",
                 config.strategy, config.cycle_seconds, config.slot_duration_min,
                 config.battery_capacity_kwh, config.min_soc_percent, config.max_soc_percent)
@@ -52,9 +59,7 @@ def main():
 
     # Initialize components
     client = HaClient()
-    collector = Collector(client, config)
-    executor = Executor(client, config)
-    publisher = EntityPublisher(client, config)
+    logger.info("HA client: %s", client._base_url)
 
     # Wait for HA to be available
     for attempt in range(10):
@@ -67,10 +72,25 @@ def main():
         logger.error("Could not reach HA API after 10 attempts. Exiting.")
         sys.exit(1)
 
+    # Publish startup heartbeat so we can see the add-on is alive
+    try:
+        client.set_state("sensor.energieha_status", "starting", {
+            "friendly_name": "EnergieHA Status",
+            "icon": "mdi:battery-sync",
+            "version": __version__,
+        })
+        logger.info("Heartbeat entity published")
+    except Exception as e:
+        logger.error("Failed to publish heartbeat: %s", e)
+
     # Fetch timezone from HA config
     ha_cfg = client.get_ha_config()
     config.timezone = ha_cfg.get("time_zone", "Europe/Vienna")
     logger.info("Timezone: %s", config.timezone)
+
+    collector = Collector(client, config)
+    executor = Executor(client, config)
+    publisher = EntityPublisher(client, config)
 
     # Sungrow TOU adapter (optional)
     tou_adapter = None
