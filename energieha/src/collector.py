@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from .ha_client import HaClient
 from .models import Config, ForecastPoint, PricePoint, Snapshot
@@ -105,6 +106,14 @@ class Collector:
                 prices.append(PricePoint(
                     start=now, end=now + timedelta(hours=1), price_eur_kwh=current))
 
+        # Freshness check
+        if prices:
+            now = datetime.now(timezone.utc)
+            newest = max(p.end for p in prices)
+            age_hours = (now - newest).total_seconds() / 3600
+            if age_hours > 24:
+                logger.warning("Price data is %.0fh old — may be stale", age_hours)
+
         logger.info("Collected %d price points", len(prices))
         return prices
 
@@ -158,6 +167,18 @@ class Collector:
 
         logger.info("Collected %d PV forecast points", len(forecasts))
         return forecasts
+
+    def get_sun_times(self) -> tuple[int, int]:
+        """Read sunrise/sunset hours from sun.sun entity."""
+        state = self._client.get_state("sun.sun")
+        if state:
+            attrs = state.get("attributes", {})
+            sunrise = self._parse_timestamp(attrs.get("next_rising"))
+            sunset = self._parse_timestamp(attrs.get("next_setting"))
+            if sunrise and sunset:
+                tz = ZoneInfo(self._config.timezone)
+                return sunrise.astimezone(tz).hour, sunset.astimezone(tz).hour
+        return 6, 20  # Fallback for Central Europe
 
     @staticmethod
     def _parse_timestamp(value) -> datetime | None:

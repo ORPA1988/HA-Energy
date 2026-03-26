@@ -30,11 +30,14 @@ MIN_POWER_THRESHOLD_W = 50
 class Executor:
     """Publishes control parameters as add-on-owned HA sensor entities."""
 
+    MIN_MODE_HOLD_SECONDS = 120  # Don't flip modes faster than 2 minutes
+
     def __init__(self, client: HaClient, config: Config):
         self._client = client
         self._config = config
         self._last_mode = None
         self._last_phev_w = None
+        self._last_mode_change = None  # datetime of last mode change
 
     def execute(self, plan: Plan) -> None:
         """Publish control parameters for the current time slot."""
@@ -47,6 +50,15 @@ class Executor:
         mode = slot.planned_battery_mode
         phev_w = round(slot.planned_phev_w)
         grid_w = round(slot.planned_grid_w)
+
+        # Hysteresis: don't flip modes too fast
+        if (mode != self._last_mode and self._last_mode_change is not None):
+            now_dt = datetime.now(ZoneInfo(self._config.timezone))
+            elapsed = (now_dt - self._last_mode_change).total_seconds()
+            if elapsed < self.MIN_MODE_HOLD_SECONDS:
+                logger.debug("Hysteresis: holding %s for %ds more",
+                             self._last_mode, self.MIN_MODE_HOLD_SECONDS - elapsed)
+                mode = self._last_mode
 
         # Only write if values changed
         if mode == self._last_mode and phev_w == self._last_phev_w:
@@ -117,6 +129,8 @@ class Executor:
         except Exception as e:
             logger.error("Failed to publish control entities: %s", e)
 
+        if mode != self._last_mode:
+            self._last_mode_change = datetime.now(ZoneInfo(self._config.timezone))
         self._last_mode = mode
         self._last_phev_w = phev_w
 

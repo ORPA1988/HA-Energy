@@ -88,6 +88,15 @@ def main():
     config.timezone = ha_cfg.get("time_zone", "Europe/Vienna")
     logger.info("Timezone: %s", config.timezone)
 
+    # Validate critical entities
+    for entity_id in [config.entity_battery_soc, config.entity_pv_power,
+                       config.entity_epex_prices]:
+        state = client.get_state(entity_id)
+        if state is None:
+            logger.warning("Entity %s not found — check config", entity_id)
+        else:
+            logger.info("Entity %s: OK (%s)", entity_id, state.get("state", "?"))
+
     collector = Collector(client, config)
     executor = Executor(client, config)
     publisher = EntityPublisher(client, config)
@@ -145,15 +154,17 @@ def _run_cycle(collector, executor, publisher, config, cycle_num, tou_adapter=No
 
     prices = collector.get_prices()
     pv_forecast = collector.get_pv_forecast()
+    sunrise_hour, sunset_hour = collector.get_sun_times()
 
     logger.info("Cycle %d: SOC=%.1f%% PV=%.0fW Load=%.0fW Grid=%.0fW | "
-                "Prices=%d Forecast=%d",
+                "Prices=%d Forecast=%d | Sun %d:00-%d:00",
                 cycle_num, snapshot.battery_soc, snapshot.pv_power_w,
                 snapshot.load_power_w, snapshot.grid_power_w,
-                len(prices), len(pv_forecast))
+                len(prices), len(pv_forecast), sunrise_hour, sunset_hour)
 
     # 2. Create plan
-    plan = create_plan(snapshot, prices, pv_forecast, config)
+    plan = create_plan(snapshot, prices, pv_forecast, config,
+                       sunrise_hour=sunrise_hour, sunset_hour=sunset_hour)
 
     # 3. Execute current slot (publish sensor entities)
     executor.execute(plan)

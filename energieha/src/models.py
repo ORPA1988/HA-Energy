@@ -119,8 +119,14 @@ class Config:
 
     dry_run: bool = False
 
+    # SOC-Grenzen
+    max_grid_charge_soc: int = 80  # Max SOC for grid charging (PV may go higher)
+
     # Sungrow TOU Steuerung
     sungrow_tou_enabled: bool = False
+
+    # EMHASS
+    emhass_url: str = "http://localhost:5000"
 
     # Timezone (set from HA config at startup)
     timezone: str = "Europe/Vienna"

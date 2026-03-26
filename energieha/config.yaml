@@ -1,5 +1,5 @@
 name: "EnergieHA"
-version: "0.2.4"
+version: "0.3.0"
 slug: "energieha"
 description: "Lightweight energy management for PV, battery, grid and consumers"
 url: "https://github.com/ORPA1988/HA-Energy"
@@ -53,11 +53,17 @@ options:
 
   dry_run: true
 
+  # SOC-Grenzen
+  max_grid_charge_soc: 80
+
   # Sungrow TOU Steuerung (programmiert die 6 TOU-Programme des Wechselrichters)
   sungrow_tou_enabled: false
 
+  # EMHASS Optimierung (erfordert laufendes EMHASS Add-on)
+  emhass_url: "http://localhost:5000"
+
 schema:
-  strategy: "list(surplus|price|forecast)"
+  strategy: "list(surplus|price|forecast|emhass)"
   cycle_seconds: "int(60,900)"
   slot_duration_min: "list(15|60)"
   battery_capacity_kwh: "float(0.1,)"
@@ -85,4 +91,6 @@ schema:
   price_threshold_eur: "float(0,)"
   estimated_daily_load_kwh: "float(0,)"
   dry_run: bool
+  max_grid_charge_soc: "int(0,100)"
   sungrow_tou_enabled: bool
+  emhass_url: str

@@ -59,5 +59,7 @@ def load_config() -> Config:
         price_threshold_eur=float(data.get("price_threshold_eur", 0.15)),
         estimated_daily_load_kwh=float(data.get("estimated_daily_load_kwh", 12.0)),
         dry_run=bool(data.get("dry_run", False)),
+        max_grid_charge_soc=int(data.get("max_grid_charge_soc", 80)),
         sungrow_tou_enabled=bool(data.get("sungrow_tou_enabled", False)),
+        emhass_url=str(data.get("emhass_url", "http://localhost:5000")),
     )

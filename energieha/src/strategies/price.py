@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from ..models import Config, ForecastPoint, Plan, PricePoint, Snapshot, TimeSlot
+from .helpers import (calc_grid_balance, calc_phev_power, get_forecast_for_time,
+                      get_price_for_time, is_grid_charging, update_soc)
 
 logger = logging.getLogger(__name__)
 
@@ -32,34 +34,22 @@ def plan_price_optimized(
     num_slots = (24 * 60) // slot_minutes
     slots = []
 
-    # Build slot array with price and PV data
     for i in range(num_slots):
         slot_start = now + timedelta(minutes=i * slot_minutes)
-        pv_w = _get_forecast_for_time(pv_forecast, slot_start)
-        price = _get_price_for_time(prices, slot_start)
+        pv_w = get_forecast_for_time(pv_forecast, slot_start)
+        price = get_price_for_time(prices, slot_start)
         load_w = snapshot.load_power_w if i == 0 else config.load_per_slot_w
-
         slots.append(TimeSlot(
-            start=slot_start,
-            duration_min=slot_minutes,
-            pv_forecast_w=pv_w,
-            price_eur_kwh=price,
-            load_estimate_w=load_w,
+            start=slot_start, duration_min=slot_minutes,
+            pv_forecast_w=pv_w, price_eur_kwh=price, load_estimate_w=load_w,
         ))
 
     # --- PASS 1: Assign PV surplus → PHEV first, then battery ---
     soc = snapshot.battery_soc
     for slot in slots:
         surplus_w = slot.pv_forecast_w - slot.load_estimate_w
-
-        # PHEV gets surplus first
-        phev_w = 0.0
-        if config.phev_enabled and snapshot.phev_connected and surplus_w > 0:
-            if surplus_w >= config.phev_min_charge_w:
-                phev_w = min(surplus_w, config.phev_max_charge_w)
-        slot.planned_phev_w = phev_w
-
-        remaining = surplus_w - phev_w
+        slot.planned_phev_w = calc_phev_power(surplus_w, config, snapshot)
+        remaining = surplus_w - slot.planned_phev_w
 
         if remaining > 0 and soc < config.max_soc_percent:
             slot.planned_battery_mode = "charge"
@@ -69,7 +59,7 @@ def plan_price_optimized(
             soc += (slot.planned_battery_w * slot_minutes / 60.0) / config.battery_capacity_wh * 100.0
             slot.planned_grid_w = -(remaining - slot.planned_battery_w)
 
-    # --- PASS 2: Greedy grid-charge / discharge pairing (battery only) ---
+    # --- PASS 2: Greedy grid-charge / discharge pairing ---
     charge_candidates = []
     discharge_candidates = []
 
@@ -96,7 +86,7 @@ def plan_price_optimized(
                 continue
 
             cheap.planned_battery_mode = "charge"
-            cheap.planned_battery_w = config.battery_capacity_wh / 4  # rough estimate
+            cheap.planned_battery_w = config.battery_capacity_wh / 4
 
             if discharge_slot.planned_battery_mode != "charge":
                 discharge_slot.planned_battery_mode = "discharge"
@@ -106,28 +96,24 @@ def plan_price_optimized(
     # --- PASS 3: Forward SOC simulation with constraint clipping ---
     soc = snapshot.battery_soc
     for slot in slots:
-        energy_wh = slot.planned_battery_w * (slot_minutes / 60.0)
-        new_soc = soc + (energy_wh / config.battery_capacity_wh) * 100.0
+        # Grid-charge limit
+        if (is_grid_charging(slot.pv_forecast_w, slot.load_estimate_w, slot.planned_battery_w)
+                and soc >= config.max_grid_charge_soc):
+            slot.planned_battery_mode = "idle"
+            slot.planned_battery_w = 0
 
-        if new_soc > config.max_soc_percent:
-            max_energy = (config.max_soc_percent - soc) / 100.0 * config.battery_capacity_wh
-            slot.planned_battery_w = max(0, max_energy / (slot_minutes / 60.0))
-            if slot.planned_battery_w < 50:
-                slot.planned_battery_mode = "idle"
-            new_soc = config.max_soc_percent
+        soc = update_soc(soc, slot.planned_battery_w, slot_minutes, config)
 
-        elif new_soc < config.min_soc_percent:
-            min_energy = (config.min_soc_percent - soc) / 100.0 * config.battery_capacity_wh
-            slot.planned_battery_w = min(0, min_energy / (slot_minutes / 60.0))
-            if abs(slot.planned_battery_w) < 50:
-                slot.planned_battery_mode = "idle"
-            new_soc = config.min_soc_percent
+        if slot.planned_battery_w > 0 and soc >= config.max_soc_percent:
+            slot.planned_battery_mode = "idle"
+            slot.planned_battery_w = 0
+        elif slot.planned_battery_w < 0 and soc <= config.min_soc_percent:
+            slot.planned_battery_mode = "idle"
+            slot.planned_battery_w = 0
 
-        # Recalculate grid
-        net = slot.pv_forecast_w - slot.load_estimate_w - slot.planned_phev_w - slot.planned_battery_w
-        slot.planned_grid_w = -net
-
-        soc = new_soc
+        slot.planned_grid_w = calc_grid_balance(
+            slot.pv_forecast_w, slot.load_estimate_w,
+            slot.planned_phev_w, slot.planned_battery_w)
         slot.projected_soc = soc
 
     logger.info("Price plan: %d slots, SOC %.1f%%→%.1f%%, %d charge/%d discharge",
@@ -137,17 +123,3 @@ def plan_price_optimized(
                 sum(1 for s in slots if s.planned_battery_mode == "discharge"))
 
     return Plan(created_at=now, strategy="price", slots=slots, tz=config.timezone)
-
-
-def _get_forecast_for_time(forecast: list[ForecastPoint], t: datetime) -> float:
-    for fp in forecast:
-        if fp.start <= t < fp.end:
-            return fp.power_w
-    return 0.0
-
-
-def _get_price_for_time(prices: list[PricePoint], t: datetime) -> float:
-    for pp in prices:
-        if pp.start <= t < pp.end:
-            return pp.price_eur_kwh
-    return 0.0
