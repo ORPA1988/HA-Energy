@@ -156,10 +156,11 @@ def _run_cycle(collector, executor, publisher, config, cycle_num, tou_adapter=No
     pv_forecast = collector.get_pv_forecast()
     sunrise_hour, sunset_hour = collector.get_sun_times()
 
-    logger.info("Cycle %d: SOC=%.1f%% PV=%.0fW Load=%.0fW Grid=%.0fW | "
+    logger.info("Cycle %d: SOC=%.1f%% PV=%.0fW Load=%.0fW Grid=%.0fW GridCharge=%.0fW | "
                 "Prices=%d Forecast=%d | Sun %d:00-%d:00",
                 cycle_num, snapshot.battery_soc, snapshot.pv_power_w,
                 snapshot.load_power_w, snapshot.grid_power_w,
+                snapshot.grid_charge_power_w,
                 len(prices), len(pv_forecast), sunrise_hour, sunset_hour)
 
     # 2. Create plan

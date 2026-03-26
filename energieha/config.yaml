@@ -1,5 +1,5 @@
 name: "EnergieHA"
-version: "0.4.1"
+version: "0.5.0"
 slug: "energieha"
 description: "Lightweight energy management for PV, battery, grid and consumers"
 url: "https://github.com/ORPA1988/HA-Energy"
@@ -42,13 +42,14 @@ options:
   entity_pv_power: "sensor.inverter_pv_power"
   entity_grid_power: "sensor.inverter_grid_power"
   entity_load_power: "sensor.inverter_load_power"
-  entity_epex_prices: "sensor.epex_spot_data_total_price"
+  entity_epex_prices: "sensor.epex_spot_data_total_price_3"
   entity_solcast_forecast: "sensor.solcast_pv_forecast_prognose_heute"
   entity_solcast_forecast_tomorrow: "sensor.solcast_pv_forecast_prognose_morgen"
+  entity_grid_charge_current: "number.inverter_battery_grid_charging_current"
 
   # Strategieparameter
   min_price_spread_eur: 0.04
-  price_threshold_eur: 0.15
+  price_threshold_eur: 0.25
   estimated_daily_load_kwh: 12.0
 
   dry_run: true
@@ -87,6 +88,7 @@ schema:
   entity_epex_prices: str
   entity_solcast_forecast: str
   entity_solcast_forecast_tomorrow: str
+  entity_grid_charge_current: str
   min_price_spread_eur: "float(0,)"
   price_threshold_eur: "float(0,)"
   estimated_daily_load_kwh: "float(0,)"

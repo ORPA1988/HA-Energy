@@ -41,6 +41,8 @@ class Snapshot:
     phev_connected: bool = False
     phev_soc: float = 0.0      # 0-100%
     phev_power_w: float = 0.0  # current charging power
+    # Grid charging: constant power set by inverter (current × voltage)
+    grid_charge_power_w: float = 5000.0
 
 
 @dataclass
@@ -108,13 +110,14 @@ class Config:
     entity_pv_power: str = "sensor.inverter_pv_power"
     entity_grid_power: str = "sensor.inverter_grid_power"
     entity_load_power: str = "sensor.inverter_load_power"
-    entity_epex_prices: str = "sensor.epex_spot_data_total_price"
+    entity_epex_prices: str = "sensor.epex_spot_data_total_price_3"
     entity_solcast_forecast: str = "sensor.solcast_pv_forecast_prognose_heute"
     entity_solcast_forecast_tomorrow: str = "sensor.solcast_pv_forecast_prognose_morgen"
+    entity_grid_charge_current: str = "number.inverter_battery_grid_charging_current"
 
     # Strategieparameter
     min_price_spread_eur: float = 0.04
-    price_threshold_eur: float = 0.15
+    price_threshold_eur: float = 0.25  # Updated for brutto prices
     estimated_daily_load_kwh: float = 12.0
 
     dry_run: bool = False

@@ -45,6 +45,21 @@ class Collector:
             phev_soc = self._client.get_state_value(self._config.entity_phev_soc) or 0.0
             phev_power = self._client.get_state_value(self._config.entity_phev_charging_power) or 0.0
 
+        # Grid charging power: current × battery voltage
+        grid_charge_w = 5000.0  # default
+        grid_charge_current = self._client.get_state_value(
+            self._config.entity_grid_charge_current)
+        if grid_charge_current and grid_charge_current > 0:
+            # Read battery voltage from SOC entity attributes
+            bat_state = self._client.get_state(self._config.entity_battery_soc)
+            bat_voltage = 51.0  # nominal
+            if bat_state:
+                bat_voltage = float(bat_state.get("attributes", {}).get(
+                    "BMS Voltage", 51.0))
+            grid_charge_w = grid_charge_current * bat_voltage
+            logger.debug("Grid charge power: %.0fA × %.1fV = %.0fW",
+                         grid_charge_current, bat_voltage, grid_charge_w)
+
         return Snapshot(
             timestamp=datetime.now(timezone.utc),
             battery_soc=soc,
@@ -55,6 +70,7 @@ class Collector:
             phev_connected=phev_connected,
             phev_soc=phev_soc,
             phev_power_w=phev_power,
+            grid_charge_power_w=grid_charge_w,
         )
 
     def get_prices(self) -> list[PricePoint]:

@@ -86,7 +86,7 @@ def plan_price_optimized(
                 continue
 
             cheap.planned_battery_mode = "charge"
-            cheap.planned_battery_w = config.battery_capacity_wh / 4
+            cheap.planned_battery_w = snapshot.grid_charge_power_w
 
             if discharge_slot.planned_battery_mode != "charge":
                 discharge_slot.planned_battery_mode = "discharge"
