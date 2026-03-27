@@ -51,16 +51,25 @@ class EntityPublisher:
         slot = plan.current_slot
         current_power = slot.planned_battery_w if slot else 0
 
-        # Build compact timeline for attributes (limit to avoid HA attribute size issues)
+        # Build timeline with all fields for dashboard planning table
         timeline = []
+        cumulative_cost = 0.0
         for s in plan.slots[:96]:  # max 24h at 15min = 96 slots
+            hours = s.duration_min / 60.0
+            # Cost: only for grid import (positive grid_w)
+            slot_cost = round(max(0, s.planned_grid_w) / 1000 * hours * s.price_eur_kwh, 4)
+            cumulative_cost += slot_cost
             timeline.append({
                 "t": s.start.strftime("%H:%M"),
                 "mode": s.planned_battery_mode,
-                "w": round(s.planned_battery_w),
-                "phev": round(s.planned_phev_w),
                 "soc": round(s.projected_soc, 1),
-                "p": round(s.price_eur_kwh, 4),
+                "batt": round(s.planned_battery_w),
+                "pv": round(s.pv_forecast_w),
+                "load": round(s.load_estimate_w),
+                "grid": round(s.planned_grid_w),
+                "price": round(s.price_eur_kwh, 4),
+                "cost": slot_cost,
+                "total": round(cumulative_cost, 2),
             })
 
         current_mode = slot.planned_battery_mode if slot else "idle"

@@ -1,5 +1,5 @@
 name: "EnergieHA"
-version: "0.6.0"
+version: "0.7.0"
 slug: "energieha"
 description: "Lightweight energy management for PV, battery, grid and consumers"
 url: "https://github.com/ORPA1988/HA-Energy"
