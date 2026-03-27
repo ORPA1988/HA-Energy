@@ -59,6 +59,14 @@ class EntityPublisher:
             # Cost: only for grid import (positive grid_w)
             slot_cost = round(max(0, s.planned_grid_w) / 1000 * hours * s.price_eur_kwh, 4)
             cumulative_cost += slot_cost
+            # Grid-load: how much the battery charges from grid (not PV)
+            from .strategies.helpers import is_grid_charging
+            surplus = s.pv_forecast_w - s.load_estimate_w
+            if is_grid_charging(s.pv_forecast_w, s.load_estimate_w, s.planned_battery_w):
+                gridload_w = round(s.planned_battery_w - max(0, surplus))
+            else:
+                gridload_w = 0
+
             timeline.append({
                 "t": s.start.strftime("%H:%M"),
                 "mode": s.planned_battery_mode,
@@ -67,6 +75,7 @@ class EntityPublisher:
                 "pv": round(s.pv_forecast_w),
                 "load": round(s.load_estimate_w),
                 "grid": round(s.planned_grid_w),
+                "gridload": gridload_w,
                 "price": round(s.price_eur_kwh, 4),
                 "cost": slot_cost,
                 "total": round(cumulative_cost, 2),
