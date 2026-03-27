@@ -98,6 +98,18 @@ def plan_emhass(
     if not batt_forecast:
         raise ValueError("EMHASS returned no battery forecast data")
 
+    # Rebase EMHASS SOC forecast onto actual SOC
+    # EMHASS calculates SOC from the optimization start, which may differ
+    # from current reality (e.g. battery discharged further since last optim)
+    if soc_forecast and soc_forecast[0] > 0:
+        soc_offset = snapshot.battery_soc - soc_forecast[0]
+        if abs(soc_offset) > 1.0:  # Only rebase if >1% difference
+            logger.info("EMHASS SOC rebase: actual=%.1f%% forecast=%.1f%% offset=%.1f%%",
+                        snapshot.battery_soc, soc_forecast[0], soc_offset)
+            soc_forecast = [max(config.min_soc_percent,
+                               min(config.max_soc_percent, s + soc_offset))
+                           for s in soc_forecast]
+
     # EMHASS uses hourly resolution — map to our slot resolution
     # Each EMHASS hour covers (60/slot_minutes) slots
     slots_per_emhass = max(1, 60 // slot_minutes)
@@ -146,6 +158,12 @@ def plan_emhass(
             soc = update_soc(soc, battery_w, slot_minutes, config)
 
         grid_w = calc_grid_balance(pv_w, load_w, phev_w, battery_w)
+
+        # Clip night export: no point exporting when PV=0
+        # WR handles this via "Zero Export to CT" anyway, but plan looks cleaner
+        if pv_w < 10 and grid_w < -10 and battery_mode == "discharge":
+            battery_w = -(load_w + phev_w)  # Match discharge to load exactly
+            grid_w = 0.0
 
         slots.append(TimeSlot(
             start=slot_start, duration_min=slot_minutes,

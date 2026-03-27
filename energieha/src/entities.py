@@ -3,6 +3,7 @@
 import json
 import logging
 
+from . import __version__
 from .ha_client import HaClient
 from .models import Config, Plan, Snapshot
 
@@ -39,6 +40,7 @@ class EntityPublisher:
             "last_plan_time": plan.created_at.isoformat(),
             "phev_active": slot.planned_phev_w > 0 if slot else False,
             "dry_run": self._config.dry_run,
+            "version": __version__,
             "icon": "mdi:battery-sync",
         }
         # Show strategy fallback error if present

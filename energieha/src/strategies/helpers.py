@@ -12,10 +12,16 @@ def get_forecast_for_time(forecast: list[ForecastPoint], t) -> float:
 
 
 def get_price_for_time(prices: list[PricePoint], t) -> float:
-    """Return electricity price (EUR/kWh) for the given time, or 0."""
+    """Return electricity price (EUR/kWh) for the given time.
+
+    Falls back to last known price if time is beyond EPEX data range.
+    """
     for pp in prices:
         if pp.start <= t < pp.end:
             return pp.price_eur_kwh
+    # Fallback: use last known price (avoids 0.0 for slots beyond EPEX range)
+    if prices:
+        return prices[-1].price_eur_kwh
     return 0.0
 
 
