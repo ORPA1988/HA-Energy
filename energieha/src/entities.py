@@ -44,6 +44,9 @@ class EntityPublisher:
         # Show strategy fallback error if present
         if hasattr(plan, "strategy_error") and plan.strategy_error:
             attrs["strategy_error"] = plan.strategy_error
+        # TOU explanation from Sungrow adapter
+        if hasattr(plan, "_tou_reason") and plan._tou_reason:
+            attrs["tou_reason"] = plan._tou_reason
         self._client.set_state(f"{PREFIX}_status", mode, attrs)
 
     def _publish_battery_plan(self, plan: Plan) -> None:

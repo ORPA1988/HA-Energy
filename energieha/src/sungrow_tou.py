@@ -161,9 +161,27 @@ class SungrowTouAdapter:
             {"start": "23:54",  "end": "23:56", "charging": "Disabled", "soc": min_soc},
         ]
 
+        # Build human-readable explanation for dashboard
+        if charge_start and charge_max_soc > min_soc:
+            if has_grid_charge:
+                reason = (f"Netzladung {charge_start}-{charge_end}: "
+                          f"EMHASS plant Batterie-Ladung die PV-Überschuss übersteigt → "
+                          f"Grid-Charging bis {p2_soc}% SOC (max_grid_charge_soc={self._config.max_grid_charge_soc}%)")
+            else:
+                reason = (f"PV-Ladung {charge_start}-{charge_end}: "
+                          f"EMHASS plant Ladung nur aus PV-Überschuss → "
+                          f"Disabled + SOC-Ziel {p2_soc}% (PV→Batterie, Haus aus Netz)")
+        else:
+            reason = ("Keine Ladung geplant: EMHASS sieht keinen Vorteil in Batterie-Ladung "
+                      "bei aktuellen Preisen/PV-Prognose → alle Programme Disabled")
+
+        # Store explanation as instance attribute for entity publishing
+        self.last_tou_reason = reason
+
         logger.info("TOU: P2=%s SOC=%d%% window=%s-%s (grid_charge=%s)",
                      p2_charging, p2_soc if charge_start else min_soc,
                      charge_start or "none", charge_end or "none", has_grid_charge)
+        logger.info("TOU Begründung: %s", reason)
 
         return programs
 

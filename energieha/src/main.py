@@ -189,7 +189,11 @@ def _run_cycle(collector, executor, publisher, config, cycle_num, tou_adapter=No
     if tou_adapter is not None:
         tou_adapter.apply(plan, snapshot)
 
-    # 5. Publish plan entities
+    # 5. Publish TOU explanation to status entity
+    if tou_adapter is not None and hasattr(tou_adapter, "last_tou_reason"):
+        plan._tou_reason = getattr(tou_adapter, "last_tou_reason", "")
+
+    # 6. Publish plan entities
     publisher.publish(plan, snapshot)
 
 
