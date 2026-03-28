@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title_suffix %} - Planung{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>24h Planung</h1>
+    {% if plan %}
+    <span class="badge badge-info">{{ plan.strategy }} | {{ plan.created_at.strftime('%H:%M') }}</span>
+    {% endif %}
+    <button class="btn btn-primary"
+            hx-post="{{ ingress_path }}/api/replan"
+            hx-swap="none">
+        Jetzt neu planen
+    </button>
+</div>
+
+<!-- Charts -->
+<div class="card card-wide">
+    <div class="card-header">SOC &amp; Leistung</div>
+    <div class="card-body">
+        <canvas id="planChart" height="200"></canvas>
+    </div>
+</div>
+
+<div class="card card-wide">
+    <div class="card-header">Strompreis</div>
+    <div class="card-body">
+        <canvas id="priceChart" height="120"></canvas>
+    </div>
+</div>
+
+<!-- Plan Table -->
+<div class="card card-wide">
+    <div class="card-header">Planungstabelle</div>
+    <div class="card-body table-scroll">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Zeit</th>
+                    <th>Modus</th>
+                    <th>SOC %</th>
+                    <th>Batterie W</th>
+                    <th>PV W</th>
+                    <th>Last W</th>
+                    <th>Netz W</th>
+                    <th>Preis EUR/kWh</th>
+                    <th>Kosten EUR</th>
+                    <th>Gesamt EUR</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for slot in timeline %}
+                <tr class="mode-{{ slot.mode }}">
+                    <td>{{ slot.time }}</td>
+                    <td><span class="mode-badge mode-{{ slot.mode }}">{{ slot.mode }}</span></td>
+                    <td>{{ slot.soc }}</td>
+                    <td>{{ slot.battery_w }}</td>
+                    <td>{{ slot.pv_w }}</td>
+                    <td>{{ slot.load_w }}</td>
+                    <td class="{% if slot.grid_w > 0 %}text-red{% elif slot.grid_w < 0 %}text-green{% endif %}">{{ slot.grid_w }}</td>
+                    <td>{{ "%.4f"|format(slot.price) }}</td>
+                    <td>{{ "%.4f"|format(slot.cost) }}</td>
+                    <td>{{ "%.2f"|format(slot.total) }}</td>
+                </tr>
+                {% endfor %}
+                {% if not timeline %}
+                <tr><td colspan="10" class="text-center">Kein Plan vorhanden</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const timeline = {{ timeline|tojson }};
+    if (!timeline.length) return;
+
+    const labels = timeline.map(s => s.time);
+    const socData = timeline.map(s => s.soc);
+    const pvData = timeline.map(s => s.pv_w);
+    const loadData = timeline.map(s => s.load_w);
+    const battData = timeline.map(s => s.battery_w);
+    const priceData = timeline.map(s => s.price);
+    const modeColors = timeline.map(s => {
+        if (s.mode === 'charge') return 'rgba(39,174,96,0.7)';
+        if (s.mode === 'discharge') return 'rgba(231,76,60,0.7)';
+        return 'rgba(149,165,166,0.5)';
+    });
+
+    // SOC + Power chart
+    new Chart(document.getElementById('planChart'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'SOC %', data: socData, borderColor: '#3498db', yAxisID: 'y', tension: 0.3, pointRadius: 0 },
+                { label: 'PV W', data: pvData, borderColor: '#f1c40f', yAxisID: 'y1', tension: 0.3, pointRadius: 0 },
+                { label: 'Last W', data: loadData, borderColor: '#e67e22', yAxisID: 'y1', tension: 0.3, pointRadius: 0 },
+                { label: 'Batterie W', data: battData, type: 'bar', backgroundColor: modeColors, yAxisID: 'y1' },
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                y: { position: 'left', min: 0, max: 100, title: { display: true, text: 'SOC %' } },
+                y1: { position: 'right', title: { display: true, text: 'Leistung W' }, grid: { drawOnChartArea: false } }
+            }
+        }
+    });
+
+    // Price chart
+    new Chart(document.getElementById('priceChart'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{ label: 'Preis EUR/kWh', data: priceData,
+                backgroundColor: priceData.map(p => p > 0.20 ? 'rgba(231,76,60,0.7)' : p < 0.10 ? 'rgba(39,174,96,0.7)' : 'rgba(52,152,219,0.7)')
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { title: { display: true, text: 'EUR/kWh' } } }
+        }
+    });
+});
+</script>
+{% endblock %}

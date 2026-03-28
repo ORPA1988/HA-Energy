@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title_suffix %} - Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <span class="badge {% if status.get('config', {}).get('dry_run') %}badge-warning{% else %}badge-success{% endif %}">
+        {% if status.get('config', {}).get('dry_run') %}DRY RUN{% else %}AKTIV{% endif %}
+    </span>
+</div>
+
+<!-- Status Cards -->
+<div class="card-grid" hx-get="{{ ingress_path }}/api/state" hx-trigger="every 30s" hx-swap="none"
+     x-data="dashboardData()" x-init="init()">
+
+    <!-- Battery SOC -->
+    <div class="card">
+        <div class="card-header">Batterie</div>
+        <div class="card-body">
+            <div class="gauge-container">
+                <div class="gauge-value" x-text="snapshot.battery_soc ? snapshot.battery_soc.toFixed(1) + '%' : '--'"></div>
+                <div class="gauge-bar">
+                    <div class="gauge-fill" :style="'width:' + (snapshot.battery_soc || 0) + '%; background:' + socColor(snapshot.battery_soc)"></div>
+                </div>
+            </div>
+            <div class="card-detail">
+                <span x-text="(snapshot.battery_power_w || 0).toFixed(0) + ' W'"></span>
+                <span class="label" x-text="plan.current_mode || 'idle'"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- PV Power -->
+    <div class="card">
+        <div class="card-header">PV Leistung</div>
+        <div class="card-body">
+            <div class="big-value" x-text="(snapshot.pv_power_w || 0).toFixed(0) + ' W'"></div>
+            <div class="card-detail">
+                <span class="label">Erzeugung</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grid Power -->
+    <div class="card">
+        <div class="card-header">Netz</div>
+        <div class="card-body">
+            <div class="big-value" :class="(snapshot.grid_power_w || 0) > 0 ? 'text-red' : 'text-green'"
+                 x-text="Math.abs(snapshot.grid_power_w || 0).toFixed(0) + ' W'">
+            </div>
+            <div class="card-detail">
+                <span class="label" x-text="(snapshot.grid_power_w || 0) > 0 ? 'Import' : 'Export'"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load -->
+    <div class="card">
+        <div class="card-header">Verbrauch</div>
+        <div class="card-body">
+            <div class="big-value" x-text="(snapshot.load_power_w || 0).toFixed(0) + ' W'"></div>
+            <div class="card-detail">
+                <span class="label">Haushalt</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Strategy -->
+    <div class="card">
+        <div class="card-header">Strategie</div>
+        <div class="card-body">
+            <div class="big-value" x-text="plan.strategy || config.strategy || '--'"></div>
+            <div class="card-detail">
+                <span class="label" x-text="'Preis: ' + (plan.current_price ? plan.current_price.toFixed(4) + ' EUR/kWh' : '--')"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- EMHASS Status -->
+    <div class="card">
+        <div class="card-header">EMHASS</div>
+        <div class="card-body">
+            <div class="status-indicator" :class="emhass_available ? 'status-ok' : 'status-warn'">
+                <span x-text="emhass_available ? 'Verbunden' : 'Nicht verfuegbar'"></span>
+            </div>
+            <div class="card-detail">
+                <span class="label" x-text="emhass_last_ok ? 'Letztes Update: ' + new Date(emhass_last_ok).toLocaleTimeString('de') : 'Kein Update'"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Power Flow Diagram -->
+<div class="card card-wide">
+    <div class="card-header">Energiefluss</div>
+    <div class="card-body">
+        <svg viewBox="0 0 600 300" class="power-flow-svg" x-data x-ref="flowsvg">
+            <!-- PV (top) -->
+            <g transform="translate(300,30)">
+                <circle r="35" class="flow-node flow-pv"/>
+                <text text-anchor="middle" dy="5" class="flow-label">PV</text>
+                <text text-anchor="middle" dy="55" class="flow-value"
+                      x-text="(snapshot.pv_power_w || 0).toFixed(0) + 'W'"></text>
+            </g>
+            <!-- Battery (left) -->
+            <g transform="translate(100,150)">
+                <rect x="-35" y="-35" width="70" height="70" rx="8" class="flow-node flow-battery"/>
+                <text text-anchor="middle" dy="0" class="flow-label">Batterie</text>
+                <text text-anchor="middle" dy="15" class="flow-label-small"
+                      x-text="(snapshot.battery_soc || 0).toFixed(0) + '%'"></text>
+                <text text-anchor="middle" dy="55" class="flow-value"
+                      x-text="Math.abs(snapshot.battery_power_w || 0).toFixed(0) + 'W'"></text>
+            </g>
+            <!-- Grid (right) -->
+            <g transform="translate(500,150)">
+                <rect x="-35" y="-35" width="70" height="70" rx="8" class="flow-node flow-grid"/>
+                <text text-anchor="middle" dy="0" class="flow-label">Netz</text>
+                <text text-anchor="middle" dy="55" class="flow-value"
+                      :class="(snapshot.grid_power_w || 0) > 0 ? 'text-red' : 'text-green'"
+                      x-text="Math.abs(snapshot.grid_power_w || 0).toFixed(0) + 'W'"></text>
+            </g>
+            <!-- House (bottom) -->
+            <g transform="translate(300,270)">
+                <rect x="-35" y="-25" width="70" height="50" rx="8" class="flow-node flow-house"/>
+                <text text-anchor="middle" dy="5" class="flow-label">Haus</text>
+                <text text-anchor="middle" dy="-35" class="flow-value"
+                      x-text="(snapshot.load_power_w || 0).toFixed(0) + 'W'"></text>
+            </g>
+            <!-- Flow lines -->
+            <line x1="300" y1="70" x2="300" y2="240" class="flow-line"/>
+            <line x1="265" y1="90" x2="140" y2="140" class="flow-line"/>
+            <line x1="335" y1="90" x2="460" y2="140" class="flow-line"/>
+            <line x1="140" y1="180" x2="265" y2="250" class="flow-line"/>
+            <line x1="460" y1="180" x2="335" y2="250" class="flow-line"/>
+        </svg>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function dashboardData() {
+    return {
+        snapshot: {{ status.get('snapshot', {})|tojson }},
+        plan: {{ status.get('plan', {})|tojson }},
+        config: {{ status.get('config', {})|tojson }},
+        emhass_available: {{ status.get('emhass_available', false)|tojson }},
+        emhass_last_ok: {{ status.get('emhass_last_ok')|tojson }},
+        init() {
+            // Auto-refresh via SSE or polling
+            setInterval(() => this.refresh(), 30000);
+        },
+        async refresh() {
+            try {
+                const resp = await fetch('{{ ingress_path }}/api/state');
+                const data = await resp.json();
+                if (data.snapshot) this.snapshot = data.snapshot;
+                if (data.plan) this.plan = data.plan;
+                if (data.config) this.config = data.config;
+                this.emhass_available = data.emhass_available || false;
+                this.emhass_last_ok = data.emhass_last_ok;
+            } catch(e) { console.warn('Refresh failed:', e); }
+        },
+        socColor(soc) {
+            if (!soc) return '#888';
+            if (soc < 20) return '#e74c3c';
+            if (soc < 50) return '#f39c12';
+            return '#27ae60';
+        }
+    };
+}
+</script>
+{% endblock %}

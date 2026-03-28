@@ -1,8 +1,12 @@
-"""EnergieHA main loop: orchestrates collect → plan → execute → publish."""
+"""EnergieHA main loop: orchestrates collect -> plan -> execute -> publish.
+
+v1.0.0: Runs planning loop as background thread, Flask web server as main thread.
+"""
 
 import logging
 import signal
 import sys
+import threading
 import time
 
 from . import __version__
@@ -13,6 +17,7 @@ from .entities import EntityPublisher
 from .executor import Executor
 from .ha_client import HaClient
 from .planner import create_plan
+from .state import AppState, CycleSummary
 
 # Compact log format: timestamp, level, module, message
 logging.basicConfig(
@@ -23,25 +28,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("energieha")
 
-# Global flag for graceful shutdown
-_running = True
-
 
 def _handle_signal(signum, frame):
-    global _running
     logger.info("Received signal %d, shutting down...", signum)
-    _running = False
+    AppState().running = False
 
 
-def main():
-    """Main entry point for EnergieHA."""
-    global _running
+def planning_loop():
+    """Background thread: runs the energy management planning loop."""
+    state = AppState()
 
-    signal.signal(signal.SIGTERM, _handle_signal)
-    signal.signal(signal.SIGINT, _handle_signal)
-
-    logger.info("=== EnergieHA v%s starting ===", __version__)
-    logger.info("Python %s", sys.version)
+    logger.info("=== EnergieHA v%s planning loop starting ===", __version__)
 
     # Load configuration
     try:
@@ -50,15 +47,20 @@ def main():
         logger.error("Failed to load config: %s", e, exc_info=True)
         config = Config()
 
-    logger.info("Strategy: %s | Cycle: %ds | Slots: %dmin | Battery: %.0f kWh (SOC %d%%–%d%%)",
+    state.config = config
+
+    logger.info("Strategy: %s | Cycle: %ds | Slots: %dmin | Battery: %.0f kWh (SOC %d%%-%d%%)",
                 config.strategy, config.cycle_seconds, config.slot_duration_min,
                 config.battery_capacity_kwh, config.min_soc_percent, config.max_soc_percent)
 
     if not validate_config(config):
-        logger.warning("Config validation failed — using values as-is, check settings")
+        logger.warning("Config validation failed - using values as-is, check settings")
 
     if config.dry_run:
-        logger.info("*** DRY RUN MODE – no control commands will be sent ***")
+        logger.info("*** DRY RUN MODE - no control commands will be sent ***")
+
+    if config.direct_control:
+        logger.info("*** DIRECT CONTROL MODE - inverter will be controlled directly ***")
 
     # Initialize components
     client = HaClient()
@@ -72,17 +74,17 @@ def main():
         logger.warning("HA API not available (attempt %d/10), waiting 10s...", attempt + 1)
         time.sleep(10)
     else:
-        logger.error("Could not reach HA API after 10 attempts. Exiting.")
-        sys.exit(1)
+        logger.error("Could not reach HA API after 10 attempts.")
+        state.add_error("Could not reach HA API after 10 attempts")
+        return
 
-    # Publish startup heartbeat so we can see the add-on is alive
+    # Publish startup heartbeat
     try:
         client.set_state("sensor.energieha_status", "starting", {
             "friendly_name": "EnergieHA Status",
             "icon": "mdi:battery-sync",
             "version": __version__,
         })
-        logger.info("Heartbeat entity published")
     except Exception as e:
         logger.error("Failed to publish heartbeat: %s", e)
 
@@ -94,11 +96,11 @@ def main():
     # Validate critical entities
     for entity_id in [config.entity_battery_soc, config.entity_pv_power,
                        config.entity_epex_prices]:
-        state = client.get_state(entity_id)
-        if state is None:
-            logger.warning("Entity %s not found — check config", entity_id)
+        entity_state = client.get_state(entity_id)
+        if entity_state is None:
+            logger.warning("Entity %s not found - check config", entity_id)
         else:
-            logger.info("Entity %s: OK (%s)", entity_id, state.get("state", "?"))
+            logger.info("Entity %s: OK (%s)", entity_id, entity_state.get("state", "?"))
 
     collector = Collector(client, config)
     executor = Executor(client, config)
@@ -111,28 +113,43 @@ def main():
         tou_adapter = SungrowTouAdapter(client, config)
         logger.info("Sungrow TOU adapter enabled")
 
+    # Inverter controller (optional)
+    inverter_ctrl = None
+    if config.direct_control:
+        from .inverter_control import InverterController
+        inverter_ctrl = InverterController(client, config)
+        logger.info("Direct inverter control enabled")
+
     # Main loop with circuit-breaker
     cycle = 0
     consecutive_failures = 0
     MAX_CONSECUTIVE_FAILURES = 3
 
-    while _running:
+    while state.running:
         cycle += 1
         cycle_start = time.monotonic()
 
+        # Check for forced replan
+        force_replan = getattr(state, '_force_replan', False)
+        if force_replan:
+            state._force_replan = False
+            logger.info("Forced replan triggered")
+
         try:
             if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                logger.warning("SAFE MODE: %d consecutive failures — publishing idle only",
+                logger.warning("SAFE MODE: %d consecutive failures - publishing idle only",
                                consecutive_failures)
                 executor._publish_idle()
             else:
-                _run_cycle(collector, executor, publisher, config, cycle, tou_adapter)
+                _run_cycle(collector, executor, publisher, config, cycle,
+                           tou_adapter, inverter_ctrl, state)
             consecutive_failures = 0
         except Exception as e:
             consecutive_failures += 1
             logger.error("Cycle %d failed (%d/%d): %s", cycle,
                          consecutive_failures, MAX_CONSECUTIVE_FAILURES,
                          e, exc_info=True)
+            state.add_error(f"Cycle {cycle}: {e}")
             try:
                 client.set_state("sensor.energieha_status", "error", {
                     "friendly_name": "EnergieHA Status",
@@ -148,19 +165,24 @@ def main():
         # Sleep until next cycle
         elapsed = time.monotonic() - cycle_start
         sleep_time = max(0, config.cycle_seconds - elapsed)
-        if sleep_time > 0 and _running:
+        if sleep_time > 0 and state.running:
             logger.debug("Cycle %d done in %.1fs, sleeping %.0fs",
                          cycle, elapsed, sleep_time)
-            # Sleep in small increments to respond to signals promptly
             end_time = time.monotonic() + sleep_time
-            while _running and time.monotonic() < end_time:
+            while state.running and time.monotonic() < end_time:
+                # Wake up early if replan requested
+                if getattr(state, '_force_replan', False):
+                    break
                 time.sleep(min(5.0, end_time - time.monotonic()))
 
-    logger.info("=== EnergieHA stopped ===")
+    logger.info("=== EnergieHA planning loop stopped ===")
 
 
-def _run_cycle(collector, executor, publisher, config, cycle_num, tou_adapter=None):
+def _run_cycle(collector, executor, publisher, config, cycle_num,
+               tou_adapter=None, inverter_ctrl=None, state=None):
     """Execute one planning cycle."""
+    from datetime import datetime
+
     # 1. Collect data
     snapshot = collector.get_snapshot()
     if snapshot is None:
@@ -195,6 +217,52 @@ def _run_cycle(collector, executor, publisher, config, cycle_num, tou_adapter=No
 
     # 6. Publish plan entities
     publisher.publish(plan, snapshot)
+
+    # 7. Update shared state for web GUI
+    if state:
+        state.plan = plan
+        state.snapshot = snapshot
+        slot = plan.current_slot
+        state.add_cycle(CycleSummary(
+            timestamp=datetime.now(),
+            strategy=plan.strategy,
+            battery_soc=snapshot.battery_soc,
+            battery_mode=slot.planned_battery_mode if slot else "idle",
+            pv_power_w=snapshot.pv_power_w,
+            grid_power_w=snapshot.grid_power_w,
+            load_power_w=snapshot.load_power_w,
+        ))
+
+
+def main():
+    """Main entry point: starts planning loop thread + Flask web server."""
+    signal.signal(signal.SIGTERM, _handle_signal)
+    signal.signal(signal.SIGINT, _handle_signal)
+
+    logger.info("=== EnergieHA v%s starting ===", __version__)
+    logger.info("Python %s", sys.version)
+
+    state = AppState()
+
+    # Start planning loop in background thread
+    loop_thread = threading.Thread(target=planning_loop, name="planning-loop", daemon=True)
+    loop_thread.start()
+    logger.info("Planning loop thread started")
+
+    # Start Flask web server in main thread
+    try:
+        from .web.app import start_server
+        start_server()
+    except ImportError:
+        logger.warning("Flask not available, running planning loop only")
+        loop_thread.join()
+    except Exception as e:
+        logger.error("Web server failed: %s", e, exc_info=True)
+        # Keep planning loop running even if web server fails
+        loop_thread.join()
+
+    state.running = False
+    logger.info("=== EnergieHA stopped ===")
 
 
 if __name__ == "__main__":

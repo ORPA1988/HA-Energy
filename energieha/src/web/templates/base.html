@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EnergieHA{% block title_suffix %}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ ingress_path }}/static/style.css">
+    <script src="{{ ingress_path }}/static/htmx.min.js" defer></script>
+    <script src="{{ ingress_path }}/static/alpine.min.js" defer></script>
+    <script src="{{ ingress_path }}/static/chart.min.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="nav-icon">&#9889;</span>
+            <span class="nav-title">EnergieHA</span>
+        </div>
+        <div class="nav-links">
+            <a href="{{ ingress_path }}/" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">Dashboard</a>
+            <a href="{{ ingress_path }}/planning" class="nav-link {% if active_page == 'planning' %}active{% endif %}">Planung</a>
+            <a href="{{ ingress_path }}/inverter" class="nav-link {% if active_page == 'inverter' %}active{% endif %}">Wechselrichter</a>
+            <a href="{{ ingress_path }}/config" class="nav-link {% if active_page == 'config' %}active{% endif %}">Konfiguration</a>
+            <a href="{{ ingress_path }}/logs" class="nav-link {% if active_page == 'logs' %}active{% endif %}">Logs</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <span>EnergieHA v1.0.0</span>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,1 @@
+"""EnergieHA web interface package."""

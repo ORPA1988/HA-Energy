@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title_suffix %} - Logs{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Logs &amp; Zyklen</h1>
+</div>
+
+<!-- Errors -->
+{% if errors %}
+<div class="card card-wide">
+    <div class="card-header text-red">Letzte Fehler</div>
+    <div class="card-body">
+        {% for err in errors %}
+        <div class="log-entry log-error">
+            <span class="log-time">{{ err.timestamp }}</span>
+            <span class="log-msg">{{ err.error }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Cycle History -->
+<div class="card card-wide">
+    <div class="card-header">Zyklusverlauf</div>
+    <div class="card-body table-scroll"
+         hx-get="{{ ingress_path }}/api/cycles"
+         hx-trigger="every 60s"
+         hx-swap="innerHTML">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Zeit</th>
+                    <th>Strategie</th>
+                    <th>Modus</th>
+                    <th>SOC %</th>
+                    <th>PV W</th>
+                    <th>Netz W</th>
+                    <th>Last W</th>
+                    <th>Fehler</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in cycles %}
+                <tr class="{% if c.error %}row-error{% endif %}">
+                    <td>{{ c.timestamp.strftime('%H:%M:%S') if c.timestamp else '--' }}</td>
+                    <td>{{ c.strategy }}</td>
+                    <td><span class="mode-badge mode-{{ c.battery_mode }}">{{ c.battery_mode }}</span></td>
+                    <td>{{ "%.1f"|format(c.battery_soc) }}</td>
+                    <td>{{ "%.0f"|format(c.pv_power_w) }}</td>
+                    <td class="{% if c.grid_power_w > 0 %}text-red{% else %}text-green{% endif %}">{{ "%.0f"|format(c.grid_power_w) }}</td>
+                    <td>{{ "%.0f"|format(c.load_power_w) }}</td>
+                    <td class="text-red">{{ c.error }}</td>
+                </tr>
+                {% endfor %}
+                {% if not cycles %}
+                <tr><td colspan="8" class="text-center">Noch keine Zyklen aufgezeichnet</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Live Log Stream -->
+<div class="card card-wide">
+    <div class="card-header">Live Stream</div>
+    <div class="card-body">
+        <div id="live-log" class="log-container" x-data="liveLog()" x-init="connect()">
+            <template x-for="msg in messages" :key="msg.id">
+                <div class="log-entry" x-text="msg.text"></div>
+            </template>
+            <div x-show="!connected" class="text-warning">Verbindung wird hergestellt...</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function liveLog() {
+    return {
+        messages: [],
+        connected: false,
+        msgId: 0,
+        connect() {
+            const es = new EventSource('{{ ingress_path }}/logs/stream');
+            es.onopen = () => { this.connected = true; };
+            es.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    const snap = data.snapshot || {};
+                    const plan = data.plan || {};
+                    const text = `[${new Date().toLocaleTimeString('de')}] `
+                        + `SOC=${(snap.battery_soc||0).toFixed(1)}% `
+                        + `PV=${(snap.pv_power_w||0).toFixed(0)}W `
+                        + `Grid=${(snap.grid_power_w||0).toFixed(0)}W `
+                        + `Mode=${plan.current_mode||'?'} `
+                        + `Strategy=${plan.strategy||'?'}`;
+                    this.messages.unshift({id: this.msgId++, text: text});
+                    if (this.messages.length > 100) this.messages.pop();
+                } catch(err) {}
+            };
+            es.onerror = () => { this.connected = false; };
+        }
+    };
+}
+</script>
+{% endblock %}

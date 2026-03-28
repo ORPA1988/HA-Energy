@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title_suffix %} - Wechselrichter{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Wechselrichter-Steuerung</h1>
+    {% if config and config.direct_control %}
+    <span class="badge badge-success">Direct Control AKTIV</span>
+    {% else %}
+    <span class="badge badge-warning">Direct Control AUS</span>
+    {% endif %}
+</div>
+
+<!-- Inverter Status -->
+<div class="card-grid">
+    <div class="card">
+        <div class="card-header">Betriebsmodus</div>
+        <div class="card-body">
+            <div class="big-value">{{ inverter.get('work_mode', '--') }}</div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">Energiemuster</div>
+        <div class="card-body">
+            <div class="big-value">{{ inverter.get('energy_pattern', '--') }}</div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">TOU Status</div>
+        <div class="card-body">
+            <div class="big-value">{{ inverter.get('tou_enabled', '--') }}</div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">Netzlade-Strom</div>
+        <div class="card-body">
+            <div class="big-value">{{ inverter.get('grid_charge_current', '--') }} A</div>
+        </div>
+    </div>
+</div>
+
+<!-- TOU Programs -->
+<div class="card card-wide">
+    <div class="card-header">TOU Programme (Time-of-Use)</div>
+    <div class="card-body">
+        <!-- Visual Timeline -->
+        <div class="tou-timeline">
+            {% for prog in inverter.get('tou_programs', []) %}
+            <div class="tou-slot {% if prog.mode == 'Grid' %}tou-grid{% else %}tou-disabled{% endif %}">
+                <span class="tou-num">#{{ prog.number }}</span>
+                <span class="tou-time">{{ prog.start_time }}</span>
+                <span class="tou-mode">{{ prog.mode }}</span>
+                <span class="tou-soc">SOC: {{ prog.soc_target }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Editable Table -->
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Startzeit</th>
+                    <th>Modus</th>
+                    <th>SOC Ziel %</th>
+                    <th>Aktion</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for prog in inverter.get('tou_programs', []) %}
+                <tr>
+                    <form method="POST" action="{{ ingress_path }}/inverter/tou/{{ prog.number }}">
+                        <td>{{ prog.number }}</td>
+                        <td><input type="time" name="start_time" value="{{ prog.start_time[:5] }}" class="input"></td>
+                        <td>
+                            <select name="mode" class="input">
+                                <option value="Grid" {% if prog.mode == 'Grid' %}selected{% endif %}>Grid</option>
+                                <option value="Disabled" {% if prog.mode != 'Grid' %}selected{% endif %}>Disabled</option>
+                            </select>
+                        </td>
+                        <td><input type="number" name="soc_target" value="{{ prog.soc_target }}" min="0" max="100" class="input input-narrow"></td>
+                        <td><button type="submit" class="btn btn-small">Setzen</button></td>
+                    </form>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- PHEV Control -->
+{% if config and config.phev_enabled %}
+<div class="card card-wide">
+    <div class="card-header">PHEV Ladesteuerung</div>
+    <div class="card-body">
+        <form method="POST" action="{{ ingress_path }}/inverter/phev" class="form-inline">
+            <label>Ladestrom (A):</label>
+            <input type="number" name="ampere" value="0" min="0" max="16" class="input input-narrow">
+            <button type="submit" class="btn btn-primary">Setzen</button>
+            <button type="submit" name="ampere" value="0" class="btn btn-danger">Stopp</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- Quick Actions -->
+<div class="card card-wide">
+    <div class="card-header">Schnellaktionen</div>
+    <div class="card-body action-bar">
+        <button class="btn btn-primary"
+                hx-post="{{ ingress_path }}/api/replan" hx-swap="none">
+            EMHASS Optimierung starten
+        </button>
+        <button class="btn btn-warning" onclick="alert('Funktion kommt in naechster Version')">
+            Alle TOU zuruecksetzen
+        </button>
+        <button class="btn btn-danger" onclick="alert('Funktion kommt in naechster Version')">
+            Notfall: Alle Idle
+        </button>
+    </div>
+</div>
+{% endblock %}

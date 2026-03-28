@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title_suffix %} - Konfiguration{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Konfiguration</h1>
+</div>
+
+<form method="POST" action="{{ ingress_path }}/config/save">
+    <!-- General -->
+    <div class="card card-wide">
+        <div class="card-header" x-data="{open:true}" @click="open=!open" style="cursor:pointer">
+            Allgemein <span x-text="open ? '&#9660;' : '&#9654;'"></span>
+        </div>
+        <div class="card-body" x-data="{open:true}" x-show="open">
+            <div class="form-group">
+                <label>Strategie</label>
+                <select name="strategy" class="input">
+                    {% for s in ['surplus', 'price', 'forecast', 'emhass'] %}
+                    <option value="{{ s }}" {% if raw.get('strategy') == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Zyklus (Sekunden)</label>
+                <input type="number" name="cycle_seconds" value="{{ raw.get('cycle_seconds', 300) }}" min="60" max="900" class="input">
+            </div>
+            <div class="form-group">
+                <label>Slot-Dauer (Minuten)</label>
+                <select name="slot_duration_min" class="input">
+                    <option value="15" {% if raw.get('slot_duration_min', 15) == 15 %}selected{% endif %}>15</option>
+                    <option value="60" {% if raw.get('slot_duration_min', 15) == 60 %}selected{% endif %}>60</option>
+                </select>
+            </div>
+            <div class="form-group form-check">
+                <input type="checkbox" name="dry_run" value="true" id="dry_run"
+                       {% if raw.get('dry_run', true) %}checked{% endif %}>
+                <label for="dry_run">Dry Run (keine Steuerkommandos)</label>
+            </div>
+            <div class="form-group form-check">
+                <input type="checkbox" name="direct_control" value="true" id="direct_control"
+                       {% if raw.get('direct_control', false) %}checked{% endif %}>
+                <label for="direct_control">Direct Control (Wechselrichter direkt steuern)</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Battery -->
+    <div class="card card-wide">
+        <div class="card-header">Batterie</div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Kapazitaet (kWh)</label>
+                    <input type="number" name="battery_capacity_kwh" value="{{ raw.get('battery_capacity_kwh', 30) }}" step="0.1" class="input">
+                </div>
+                <div class="form-group">
+                    <label>Min SOC %</label>
+                    <input type="number" name="min_soc_percent" value="{{ raw.get('min_soc_percent', 15) }}" min="0" max="100" class="input">
+                </div>
+                <div class="form-group">
+                    <label>Max SOC %</label>
+                    <input type="number" name="max_soc_percent" value="{{ raw.get('max_soc_percent', 95) }}" min="0" max="100" class="input">
+                </div>
+                <div class="form-group">
+                    <label>Effizienz</label>
+                    <input type="number" name="round_trip_efficiency" value="{{ raw.get('round_trip_efficiency', 0.85) }}" step="0.01" min="0.5" max="1.0" class="input">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Max Grid-Charge SOC %</label>
+                <input type="number" name="max_grid_charge_soc" value="{{ raw.get('max_grid_charge_soc', 80) }}" min="0" max="100" class="input">
+            </div>
+        </div>
+    </div>
+
+    <!-- Entities -->
+    <div class="card card-wide">
+        <div class="card-header">Sensor-Entitaeten</div>
+        <div class="card-body">
+            {% for key in ['entity_battery_soc', 'entity_battery_power', 'entity_pv_power',
+                           'entity_grid_power', 'entity_load_power', 'entity_epex_prices',
+                           'entity_solcast_forecast', 'entity_solcast_forecast_tomorrow',
+                           'entity_grid_charge_current'] %}
+            <div class="form-group">
+                <label>{{ key }}</label>
+                <input type="text" name="{{ key }}" value="{{ raw.get(key, '') }}" class="input input-wide">
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- PHEV -->
+    <div class="card card-wide">
+        <div class="card-header">PHEV</div>
+        <div class="card-body">
+            <div class="form-group form-check">
+                <input type="checkbox" name="phev_enabled" value="true" id="phev_enabled"
+                       {% if raw.get('phev_enabled', false) %}checked{% endif %}>
+                <label for="phev_enabled">PHEV aktiviert</label>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Min Leistung (W)</label>
+                    <input type="number" name="phev_min_charge_w" value="{{ raw.get('phev_min_charge_w', 1380) }}" class="input">
+                </div>
+                <div class="form-group">
+                    <label>Max Leistung (W)</label>
+                    <input type="number" name="phev_max_charge_w" value="{{ raw.get('phev_max_charge_w', 3680) }}" class="input">
+                </div>
+                <div class="form-group">
+                    <label>Batterie (kWh)</label>
+                    <input type="number" name="phev_battery_kwh" value="{{ raw.get('phev_battery_kwh', 14) }}" step="0.1" class="input">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sungrow TOU -->
+    <div class="card card-wide">
+        <div class="card-header">Sungrow TOU</div>
+        <div class="card-body">
+            <div class="form-group form-check">
+                <input type="checkbox" name="sungrow_tou_enabled" value="true" id="sungrow_tou"
+                       {% if raw.get('sungrow_tou_enabled', false) %}checked{% endif %}>
+                <label for="sungrow_tou">TOU-Steuerung aktiviert</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- EMHASS -->
+    <div class="card card-wide">
+        <div class="card-header">EMHASS</div>
+        <div class="card-body">
+            <div class="form-group">
+                <label>EMHASS URL</label>
+                <input type="text" name="emhass_url" value="{{ raw.get('emhass_url', 'http://localhost:5000') }}" class="input input-wide">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Export-Preis (EUR/kWh)</label>
+                    <input type="number" name="export_price_eur" value="{{ raw.get('export_price_eur', 0.10) }}" step="0.01" class="input">
+                </div>
+                <div class="form-group">
+                    <label>Zeitschritt (Min)</label>
+                    <select name="emhass_optimization_time_step" class="input">
+                        {% for v in [15, 30, 60] %}
+                        <option value="{{ v }}" {% if raw.get('emhass_optimization_time_step', 30) == v %}selected{% endif %}>{{ v }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Max Ladeleistung (W)</label>
+                    <input type="number" name="emhass_battery_charge_power_max" value="{{ raw.get('emhass_battery_charge_power_max', 5000) }}" class="input">
+                </div>
+                <div class="form-group">
+                    <label>Max Entladeleistung (W)</label>
+                    <input type="number" name="emhass_battery_discharge_power_max" value="{{ raw.get('emhass_battery_discharge_power_max', 5000) }}" class="input">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Strategy Parameters -->
+    <div class="card card-wide">
+        <div class="card-header">Strategie-Parameter</div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Min Preis-Spread (EUR)</label>
+                    <input type="number" name="min_price_spread_eur" value="{{ raw.get('min_price_spread_eur', 0.04) }}" step="0.01" class="input">
+                </div>
+                <div class="form-group">
+                    <label>Preis-Schwelle (EUR)</label>
+                    <input type="number" name="price_threshold_eur" value="{{ raw.get('price_threshold_eur', 0.25) }}" step="0.01" class="input">
+                </div>
+                <div class="form-group">
+                    <label>Tagesl. Verbrauch (kWh)</label>
+                    <input type="number" name="estimated_daily_load_kwh" value="{{ raw.get('estimated_daily_load_kwh', 12) }}" step="0.1" class="input">
+                </div>
+                <div class="form-group">
+                    <label>Mode Hold (s)</label>
+                    <input type="number" name="mode_hold_seconds" value="{{ raw.get('mode_hold_seconds', 120) }}" min="0" max="600" class="input">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-large">Speichern &amp; Anwenden</button>
+    </div>
+</form>
+{% endblock %}

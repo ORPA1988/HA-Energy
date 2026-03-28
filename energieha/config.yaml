@@ -1,5 +1,5 @@
 name: "EnergieHA"
-version: "0.9.0"
+version: "1.0.0"
 slug: "energieha"
 description: "Lightweight energy management for PV, battery, grid and consumers"
 url: "https://github.com/ORPA1988/HA-Energy"
@@ -10,6 +10,11 @@ arch:
   - i386
 init: false
 homeassistant_api: true
+ingress: true
+ingress_port: 5050
+ingress_entry: "/"
+panel_icon: "mdi:lightning-bolt"
+panel_title: "EnergieHA"
 startup: application
 boot: auto
 map:
@@ -53,6 +58,7 @@ options:
   estimated_daily_load_kwh: 12.0
 
   dry_run: true
+  direct_control: false
 
   # SOC-Grenzen
   max_grid_charge_soc: 80
@@ -108,3 +114,4 @@ schema:
   emhass_battery_charge_power_max: "int(100,)"
   emhass_battery_discharge_power_max: "int(100,)"
   mode_hold_seconds: "int(0,600)"
+  direct_control: bool

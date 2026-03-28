@@ -121,6 +121,7 @@ class Config:
     estimated_daily_load_kwh: float = 12.0
 
     dry_run: bool = False
+    direct_control: bool = False
 
     # SOC-Grenzen
     max_grid_charge_soc: int = 80  # Max SOC for grid charging (PV may go higher)
