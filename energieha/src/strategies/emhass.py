@@ -3,9 +3,17 @@
 Calls the EMHASS REST API for day-ahead optimization, then reads the
 result sensors (p_batt_forecast, soc_batt_forecast) and converts them
 to TimeSlot objects. PHEV is handled separately (EMHASS doesn't know about it).
+
+EMHASS sign convention: p_batt positive = discharge, negative = charge
+EnergieHA convention: positive = charge, negative = discharge
+→ Sign is inverted when reading EMHASS results.
+
+EMHASS SOC convention: decimal 0.0-1.0 (not percentage 0-100)
+→ Converted at API boundary; internal plan uses percentage 0-100.
 """
 
 import logging
+import math
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -29,13 +37,17 @@ def plan_emhass(
     slot_minutes = config.slot_duration_min
     num_slots = (24 * 60) // slot_minutes
 
-    # Build time-aligned arrays for EMHASS
+    # EMHASS time step (may differ from EnergieHA slot duration)
+    emhass_step = config.emhass_optimization_time_step
+    num_emhass_points = (24 * 60) // emhass_step
+
+    # Build time-aligned arrays at EMHASS resolution
     pv_w_list = []
     load_w_list = []
     price_list = []
 
-    for i in range(num_slots):
-        slot_start = now + timedelta(minutes=i * slot_minutes)
+    for i in range(num_emhass_points):
+        slot_start = now + timedelta(minutes=i * emhass_step)
         pv_w_list.append(get_forecast_for_time(pv_forecast, slot_start))
         load_w_list.append(snapshot.load_power_w if i == 0 else config.load_per_slot_w)
         price_list.append(get_price_for_time(prices, slot_start))
@@ -43,9 +55,10 @@ def plan_emhass(
     # Validate inputs
     client = EmhassClient(config.emhass_url)
 
-    errors = client.validate_inputs(
-        pv_w_list, load_w_list, price_list,
-        snapshot.battery_soc, config.min_soc_percent, config.max_soc_percent)
+    # Convert SOC to decimal (EMHASS uses 0.0-1.0, not 0-100%)
+    target_soc = config.max_grid_charge_soc / 100.0
+
+    errors = client.validate_inputs(pv_w_list, load_w_list, price_list, target_soc)
     if errors:
         for e in errors:
             logger.error("EMHASS validation: %s", e)
@@ -55,25 +68,36 @@ def plan_emhass(
     if not client.is_available():
         raise ConnectionError(f"EMHASS not reachable at {config.emhass_url}")
 
-    # Call EMHASS optimization — use actual SOC (may be below min_soc)
-    soc_init = snapshot.battery_soc
-    soc_final = config.max_grid_charge_soc  # Target: grid-charge limit
+    # Build battery parameters for EMHASS (all SOC values as decimal 0-1)
+    # Efficiency: split round_trip_efficiency symmetrically into charge/discharge
+    eff_single = math.sqrt(config.round_trip_efficiency)
+    battery_params = {
+        "set_use_battery": True,
+        "battery_nominal_energy_capacity": config.battery_capacity_kwh * 1000,  # Wh
+        "battery_minimum_state_of_charge": config.min_soc_percent / 100.0,
+        "battery_maximum_state_of_charge": config.max_soc_percent / 100.0,
+        "battery_target_state_of_charge": target_soc,
+        "battery_charge_power_max": config.emhass_battery_charge_power_max,
+        "battery_discharge_power_max": config.emhass_battery_discharge_power_max,
+        "battery_charge_efficiency": eff_single,
+        "battery_discharge_efficiency": eff_single,
+    }
 
     client.dayahead_optim(
         pv_forecast_w=pv_w_list,
         load_forecast_w=load_w_list,
         prices_eur=price_list,
-        soc_init=soc_init,
-        soc_final=soc_final,
         export_price_eur=config.export_price_eur,
+        battery_params=battery_params,
+        optimization_time_step=emhass_step,
     )
 
-    # Read EMHASS result sensors from HA (reuse same client credentials)
+    # Read EMHASS result sensors from HA
     from ..ha_client import HaClient
     ha = HaClient()
 
-    batt_forecast = _read_forecast_sensor(ha, "sensor.p_batt_forecast", num_slots)
-    soc_forecast = _read_forecast_sensor(ha, "sensor.soc_batt_forecast", num_slots)
+    batt_forecast = _read_forecast_sensor(ha, "sensor.p_batt_forecast", num_emhass_points)
+    soc_forecast = _read_forecast_sensor(ha, "sensor.soc_batt_forecast", num_emhass_points)
 
     # Check data freshness and availability
     EMHASS_MAX_AGE_SECONDS = 6 * 3600  # 6h = 1.5× trigger interval
@@ -98,9 +122,24 @@ def plan_emhass(
     if not batt_forecast:
         raise ValueError("EMHASS returned no battery forecast data")
 
+    # Validate result length
+    if len(batt_forecast) != num_emhass_points:
+        logger.warning("EMHASS returned %d batt points, expected %d. "
+                       "Check EMHASS optimization_time_step setting (expected %d min).",
+                       len(batt_forecast), num_emhass_points, emhass_step)
+
+    # Warn if all battery values are zero (EMHASS may not have battery enabled)
+    if all(abs(v) < 1.0 for v in batt_forecast):
+        logger.warning("EMHASS battery forecast is all zeros — "
+                       "check that set_use_battery is True in EMHASS config")
+
+    # Normalize EMHASS SOC forecast: EMHASS returns decimal (0-1), we use percentage (0-100)
+    if soc_forecast:
+        if max(soc_forecast) <= 1.5:  # Clearly decimal format
+            soc_forecast = [s * 100.0 for s in soc_forecast]
+            logger.debug("EMHASS SOC forecast: converted from decimal to percentage")
+
     # Rebase EMHASS SOC forecast onto actual SOC
-    # EMHASS calculates SOC from the optimization start, which may differ
-    # from current reality (e.g. battery discharged further since last optim)
     if soc_forecast and soc_forecast[0] > 0:
         soc_offset = snapshot.battery_soc - soc_forecast[0]
         if abs(soc_offset) > 1.0:  # Only rebase if >1% difference
@@ -110,9 +149,9 @@ def plan_emhass(
                                min(config.max_soc_percent, s + soc_offset))
                            for s in soc_forecast]
 
-    # EMHASS uses hourly resolution — map to our slot resolution
-    # Each EMHASS hour covers (60/slot_minutes) slots
-    slots_per_emhass = max(1, 60 // slot_minutes)
+    # Map EMHASS results to EnergieHA slot resolution
+    # Each EMHASS interval covers (emhass_step / slot_minutes) EnergieHA slots
+    slots_per_emhass = max(1, emhass_step // slot_minutes)
 
     # Build plan from EMHASS output
     slots = []
@@ -120,14 +159,15 @@ def plan_emhass(
 
     for i in range(num_slots):
         slot_start = now + timedelta(minutes=i * slot_minutes)
-        pv_w = pv_w_list[i]
-        load_w = load_w_list[i]
-        price = price_list[i]
+        # Get PV/load/price at slot resolution (not EMHASS resolution)
+        pv_w = get_forecast_for_time(pv_forecast, slot_start)
+        load_w = snapshot.load_power_w if i == 0 else config.load_per_slot_w
+        price = get_price_for_time(prices, slot_start)
 
-        # Map slot index to EMHASS hourly index
-        # EMHASS convention: positive=discharge, negative=charge
-        # EnergieHA convention: positive=charge, negative=discharge
-        # → invert sign
+        # Map slot index to EMHASS index
+        # EMHASS convention: positive = discharge, negative = charge
+        # EnergieHA convention: positive = charge, negative = discharge
+        # → Invert sign
         emhass_idx = i // slots_per_emhass
         raw_batt = batt_forecast[emhass_idx] if emhass_idx < len(batt_forecast) else 0.0
         battery_w = -raw_batt  # Invert: EMHASS positive=discharge → our negative
@@ -160,7 +200,6 @@ def plan_emhass(
         grid_w = calc_grid_balance(pv_w, load_w, phev_w, battery_w)
 
         # Clip night export: no point exporting when PV=0
-        # WR handles this via "Zero Export to CT" anyway, but plan looks cleaner
         if pv_w < 10 and grid_w < -10 and battery_mode == "discharge":
             battery_w = -(load_w + phev_w)  # Match discharge to load exactly
             grid_w = 0.0
@@ -213,7 +252,6 @@ def _read_forecast_sensor(ha, entity_id: str, expected_len: int) -> list[float]:
                 values.append(float(item))
             elif isinstance(item, dict):
                 # EMHASS uses the sensor name as value key (e.g. "p_batt_forecast")
-                # Try all numeric-looking values in the dict
                 val = None
                 for k, v in item.items():
                     if k == "date":

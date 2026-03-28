@@ -131,6 +131,9 @@ class Config:
     # EMHASS
     emhass_url: str = "http://localhost:5000"
     export_price_eur: float = 0.10  # Feed-in tariff EUR/kWh (fix, not EPEX-dependent)
+    emhass_optimization_time_step: int = 30  # EMHASS time step in minutes (default 30)
+    emhass_battery_charge_power_max: int = 5000    # Max charge power in W
+    emhass_battery_discharge_power_max: int = 5000  # Max discharge power in W
 
     # Executor
     mode_hold_seconds: int = 120  # Hysteresis: min seconds between mode changes

@@ -64,6 +64,9 @@ def load_config() -> Config:
         sungrow_tou_enabled=bool(data.get("sungrow_tou_enabled", False)),
         emhass_url=str(data.get("emhass_url", "http://localhost:5000")),
         export_price_eur=float(data.get("export_price_eur", 0.10)),
+        emhass_optimization_time_step=int(data.get("emhass_optimization_time_step", 30)),
+        emhass_battery_charge_power_max=int(data.get("emhass_battery_charge_power_max", 5000)),
+        emhass_battery_discharge_power_max=int(data.get("emhass_battery_discharge_power_max", 5000)),
         mode_hold_seconds=int(data.get("mode_hold_seconds", 120)),
     )
 
@@ -81,6 +84,17 @@ def validate_config(config: Config) -> bool:
         errors.append("entity_battery_soc is empty")
     if config.round_trip_efficiency < 0.5 or config.round_trip_efficiency > 1.0:
         errors.append(f"round_trip_efficiency ({config.round_trip_efficiency}) outside [0.5, 1.0]")
+    # EMHASS-specific validation
+    if config.strategy == "emhass":
+        step = config.emhass_optimization_time_step
+        slot = config.slot_duration_min
+        if step % slot != 0 and slot % step != 0:
+            errors.append(f"emhass_optimization_time_step ({step}) must be a multiple "
+                          f"of slot_duration_min ({slot}) or vice versa")
+        if config.emhass_battery_charge_power_max <= 0:
+            errors.append(f"emhass_battery_charge_power_max must be > 0")
+        if config.emhass_battery_discharge_power_max <= 0:
+            errors.append(f"emhass_battery_discharge_power_max must be > 0")
     for e in errors:
         logger.error("Config validation: %s", e)
     return len(errors) == 0

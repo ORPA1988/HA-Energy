@@ -53,20 +53,37 @@ class EmhassClient:
     def dayahead_optim(self, pv_forecast_w: list[float],
                        load_forecast_w: list[float],
                        prices_eur: list[float],
-                       soc_init: float, soc_final: float,
-                       export_price_eur: float = 0.10) -> dict:
-        """Run day-ahead optimization and return result."""
+                       export_price_eur: float = 0.10,
+                       battery_params: dict = None,
+                       optimization_time_step: int = None) -> dict:
+        """Run day-ahead optimization and return result.
+
+        Args:
+            battery_params: Dict with EMHASS battery runtime params (decimal SOC 0-1).
+                Keys: set_use_battery, battery_nominal_energy_capacity,
+                battery_minimum/maximum/target_state_of_charge,
+                battery_charge/discharge_power_max,
+                battery_charge/discharge_efficiency.
+            optimization_time_step: EMHASS time step in minutes (passed as runtime param).
+        """
         payload = {
             "pv_power_forecast": pv_forecast_w,
             "load_power_forecast": load_forecast_w,
             "load_cost_forecast": prices_eur,
             "prod_price_forecast": [export_price_eur] * len(prices_eur),
-            "soc_init": soc_init,
-            "soc_final": soc_final,
         }
 
-        logger.info("EMHASS: calling dayahead-optim with %d intervals, SOC %.1f%%→%.1f%%",
-                     len(pv_forecast_w), soc_init, soc_final)
+        # Add battery parameters (EMHASS uses decimal SOC 0.0-1.0)
+        if battery_params:
+            payload.update(battery_params)
+
+        if optimization_time_step:
+            payload["optimization_time_step"] = optimization_time_step
+
+        target_soc = battery_params.get("battery_target_state_of_charge", 0) if battery_params else 0
+        logger.info("EMHASS: calling dayahead-optim with %d intervals, target SOC %.1f%%, time_step=%s",
+                     len(pv_forecast_w), target_soc * 100,
+                     optimization_time_step or "default")
 
         resp = requests.post(f"{self.url}/action/dayahead-optim",
                              json=payload, timeout=TIMEOUT)
@@ -107,9 +124,12 @@ class EmhassClient:
 
     @staticmethod
     def validate_inputs(pv_forecast: list[float], load_forecast: list[float],
-                        prices: list[float], soc_init: float,
-                        min_soc: int, max_soc: int) -> list[str]:
-        """Validate EMHASS inputs, return list of error messages (empty = OK)."""
+                        prices: list[float], target_soc: float) -> list[str]:
+        """Validate EMHASS inputs, return list of error messages (empty = OK).
+
+        Args:
+            target_soc: Target SOC as decimal (0.0-1.0), matching EMHASS convention.
+        """
         errors = []
 
         if len(pv_forecast) != len(load_forecast):
@@ -118,10 +138,9 @@ class EmhassClient:
         if len(prices) < len(pv_forecast):
             errors.append(f"Too few price points: {len(prices)} < {len(pv_forecast)}")
 
-        # SOC can be below min_soc in real operation (battery depleted)
-        # Only reject impossible values (negative or >100%)
-        if not (0 <= soc_init <= 100):
-            errors.append(f"SOC init {soc_init}% outside [0-100]%")
+        # EMHASS uses decimal SOC (0.0-1.0)
+        if not (0.0 <= target_soc <= 1.0):
+            errors.append(f"Target SOC {target_soc} outside [0.0-1.0] (EMHASS decimal format)")
 
         if any(p < 0 for p in pv_forecast):
             errors.append("Negative PV forecast values")
