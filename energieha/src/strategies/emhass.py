@@ -14,6 +14,7 @@ EMHASS SOC convention: decimal 0.0-1.0 (not percentage 0-100)
 
 import logging
 import math
+import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -92,6 +93,9 @@ def plan_emhass(
         optimization_time_step=emhass_step,
     )
 
+    # Wait briefly for EMHASS publish-data to propagate to HA sensors
+    time.sleep(2)
+
     # Read EMHASS result sensors from HA
     from ..ha_client import HaClient
     ha = HaClient()
@@ -110,11 +114,12 @@ def plan_emhass(
         # Freshness check
         if last_updated:
             try:
-                age = (datetime.now(timezone.utc) - datetime.fromisoformat(last_updated)).total_seconds()
-                if age > EMHASS_MAX_AGE_SECONDS:
-                    raise ValueError(f"EMHASS data stale ({age/3600:.1f}h old, max {EMHASS_MAX_AGE_SECONDS/3600:.0f}h)")
+                updated_dt = datetime.fromisoformat(last_updated)
+                age = (datetime.now(timezone.utc) - updated_dt).total_seconds()
             except (ValueError, TypeError):
-                pass  # Can't parse timestamp — skip freshness check
+                age = None  # Can't parse timestamp — skip freshness check
+            if age is not None and age > EMHASS_MAX_AGE_SECONDS:
+                raise ValueError(f"EMHASS data stale ({age/3600:.1f}h old, max {EMHASS_MAX_AGE_SECONDS/3600:.0f}h)")
     else:
         logger.info("EMHASS results: %d batt points, %d soc points",
                     len(batt_forecast), len(soc_forecast))

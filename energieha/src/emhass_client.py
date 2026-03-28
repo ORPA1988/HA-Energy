@@ -108,6 +108,11 @@ class EmhassClient:
             result = resp.json()
         except ValueError:
             logger.warning("EMHASS: non-JSON response: %s", resp.text[:200])
+            # Still trigger publish-data for non-JSON success responses
+            try:
+                requests.post(f"{self.url}/action/publish-data", json={}, timeout=30)
+            except requests.RequestException:
+                pass
             return {"status": "ok", "raw": resp.text[:200]}
 
         logger.info("EMHASS: optimization complete, triggering publish-data")
