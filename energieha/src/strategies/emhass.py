@@ -84,7 +84,7 @@ def plan_emhass(
         "battery_discharge_efficiency": eff_single,
     }
 
-    client.dayahead_optim(
+    result = client.dayahead_optim(
         pv_forecast_w=pv_w_list,
         load_forecast_w=load_w_list,
         prices_eur=price_list,
@@ -93,36 +93,38 @@ def plan_emhass(
         optimization_time_step=emhass_step,
     )
 
-    # Wait briefly for EMHASS publish-data to propagate to HA sensors
-    time.sleep(2)
+    # Try to extract results directly from API response first
+    batt_forecast = _extract_from_result(result, "P_batt", num_emhass_points)
+    soc_forecast = _extract_from_result(result, "SOC_opt", num_emhass_points)
 
-    # Read EMHASS result sensors from HA
-    from ..ha_client import HaClient
-    ha = HaClient()
-
-    batt_forecast = _read_forecast_sensor(ha, "sensor.p_batt_forecast", num_emhass_points)
-    soc_forecast = _read_forecast_sensor(ha, "sensor.soc_batt_forecast", num_emhass_points)
-
-    # Check data freshness and availability
-    EMHASS_MAX_AGE_SECONDS = 6 * 3600  # 6h = 1.5× trigger interval
-
-    batt_state = ha.get_state("sensor.p_batt_forecast")
-    if batt_state:
-        last_updated = batt_state.get("last_updated", "")
-        logger.info("EMHASS results: %d batt points, %d soc points (updated: %s)",
-                    len(batt_forecast), len(soc_forecast), last_updated[:19])
-        # Freshness check
-        if last_updated:
-            try:
-                updated_dt = datetime.fromisoformat(last_updated)
-                age = (datetime.now(timezone.utc) - updated_dt).total_seconds()
-            except (ValueError, TypeError):
-                age = None  # Can't parse timestamp — skip freshness check
-            if age is not None and age > EMHASS_MAX_AGE_SECONDS:
-                raise ValueError(f"EMHASS data stale ({age/3600:.1f}h old, max {EMHASS_MAX_AGE_SECONDS/3600:.0f}h)")
+    if batt_forecast:
+        logger.info("EMHASS: using direct API response (%d batt points)", len(batt_forecast))
     else:
-        logger.info("EMHASS results: %d batt points, %d soc points",
-                    len(batt_forecast), len(soc_forecast))
+        # Fallback: read from HA sensors (may be stale)
+        logger.info("EMHASS: no direct result, reading HA sensors (may be stale)")
+        time.sleep(2)
+
+        from ..ha_client import HaClient
+        ha = HaClient()
+
+        batt_forecast = _read_forecast_sensor(ha, "sensor.p_batt_forecast", num_emhass_points)
+        soc_forecast = _read_forecast_sensor(ha, "sensor.soc_batt_forecast", num_emhass_points)
+
+        # Check freshness only for sensor-based data
+        EMHASS_MAX_AGE_SECONDS = 6 * 3600
+        batt_state = ha.get_state("sensor.p_batt_forecast")
+        if batt_state:
+            last_updated = batt_state.get("last_updated", "")
+            logger.info("EMHASS sensors: %d batt, %d soc points (updated: %s)",
+                        len(batt_forecast), len(soc_forecast), last_updated[:19])
+            if last_updated:
+                try:
+                    updated_dt = datetime.fromisoformat(last_updated)
+                    age = (datetime.now(timezone.utc) - updated_dt).total_seconds()
+                except (ValueError, TypeError):
+                    age = None
+                if age is not None and age > EMHASS_MAX_AGE_SECONDS:
+                    raise ValueError(f"EMHASS data stale ({age/3600:.1f}h old, max {EMHASS_MAX_AGE_SECONDS/3600:.0f}h)")
 
     if not batt_forecast:
         raise ValueError("EMHASS returned no battery forecast data")
@@ -223,6 +225,52 @@ def plan_emhass(
                 sum(1 for s in slots if s.planned_battery_mode == "discharge"))
 
     return Plan(created_at=now, strategy="emhass", slots=slots, tz=config.timezone)
+
+
+def _extract_from_result(result: dict, key: str, expected_len: int) -> list[float]:
+    """Extract forecast values directly from EMHASS API response.
+
+    EMHASS may return results in various formats:
+    - {"P_batt": [val1, val2, ...]} - direct list
+    - {"P_batt": {"2026-03-28 00:00": val1, ...}} - timestamped dict
+    - {"result": {"P_batt": [...]}} - nested under result key
+    """
+    if not isinstance(result, dict):
+        return []
+
+    # Try direct key
+    data = result.get(key)
+
+    # Try nested under 'result'
+    if data is None and "result" in result:
+        nested = result["result"]
+        if isinstance(nested, dict):
+            data = nested.get(key)
+
+    # Try case-insensitive
+    if data is None:
+        for k, v in result.items():
+            if k.lower() == key.lower():
+                data = v
+                break
+
+    if data is None:
+        return []
+
+    # Parse the data
+    if isinstance(data, list):
+        try:
+            return [float(v) for v in data]
+        except (ValueError, TypeError):
+            return []
+    elif isinstance(data, dict):
+        # Timestamped dict: {"2026-03-28 00:00": 123.4, ...}
+        try:
+            return [float(v) for v in data.values()]
+        except (ValueError, TypeError):
+            return []
+
+    return []
 
 
 def _read_forecast_sensor(ha, entity_id: str, expected_len: int) -> list[float]:

@@ -232,6 +232,12 @@ def _run_cycle(collector, executor, publisher, config, cycle_num,
             grid_power_w=snapshot.grid_power_w,
             load_power_w=snapshot.load_power_w,
         ))
+        # Update EMHASS health status
+        if plan.strategy == "emhass":
+            state.emhass_available = True
+            state.emhass_last_ok = datetime.now()
+        elif config.strategy == "emhass" and hasattr(plan, 'strategy_error'):
+            state.emhass_available = False
 
 
 def main():

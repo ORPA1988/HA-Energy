@@ -115,9 +115,10 @@ class EmhassClient:
                 pass
             return {"status": "ok", "raw": resp.text[:200]}
 
-        logger.info("EMHASS: optimization complete, triggering publish-data")
+        logger.info("EMHASS: optimization complete, result keys: %s",
+                    list(result.keys()) if isinstance(result, dict) else type(result).__name__)
 
-        # Force EMHASS to publish results to HA sensors
+        # Try to trigger publish-data (may not work in all EMHASS versions)
         try:
             pub_resp = requests.post(f"{self.url}/action/publish-data",
                                       json={}, timeout=30)
@@ -126,6 +127,23 @@ class EmhassClient:
             logger.warning("EMHASS: publish-data failed: %s", e)
 
         return result
+
+    def get_optimization_results(self) -> dict | None:
+        """Read cached optimization results directly from EMHASS API.
+
+        Returns dict with 'optim_status', 'P_batt', 'SOC_opt', etc.
+        Falls back to None if not available.
+        """
+        try:
+            resp = requests.get(f"{self.url}/action/get-data", timeout=10)
+            if resp.status_code == 200 and resp.text:
+                try:
+                    return resp.json()
+                except ValueError:
+                    pass
+        except requests.RequestException:
+            pass
+        return None
 
     @staticmethod
     def validate_inputs(pv_forecast: list[float], load_forecast: list[float],
