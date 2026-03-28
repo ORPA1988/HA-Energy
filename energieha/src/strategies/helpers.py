@@ -44,9 +44,9 @@ def update_soc(soc: float, battery_w: float, slot_minutes: int,
     energy_wh = battery_w * (slot_minutes / 60.0)
     eff_half = config.round_trip_efficiency ** 0.5
     if energy_wh > 0:
-        energy_wh *= eff_half  # Charge losses
+        energy_wh *= eff_half  # Charge losses: less energy stored than drawn
     elif energy_wh < 0:
-        energy_wh *= eff_half  # Discharge losses
+        energy_wh /= eff_half  # Discharge losses: more energy consumed than delivered
     soc += (energy_wh / config.battery_capacity_wh) * 100.0
     return max(config.min_soc_percent, min(config.max_soc_percent, soc))
 

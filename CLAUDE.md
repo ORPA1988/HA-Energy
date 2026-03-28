@@ -7,7 +7,7 @@
 **EnergieHA** ist ein leichtgewichtiges Home Assistant Add-on fuer Energiemanagement. Es steuert eine Hausbatterie ueber Sungrow TOU-Programme, basierend auf EMHASS LP-Optimierung, PV-Prognose (Solcast), Strompreisen (EPEX Spot) und aktuellem Verbrauch. PHEV-Ladung wird von evcc gesteuert.
 
 **Repository**: https://github.com/ORPA1988/HA-Energy
-**Version**: 0.3.9
+**Version**: 0.9.0
 **Sprache**: Python (kein Framework, nur `requests`)
 **Deployment**: HA Add-on Container (Alpine + Python)
 
@@ -134,7 +134,7 @@ WICHTIG: `pv_estimate` ist in **kW** (nicht W). Collector konvertiert automatisc
 String-Werte: `"Disconnected"`, `"InProgress"`, `"Connected"`, `"WaitScheduled"` etc.
 Collector erkennt `inprogress`, `charging`, `waitscheduled`, `connected` als "angeschlossen".
 
-## Status (v0.3.9, Stand 2026-03-26)
+## Status (v0.9.0, Stand 2026-03-28)
 
 **LIVE-Betrieb** mit `strategy=emhass`, `sungrow_tou_enabled=true`, `dry_run=false`.
 Batterie wird aktiv gesteuert: Netzladung bei guenstigen Preisen (EMHASS LP-Optimierung).
