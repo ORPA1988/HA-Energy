@@ -1,29 +1,36 @@
 """EMHASS-based strategy: uses linear programming for optimal scheduling.
 
-Calls the EMHASS REST API for day-ahead optimization, then reads the
-result sensors (p_batt_forecast, soc_batt_forecast) and converts them
-to TimeSlot objects. PHEV is handled separately (EMHASS doesn't know about it).
+Calls the EMHASS optimization engine DIRECTLY as a Python library
+(not via REST API). This eliminates the publish-data bug and gives
+immediate access to optimization results.
 
 EMHASS sign convention: p_batt positive = discharge, negative = charge
 EnergieHA convention: positive = charge, negative = discharge
 → Sign is inverted when reading EMHASS results.
-
-EMHASS SOC convention: decimal 0.0-1.0 (not percentage 0-100)
-→ Converted at API boundary; internal plan uses percentage 0-100.
 """
 
 import logging
 import math
-import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from ..emhass_client import EmhassClient
 from ..models import Config, ForecastPoint, Plan, PricePoint, Snapshot, TimeSlot
 from .helpers import (calc_grid_balance, calc_phev_power, get_forecast_for_time,
                       get_price_for_time, is_grid_charging, update_soc)
 
 logger = logging.getLogger(__name__)
+
+# Try to import EMHASS optimization engine
+_emhass_available = False
+try:
+    import numpy as np
+    import pandas as pd
+    from emhass.optimization import Optimization
+    from emhass.forecast import Forecast
+    _emhass_available = True
+    logger.info("EMHASS optimization engine loaded (direct Python integration)")
+except ImportError as e:
+    logger.warning("EMHASS not available as library: %s", e)
 
 
 def plan_emhass(
@@ -32,15 +39,16 @@ def plan_emhass(
     pv_forecast: list[ForecastPoint],
     config: Config,
 ) -> Plan:
-    """Create a 24h plan using EMHASS linear programming optimization."""
+    """Create a plan using EMHASS linear programming optimization."""
+    if not _emhass_available:
+        raise ImportError("EMHASS optimization engine not installed")
+
     tz = ZoneInfo(config.timezone)
     now = datetime.now(tz)
     slot_minutes = config.slot_duration_min
-    num_slots = (24 * 60) // slot_minutes
-
-    # EMHASS time step (may differ from EnergieHA slot duration)
     emhass_step = config.emhass_optimization_time_step
     num_emhass_points = (24 * 60) // emhass_step
+    num_slots = (24 * 60) // slot_minutes
 
     # Build time-aligned arrays at EMHASS resolution
     pv_w_list = []
@@ -53,196 +61,106 @@ def plan_emhass(
         load_w_list.append(snapshot.load_power_w if i == 0 else config.load_per_slot_w)
         price_list.append(get_price_for_time(prices, slot_start))
 
-    # Validate inputs
-    client = EmhassClient(config.emhass_url)
+    # Build pandas DataFrames for EMHASS
+    freq = pd.Timedelta(minutes=emhass_step)
+    time_index = pd.date_range(start=now, periods=num_emhass_points, freq=freq, tz=tz)
 
-    # Convert SOC to decimal (EMHASS uses 0.0-1.0, not 0-100%)
-    target_soc = config.max_grid_charge_soc / 100.0
+    P_PV = pd.Series(pv_w_list, index=time_index, name="P_PV")
+    P_Load = pd.Series(load_w_list, index=time_index, name="P_Load")
+    cost_forecast = pd.Series(price_list, index=time_index, name="cost")
+    prod_price = pd.Series([config.export_price_eur] * num_emhass_points,
+                           index=time_index, name="prod_price")
 
-    errors = client.validate_inputs(pv_w_list, load_w_list, price_list, target_soc)
-    if errors:
-        for e in errors:
-            logger.error("EMHASS validation: %s", e)
-        raise ValueError(f"EMHASS input validation failed: {errors[0]}")
-
-    # Check EMHASS availability
-    if not client.is_available():
-        raise ConnectionError(f"EMHASS not reachable at {config.emhass_url}")
-
-    # Build battery parameters for EMHASS (all SOC values as decimal 0-1)
-    # Efficiency: split round_trip_efficiency symmetrically into charge/discharge
+    # Battery parameters
     eff_single = math.sqrt(config.round_trip_efficiency)
-    battery_params = {
+
+    optim_conf = {
         "set_use_battery": True,
-        "battery_nominal_energy_capacity": config.battery_capacity_kwh * 1000,  # Wh
+        "battery_nominal_energy_capacity": config.battery_capacity_kwh * 1000,
         "battery_minimum_state_of_charge": config.min_soc_percent / 100.0,
         "battery_maximum_state_of_charge": config.max_soc_percent / 100.0,
-        "battery_target_state_of_charge": target_soc,
+        "battery_target_state_of_charge": config.max_grid_charge_soc / 100.0,
         "battery_charge_power_max": config.emhass_battery_charge_power_max,
         "battery_discharge_power_max": config.emhass_battery_discharge_power_max,
         "battery_charge_efficiency": eff_single,
         "battery_discharge_efficiency": eff_single,
+        "num_def_loads": 0,
+        "set_nocharge_from_grid": False,
+        "set_nodischarge_to_grid": True,
+        "set_total_pv_sell": False,
     }
 
-    result = client.dayahead_optim(
-        pv_forecast_w=pv_w_list,
-        load_forecast_w=load_w_list,
-        prices_eur=price_list,
-        export_price_eur=config.export_price_eur,
-        battery_params=battery_params,
-        optimization_time_step=emhass_step,
-    )
+    logger.info("EMHASS direct: %d intervals, SOC=%.1f%%, target=%.1f%%, step=%dmin",
+                num_emhass_points, snapshot.battery_soc,
+                config.max_grid_charge_soc, emhass_step)
 
-    # Publish EMHASS debug info to a diagnostic sensor
-    from ..ha_client import HaClient
-    ha = HaClient()
+    # Run EMHASS optimization directly
+    try:
+        opt = Optimization(
+            soc_init=snapshot.battery_soc / 100.0,
+            soc_final=config.max_grid_charge_soc / 100.0,
+            num_def_loads=0,
+            P_PV_forecast=P_PV.values,
+            P_load_forecast=P_Load.values,
+            unit_load_cost=cost_forecast.values,
+            unit_prod_price=prod_price.values,
+            optim_conf=optim_conf,
+            plant_conf={},
+            logger=logger,
+        )
 
-    # EMHASS v0.17.1 returns plain text from dayahead-optim, not JSON results.
-    # The actual results must be retrieved separately.
+        opt_res = opt.perform_dayahead_forecast_optim(P_PV, P_Load)
 
-    # Step 1: Try to get cached results from EMHASS API endpoints
-    cached = client.get_optimization_results()
-    if cached:
-        logger.info("EMHASS: got cached results with keys: %s", list(cached.keys())[:10])
-        result = cached  # Use cached results instead of the text response
+        if opt_res is None or opt_res.empty:
+            raise ValueError("EMHASS optimization returned empty result")
 
-    # Publish diagnostics (now with the best result we have)
-    _publish_emhass_diag(ha, result, client)
+        logger.info("EMHASS optimization complete: %d rows, columns: %s",
+                    len(opt_res), list(opt_res.columns))
 
-    # Step 2: Try to extract P_batt/SOC from the result
+    except Exception as e:
+        # If direct optimization fails, try the REST API fallback
+        logger.warning("EMHASS direct optimization failed: %s. Trying REST API...", e)
+        return _plan_emhass_rest_fallback(snapshot, prices, pv_forecast, config,
+                                          pv_w_list, load_w_list, price_list)
+
+    # Extract battery power and SOC from results
     batt_forecast = []
     soc_forecast = []
 
-    # Try many possible key names
-    batt_keys = ("P_batt", "p_batt_forecast", "P_batt_forecast", "opt_p_batt",
-                 "battery_power", "P_battery", "p_batt")
-    soc_keys = ("SOC_opt", "soc_batt_forecast", "SOC_batt", "opt_soc",
-                "battery_soc", "SOC_battery", "soc_batt")
-
-    for key in batt_keys:
-        batt_forecast = _extract_from_result(result, key, num_emhass_points)
-        if batt_forecast:
-            logger.info("EMHASS: found batt data under key '%s' (%d points)", key, len(batt_forecast))
-            break
-
-    for key in soc_keys:
-        soc_forecast = _extract_from_result(result, key, num_emhass_points)
-        if soc_forecast:
-            logger.info("EMHASS: found SOC data under key '%s' (%d points)", key, len(soc_forecast))
-            break
-
-    if batt_forecast:
-        logger.info("EMHASS: using API data (%d batt, %d soc points)",
-                    len(batt_forecast), len(soc_forecast))
-    else:
-        # EMHASS v0.17.1 returns plain text. Try multiple approaches to get results.
-        logger.info("EMHASS: no direct API data, trying publish pipeline...")
-
-        # Approach 1: Call publish-data via Supervisor proxy (like HA automations)
-        client.call_via_supervisor("action/publish-data", {})
-        time.sleep(5)
-
-        batt_forecast = _read_forecast_sensor(ha, "sensor.p_batt_forecast", num_emhass_points)
-        soc_forecast = _read_forecast_sensor(ha, "sensor.soc_batt_forecast", num_emhass_points)
-
-        # Check if sensors actually updated (within last 5 minutes)
-        sensors_fresh = False
-        batt_state = ha.get_state("sensor.p_batt_forecast")
-        if batt_state:
-            last_updated = batt_state.get("last_updated", "")
-            if last_updated:
-                try:
-                    updated_dt = datetime.fromisoformat(last_updated)
-                    age = (datetime.now(timezone.utc) - updated_dt).total_seconds()
-                    sensors_fresh = age < 300  # Updated within 5 minutes
-                except (ValueError, TypeError):
-                    pass
-            logger.info("EMHASS sensors: %d batt, %d soc (fresh=%s, updated=%s)",
-                        len(batt_forecast), len(soc_forecast), sensors_fresh, last_updated[:19])
-
-        # If sensors still stale and no battery data available,
-        # don't fake it - let the fallback to Price strategy handle it
-        if not sensors_fresh and not batt_forecast:
-            logger.warning("EMHASS sensors stale and no battery data from API. "
-                          "EMHASS optimization result is lost. Falling back to Price strategy.")
-            raise ValueError("EMHASS optimization succeeded but results unavailable "
-                           "(publish-data failed, no API data). Use Price strategy instead.")
-
-        # Use whatever data we have (even if stale)
-        EMHASS_MAX_AGE_SECONDS = 48 * 3600
-        EMHASS_WARN_AGE_SECONDS = 6 * 3600
-
-        if batt_state:
-            last_updated = batt_state.get("last_updated", "")
-            logger.info("EMHASS sensors: %d batt, %d soc points (updated: %s)",
-                        len(batt_forecast), len(soc_forecast), last_updated[:19])
-            if last_updated:
-                try:
-                    updated_dt = datetime.fromisoformat(last_updated)
-                    age = (datetime.now(timezone.utc) - updated_dt).total_seconds()
-                except (ValueError, TypeError):
-                    age = None
-                if age is not None:
-                    if age > EMHASS_MAX_AGE_SECONDS:
-                        raise ValueError(f"EMHASS data too old ({age/3600:.1f}h, max {EMHASS_MAX_AGE_SECONDS/3600:.0f}h)")
-                    elif age > EMHASS_WARN_AGE_SECONDS:
-                        logger.warning("EMHASS data stale (%.1fh old) - using anyway, "
-                                      "check EMHASS publish-data", age / 3600)
+    if "P_batt" in opt_res.columns:
+        batt_forecast = opt_res["P_batt"].tolist()
+    if "SOC_opt" in opt_res.columns:
+        soc_forecast = (opt_res["SOC_opt"] * 100).tolist()  # decimal → %
 
     if not batt_forecast:
-        raise ValueError("EMHASS returned no battery forecast data")
+        raise ValueError("EMHASS result missing P_batt column")
 
-    # Validate result length
-    if len(batt_forecast) != num_emhass_points:
-        logger.warning("EMHASS returned %d batt points, expected %d. "
-                       "Check EMHASS optimization_time_step setting (expected %d min).",
-                       len(batt_forecast), num_emhass_points, emhass_step)
+    logger.info("EMHASS results: %d batt points, %d soc points",
+                len(batt_forecast), len(soc_forecast))
 
-    # Warn if all battery values are zero (EMHASS may not have battery enabled)
-    if all(abs(v) < 1.0 for v in batt_forecast):
-        logger.warning("EMHASS battery forecast is all zeros — "
-                       "check that set_use_battery is True in EMHASS config")
+    # Rebase SOC onto actual
+    if soc_forecast and abs(soc_forecast[0] - snapshot.battery_soc) > 1.0:
+        offset = snapshot.battery_soc - soc_forecast[0]
+        soc_forecast = [max(config.min_soc_percent,
+                           min(config.max_soc_percent, s + offset))
+                       for s in soc_forecast]
 
-    # Normalize EMHASS SOC forecast: EMHASS returns decimal (0-1), we use percentage (0-100)
-    if soc_forecast:
-        if max(soc_forecast) <= 1.5:  # Clearly decimal format
-            soc_forecast = [s * 100.0 for s in soc_forecast]
-            logger.debug("EMHASS SOC forecast: converted from decimal to percentage")
-
-    # Rebase EMHASS SOC forecast onto actual SOC
-    if soc_forecast and soc_forecast[0] > 0:
-        soc_offset = snapshot.battery_soc - soc_forecast[0]
-        if abs(soc_offset) > 1.0:  # Only rebase if >1% difference
-            logger.info("EMHASS SOC rebase: actual=%.1f%% forecast=%.1f%% offset=%.1f%%",
-                        snapshot.battery_soc, soc_forecast[0], soc_offset)
-            soc_forecast = [max(config.min_soc_percent,
-                               min(config.max_soc_percent, s + soc_offset))
-                           for s in soc_forecast]
-
-    # Map EMHASS results to EnergieHA slot resolution
-    # Each EMHASS interval covers (emhass_step / slot_minutes) EnergieHA slots
+    # Map to EnergieHA slot resolution
     slots_per_emhass = max(1, emhass_step // slot_minutes)
-
-    # Build plan from EMHASS output
     slots = []
     soc = snapshot.battery_soc
 
     for i in range(num_slots):
         slot_start = now + timedelta(minutes=i * slot_minutes)
-        # Get PV/load/price at slot resolution (not EMHASS resolution)
         pv_w = get_forecast_for_time(pv_forecast, slot_start)
         load_w = snapshot.load_power_w if i == 0 else config.load_per_slot_w
         price = get_price_for_time(prices, slot_start)
 
-        # Map slot index to EMHASS index
-        # EMHASS convention: positive = discharge, negative = charge
-        # EnergieHA convention: positive = charge, negative = discharge
-        # → Invert sign
+        # EMHASS sign inversion: positive=discharge → our negative
         emhass_idx = i // slots_per_emhass
         raw_batt = batt_forecast[emhass_idx] if emhass_idx < len(batt_forecast) else 0.0
-        battery_w = -raw_batt  # Invert: EMHASS positive=discharge → our negative
+        battery_w = -raw_batt
 
-        # Determine mode from power
         if battery_w > 50:
             battery_mode = "charge"
         elif battery_w < -50:
@@ -251,16 +169,14 @@ def plan_emhass(
             battery_mode = "idle"
             battery_w = 0.0
 
-        # Grid-charge limit enforcement
+        # Grid-charge limit
         if is_grid_charging(pv_w, load_w, battery_w) and soc >= config.max_grid_charge_soc:
             battery_mode = "idle"
             battery_w = 0.0
 
-        # PHEV from surplus (EMHASS doesn't handle this)
         surplus_w = pv_w - load_w
         phev_w = calc_phev_power(surplus_w - max(0, battery_w), config, snapshot)
 
-        # SOC from EMHASS if available, else simulate
         soc_idx = i // slots_per_emhass
         if soc_idx < len(soc_forecast) and soc_forecast[soc_idx] > 0:
             soc = soc_forecast[soc_idx]
@@ -268,11 +184,6 @@ def plan_emhass(
             soc = update_soc(soc, battery_w, slot_minutes, config)
 
         grid_w = calc_grid_balance(pv_w, load_w, phev_w, battery_w)
-
-        # Clip night export: no point exporting when PV=0
-        if pv_w < 10 and grid_w < -10 and battery_mode == "discharge":
-            battery_w = -(load_w + phev_w)  # Match discharge to load exactly
-            grid_w = 0.0
 
         slots.append(TimeSlot(
             start=slot_start, duration_min=slot_minutes,
@@ -287,158 +198,54 @@ def plan_emhass(
                 sum(1 for s in slots if s.planned_battery_mode == "charge"),
                 sum(1 for s in slots if s.planned_battery_mode == "discharge"))
 
+    # Publish diagnostics
+    try:
+        from ..ha_client import HaClient
+        ha = HaClient()
+        ha.set_state("sensor.energieha_emhass_diag", "ok", {
+            "friendly_name": "EnergieHA EMHASS Diagnostics",
+            "icon": "mdi:bug",
+            "mode": "direct_python",
+            "result_columns": list(opt_res.columns) if opt_res is not None else [],
+            "batt_points": len(batt_forecast),
+            "soc_points": len(soc_forecast),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass
+
     return Plan(created_at=now, strategy="emhass", slots=slots, tz=config.timezone)
 
 
-def _publish_emhass_diag(ha, result, client) -> None:
-    """Publish EMHASS API response diagnostics as a HA sensor for debugging."""
-    import json
-    try:
-        if isinstance(result, dict):
-            keys = list(result.keys())
-            # Sample first values for each key
-            sample = {}
-            for k, v in result.items():
-                if isinstance(v, list) and len(v) > 0:
-                    sample[k] = f"list[{len(v)}]: {v[:3]}..."
-                elif isinstance(v, dict) and len(v) > 0:
-                    sample[k] = f"dict[{len(v)}]: {list(v.keys())[:3]}..."
-                else:
-                    sample[k] = str(v)[:100]
-            # Also check cached results endpoint
-            cached_info = "N/A"
-            try:
-                cached = client.get_optimization_results()
-                if cached:
-                    cached_info = f"dict[{len(cached)}]: {list(cached.keys())[:10]}"
-                else:
-                    cached_info = "None (no cached results)"
-            except Exception:
-                cached_info = "Error"
+def _plan_emhass_rest_fallback(snapshot, prices, pv_forecast, config,
+                                pv_w_list, load_w_list, price_list):
+    """Fallback: Call EMHASS via REST API if direct Python fails."""
+    from ..emhass_client import EmhassClient
 
-            diag_attrs = {
-                "friendly_name": "EnergieHA EMHASS Diagnostics",
-                "icon": "mdi:bug",
-                "result_type": type(result).__name__,
-                "result_keys": keys,
-                "result_sample": sample,
-                "cached_results": cached_info,
-                "emhass_url": client.url,
-                "emhass_available": client.is_available(),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-        else:
-            diag_attrs = {
-                "friendly_name": "EnergieHA EMHASS Diagnostics",
-                "icon": "mdi:bug",
-                "result_type": type(result).__name__,
-                "result_raw": str(result)[:500],
-                "emhass_url": client.url,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-        ha.set_state("sensor.energieha_emhass_diag",
-                      "ok" if isinstance(result, dict) else "error",
-                      diag_attrs)
-    except Exception as e:
-        logger.warning("Failed to publish EMHASS diag: %s", e)
+    client = EmhassClient(config.emhass_url)
+    if not client.is_available():
+        raise ConnectionError(f"EMHASS not reachable at {config.emhass_url}")
 
+    eff_single = math.sqrt(config.round_trip_efficiency)
+    battery_params = {
+        "set_use_battery": True,
+        "battery_nominal_energy_capacity": config.battery_capacity_kwh * 1000,
+        "battery_minimum_state_of_charge": config.min_soc_percent / 100.0,
+        "battery_maximum_state_of_charge": config.max_soc_percent / 100.0,
+        "battery_target_state_of_charge": config.max_grid_charge_soc / 100.0,
+        "battery_charge_power_max": config.emhass_battery_charge_power_max,
+        "battery_discharge_power_max": config.emhass_battery_discharge_power_max,
+        "battery_charge_efficiency": eff_single,
+        "battery_discharge_efficiency": eff_single,
+    }
 
-def _extract_from_result(result: dict, key: str, expected_len: int) -> list[float]:
-    """Extract forecast values directly from EMHASS API response.
+    client.dayahead_optim(
+        pv_forecast_w=pv_w_list,
+        load_forecast_w=load_w_list,
+        prices_eur=price_list,
+        export_price_eur=config.export_price_eur,
+        battery_params=battery_params,
+        optimization_time_step=config.emhass_optimization_time_step,
+    )
 
-    EMHASS may return results in various formats:
-    - {"P_batt": [val1, val2, ...]} - direct list
-    - {"P_batt": {"2026-03-28 00:00": val1, ...}} - timestamped dict
-    - {"result": {"P_batt": [...]}} - nested under result key
-    """
-    if not isinstance(result, dict):
-        return []
-
-    # Try direct key
-    data = result.get(key)
-
-    # Try nested under 'result'
-    if data is None and "result" in result:
-        nested = result["result"]
-        if isinstance(nested, dict):
-            data = nested.get(key)
-
-    # Try case-insensitive
-    if data is None:
-        for k, v in result.items():
-            if k.lower() == key.lower():
-                data = v
-                break
-
-    if data is None:
-        return []
-
-    # Parse the data
-    if isinstance(data, list):
-        try:
-            return [float(v) for v in data]
-        except (ValueError, TypeError):
-            return []
-    elif isinstance(data, dict):
-        # Timestamped dict: {"2026-03-28 00:00": 123.4, ...}
-        try:
-            return [float(v) for v in data.values()]
-        except (ValueError, TypeError):
-            return []
-
-    return []
-
-
-def _read_forecast_sensor(ha, entity_id: str, expected_len: int) -> list[float]:
-    """Read a forecast sensor published by EMHASS. Returns list of float values.
-
-    EMHASS publishes data in various attribute formats:
-    - battery_scheduled_power: [{"date": ..., "p_batt_forecast": "-360.23"}, ...]
-    - battery_scheduled_soc:   [{"date": ..., "soc_batt_forecast": "59.92"}, ...]
-    - forecast_data / forecasts / data: generic formats
-    """
-    data = ha.get_state(entity_id)
-    if not data:
-        logger.warning("EMHASS sensor %s not found", entity_id)
-        return []
-
-    attrs = data.get("attributes", {})
-
-    # Try all known EMHASS attribute names
-    forecast_data = None
-    for attr_name in ("battery_scheduled_power", "battery_scheduled_soc",
-                      "forecast_data", "forecasts", "data"):
-        if attr_name in attrs and isinstance(attrs[attr_name], list):
-            forecast_data = attrs[attr_name]
-            logger.debug("EMHASS %s: using attribute '%s' with %d entries",
-                         entity_id, attr_name, len(forecast_data))
-            break
-
-    if forecast_data:
-        values = []
-        for item in forecast_data:
-            if isinstance(item, (int, float)):
-                values.append(float(item))
-            elif isinstance(item, dict):
-                # EMHASS uses the sensor name as value key (e.g. "p_batt_forecast")
-                val = None
-                for k, v in item.items():
-                    if k == "date":
-                        continue
-                    try:
-                        val = float(v)
-                        break
-                    except (ValueError, TypeError):
-                        continue
-                if val is not None:
-                    values.append(val)
-        if values:
-            return values
-
-    # Fallback: single state value repeated
-    try:
-        val = float(data.get("state", 0))
-        logger.debug("EMHASS %s: using state value %.1f as fallback", entity_id, val)
-        return [val] * expected_len
-    except (ValueError, TypeError):
-        return []
+    raise ValueError("EMHASS REST API returned text only - use Price strategy instead")

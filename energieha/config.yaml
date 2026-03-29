@@ -1,13 +1,11 @@
 name: "EnergieHA"
-version: "2.5.1"
+version: "3.0.0"
 slug: "energieha"
-description: "Lightweight energy management for PV, battery, grid and consumers"
+description: "Energy management with integrated EMHASS optimization for PV, battery, grid and consumers"
 url: "https://github.com/ORPA1988/HA-Energy"
 arch:
   - aarch64
   - amd64
-  - armv7
-  - i386
 init: false
 homeassistant_api: true
 ingress: true
