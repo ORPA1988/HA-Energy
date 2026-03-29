@@ -93,19 +93,39 @@ def plan_emhass(
         optimization_time_step=emhass_step,
     )
 
+    # Publish EMHASS debug info to a diagnostic sensor
+    from ..ha_client import HaClient
+    ha = HaClient()
+    _publish_emhass_diag(ha, result, client)
+
     # Try to extract results directly from API response first
     batt_forecast = _extract_from_result(result, "P_batt", num_emhass_points)
     soc_forecast = _extract_from_result(result, "SOC_opt", num_emhass_points)
+
+    # Also try alternative EMHASS key names
+    if not batt_forecast:
+        for alt_key in ("p_batt_forecast", "P_batt_forecast", "opt_p_batt",
+                        "battery_power", "P_battery"):
+            batt_forecast = _extract_from_result(result, alt_key, num_emhass_points)
+            if batt_forecast:
+                logger.info("EMHASS: found batt data under key '%s'", alt_key)
+                break
+
+    if not soc_forecast:
+        for alt_key in ("soc_batt_forecast", "SOC_batt", "opt_soc",
+                        "battery_soc", "SOC_battery"):
+            soc_forecast = _extract_from_result(result, alt_key, num_emhass_points)
+            if soc_forecast:
+                logger.info("EMHASS: found soc data under key '%s'", alt_key)
+                break
 
     if batt_forecast:
         logger.info("EMHASS: using direct API response (%d batt points)", len(batt_forecast))
     else:
         # Fallback: read from HA sensors (may be stale)
-        logger.info("EMHASS: no direct result, reading HA sensors (may be stale)")
-        time.sleep(2)
-
-        from ..ha_client import HaClient
-        ha = HaClient()
+        logger.info("EMHASS: no direct result (keys: %s), reading HA sensors",
+                    list(result.keys()) if isinstance(result, dict) else "non-dict")
+        time.sleep(3)
 
         batt_forecast = _read_forecast_sensor(ha, "sensor.p_batt_forecast", num_emhass_points)
         soc_forecast = _read_forecast_sensor(ha, "sensor.soc_batt_forecast", num_emhass_points)
@@ -225,6 +245,47 @@ def plan_emhass(
                 sum(1 for s in slots if s.planned_battery_mode == "discharge"))
 
     return Plan(created_at=now, strategy="emhass", slots=slots, tz=config.timezone)
+
+
+def _publish_emhass_diag(ha, result, client) -> None:
+    """Publish EMHASS API response diagnostics as a HA sensor for debugging."""
+    import json
+    try:
+        if isinstance(result, dict):
+            keys = list(result.keys())
+            # Sample first values for each key
+            sample = {}
+            for k, v in result.items():
+                if isinstance(v, list) and len(v) > 0:
+                    sample[k] = f"list[{len(v)}]: {v[:3]}..."
+                elif isinstance(v, dict) and len(v) > 0:
+                    sample[k] = f"dict[{len(v)}]: {list(v.keys())[:3]}..."
+                else:
+                    sample[k] = str(v)[:100]
+            diag_attrs = {
+                "friendly_name": "EnergieHA EMHASS Diagnostics",
+                "icon": "mdi:bug",
+                "result_type": type(result).__name__,
+                "result_keys": keys,
+                "result_sample": sample,
+                "emhass_url": client.url,
+                "emhass_available": client.is_available(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        else:
+            diag_attrs = {
+                "friendly_name": "EnergieHA EMHASS Diagnostics",
+                "icon": "mdi:bug",
+                "result_type": type(result).__name__,
+                "result_raw": str(result)[:500],
+                "emhass_url": client.url,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ha.set_state("sensor.energieha_emhass_diag",
+                      "ok" if isinstance(result, dict) else "error",
+                      diag_attrs)
+    except Exception as e:
+        logger.warning("Failed to publish EMHASS diag: %s", e)
 
 
 def _extract_from_result(result: dict, key: str, expected_len: int) -> list[float]:
