@@ -93,6 +93,22 @@ class HaClient:
         """Get HA configuration (timezone, location, etc.)."""
         return self._request("GET", "/config") or {}
 
+    def get_history(self, entity_id: str, days_back: int = 7) -> list:
+        """Get state history for an entity. Returns list of state dicts."""
+        from datetime import datetime, timedelta, timezone
+        start = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat()
+        try:
+            result = self._request("GET", f"/history/period/{start}",
+                                   params={"filter_entity_id": entity_id,
+                                           "minimal_response": "true",
+                                           "significant_changes_only": "true"})
+            if result and isinstance(result, list) and len(result) > 0:
+                return result[0]  # API returns [[states]] - first element is the entity
+            return []
+        except Exception as e:
+            logger.warning("History API failed for %s: %s", entity_id, e)
+            return []
+
     def is_available(self) -> bool:
         """Check if the HA API is reachable."""
         try:

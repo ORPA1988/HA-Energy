@@ -86,6 +86,55 @@ class Collector:
             dynamic_price_threshold=dyn_price_threshold,
         )
 
+    def get_average_load_w(self, days: int = 7, divisor: int = 5) -> float:
+        """Calculate average load from HA history: sum(7d) / divisor / 24h.
+
+        Args:
+            days: Number of days of history to fetch (default 7)
+            divisor: Divisor for the total (default 5: 7d consumption / 5 = avg daily)
+
+        Returns average load in Watts, or config fallback if history unavailable.
+        """
+        try:
+            history = self._client.get_history(self._config.entity_load_power, days_back=days)
+            if not history or len(history) < 10:
+                logger.debug("Load history too short (%d entries), using config default",
+                            len(history) if history else 0)
+                return self._config.load_per_slot_w
+
+            # Calculate time-weighted average from state changes
+            total_wh = 0.0
+            total_hours = 0.0
+            for i in range(len(history) - 1):
+                try:
+                    power_w = float(history[i].get("state", 0))
+                    t1 = datetime.fromisoformat(history[i].get("last_changed", ""))
+                    t2 = datetime.fromisoformat(history[i + 1].get("last_changed", ""))
+                    hours = (t2 - t1).total_seconds() / 3600.0
+                    if 0 < hours < 24 and 0 < power_w < 50000:  # sanity check
+                        total_wh += power_w * hours
+                        total_hours += hours
+                except (ValueError, TypeError):
+                    continue
+
+            if total_hours < 24:
+                logger.debug("Load history only %.1fh, using config default", total_hours)
+                return self._config.load_per_slot_w
+
+            # Total consumption in Wh over the period
+            total_kwh = total_wh / 1000.0
+            # Average daily: total / divisor (7d consumption / 5 = avg daily kWh)
+            avg_daily_kwh = total_kwh / divisor
+            avg_w = avg_daily_kwh * 1000.0 / 24.0
+
+            logger.info("Load history: %.0f kWh over %.0fh → %.0f kWh/day (/%d) → %.0f W avg",
+                        total_kwh, total_hours, avg_daily_kwh, divisor, avg_w)
+            return avg_w
+
+        except Exception as e:
+            logger.warning("Failed to get load history: %s", e)
+            return self._config.load_per_slot_w
+
     def get_prices(self) -> list[PricePoint]:
         """Read EPEX spot prices from HA entity attributes.
 

@@ -139,23 +139,43 @@ def plan_price_optimized(
                 slot.planned_battery_mode = "discharge"
                 slot.planned_battery_w = -deficit_w
 
-    # --- Forward SOC simulation with constraint clipping ---
+    # --- Forward SOC simulation with realistic battery behavior ---
+    # Sungrow "Disabled" mode = Load First: battery serves house load.
+    # idle slots with load > pv → battery discharges to cover deficit.
+    # idle slots with pv > load → PV surplus charges battery.
     soc = snapshot.battery_soc
     total_charge_cost = 0.0
     for slot in slots:
+        # Grid-charge SOC limit
         if (slot.planned_battery_mode == "charge"
                 and is_grid_charging(slot.pv_forecast_w, slot.load_estimate_w, slot.planned_battery_w)
                 and soc >= config.grid_charge_target_soc):
             slot.planned_battery_mode = "idle"
             slot.planned_battery_w = 0
 
+        # Max SOC limit
         if slot.planned_battery_w > 0 and soc >= config.max_soc_percent:
             slot.planned_battery_mode = "idle"
             slot.planned_battery_w = 0
 
+        # Min SOC limit
         if slot.planned_battery_w < 0 and soc <= config.min_soc_percent:
             slot.planned_battery_mode = "idle"
             slot.planned_battery_w = 0
+
+        # Simulate real battery behavior for idle/discharge slots:
+        # In "Disabled" TOU mode, the inverter uses Load First pattern:
+        # battery covers (load - pv) deficit, PV surplus charges battery.
+        if slot.planned_battery_mode == "idle":
+            deficit_w = slot.load_estimate_w - slot.pv_forecast_w
+            if deficit_w > 0 and soc > config.min_soc_percent:
+                # Battery discharges to cover house load deficit
+                slot.planned_battery_w = -deficit_w
+                slot.planned_battery_mode = "discharge"
+            elif deficit_w < -50:
+                # PV surplus → battery charges (free)
+                slot.planned_battery_w = -deficit_w  # positive = charge
+                slot.planned_battery_mode = "charge"
 
         soc = update_soc(soc, slot.planned_battery_w, slot_minutes, config)
 
