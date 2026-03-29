@@ -244,11 +244,22 @@
     </div>
 </div>
 
-<!-- 7-Day History Chart -->
-<div class="card card-wide" x-data="weekChart()" x-init="init()" title="Taeglich: Grid Import (rot), PV Ertrag (gelb), Kosten (blau). Basiert auf kumulierten 5-Min-Messwerten.">
-    <div class="card-header">7-Tage Verlauf</div>
-    <div class="card-body" style="height:220px">
-        <canvas x-ref="weekCanvas"></canvas>
+<!-- Charts Row: 7-Day + Forecast Accuracy -->
+<div class="chart-row">
+    <!-- 7-Day History -->
+    <div class="card card-chart" x-data="weekChart()" x-init="init()" title="Taeglich: Grid Import (rot), PV Ertrag (gelb), Kosten (blau).">
+        <div class="card-header">7-Tage Verlauf</div>
+        <div class="card-body">
+            <canvas x-ref="weekCanvas" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- Forecast Accuracy -->
+    <div class="card card-chart" x-data="accuracyChart()" x-init="init()" title="Vergleich: Geplanter SOC vs. tatsaechlicher SOC. Kleine Abweichung = gute Prognose.">
+        <div class="card-header">Prognose-Genauigkeit</div>
+        <div class="card-body">
+            <canvas x-ref="accCanvas" height="200"></canvas>
+        </div>
     </div>
 </div>
 
@@ -479,6 +490,52 @@ function forecastChart() {
                 }
             });
             } catch(e) { console.warn('Forecast chart error:', e); }
+        }
+    };
+}
+
+function accuracyChart() {
+    return {
+        chart: null,
+        async init() {
+            try {
+                const resp = await fetch('./api/forecast-accuracy?count=48');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (!data.entries || !data.entries.length) return;
+
+                const labels = data.entries.map(e => e.time.slice(11, 16)); // HH:MM
+                const plannedSoc = data.entries.map(e => e.planned_soc);
+                const actualSoc = data.entries.map(e => e.actual_soc);
+
+                this.chart = new Chart(this.$refs.accCanvas, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: 'Geplant SOC %', data: plannedSoc,
+                              borderColor: 'rgba(52,152,219,0.5)', borderWidth: 1.5, borderDash: [4,3],
+                              pointRadius: 0, tension: 0.3, fill: false },
+                            { label: 'Tatsaechlich SOC %', data: actualSoc,
+                              borderColor: '#3498db', borderWidth: 2,
+                              pointRadius: 0, tension: 0.3, fill: false },
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { labels: { color: '#aaa', boxWidth: 12, font: { size: 10 } } },
+                            subtitle: { display: true, color: '#888', font: { size: 10 },
+                                text: 'Ø SOC-Abweichung: ' + data.avg_soc_error_pct + '% | Ø PV-Fehler: ' + data.avg_pv_error_w + 'W' }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#888', maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                            y: { min: 0, max: 100, ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                        }
+                    }
+                });
+            } catch(e) { console.warn('Accuracy chart error:', e); }
         }
     };
 }

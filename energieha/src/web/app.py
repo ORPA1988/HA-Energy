@@ -289,6 +289,27 @@ def create_app() -> Flask:
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)})
 
+    @app.route("/api/forecast-accuracy")
+    def api_forecast_accuracy():
+        try:
+            count = int(request.args.get("count", 48))
+            entries = AppState().get_forecast_accuracy(count)
+            if entries:
+                soc_errors = [abs(e["soc_error"]) for e in entries]
+                pv_errors = [abs(e["pv_error"]) for e in entries]
+                avg_soc_err = sum(soc_errors) / len(soc_errors)
+                avg_pv_err = sum(pv_errors) / len(pv_errors)
+            else:
+                avg_soc_err = avg_pv_err = 0
+            return jsonify({
+                "entries": entries,
+                "count": len(entries),
+                "avg_soc_error_pct": round(avg_soc_err, 1),
+                "avg_pv_error_w": round(avg_pv_err),
+            })
+        except Exception as e:
+            return jsonify({"entries": [], "error": str(e)}), 500
+
     @app.route("/api/daily-stats")
     def api_daily_stats():
         try:

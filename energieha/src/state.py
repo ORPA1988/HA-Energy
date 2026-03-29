@@ -54,6 +54,7 @@ class AppState:
         self._pv_forecast = []  # list of ForecastPoint-like dicts
         self._savings = {}      # savings summary dict
         self._daily_stats = []  # list of daily stat dicts (last 30 days)
+        self._forecast_accuracy = []  # list of {time, planned_soc, actual_soc, planned_mode, actual_mode}
 
     @property
     def plan(self):
@@ -274,6 +275,33 @@ class AppState:
         except Exception as e:
             logger.warning("Failed to load daily stats: %s", e)
             self._daily_stats = []
+
+    def record_forecast_accuracy(self, snapshot, plan):
+        """Compare planned vs actual SOC/mode for forecast accuracy tracking."""
+        try:
+            if not snapshot or not plan or not plan.current_slot:
+                return
+            slot = plan.current_slot
+            entry = {
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "planned_soc": round(slot.projected_soc, 1),
+                "actual_soc": round(snapshot.battery_soc, 1),
+                "soc_error": round(snapshot.battery_soc - slot.projected_soc, 1),
+                "planned_mode": slot.planned_battery_mode,
+                "planned_pv": round(slot.pv_forecast_w),
+                "actual_pv": round(snapshot.pv_power_w),
+                "pv_error": round(snapshot.pv_power_w - slot.pv_forecast_w),
+            }
+            self._forecast_accuracy.append(entry)
+            # Keep last 288 entries (24h × 12 cycles/h)
+            if len(self._forecast_accuracy) > 288:
+                self._forecast_accuracy = self._forecast_accuracy[-288:]
+        except Exception as e:
+            logger.warning("Forecast accuracy error: %s", e)
+
+    def get_forecast_accuracy(self, count: int = 48) -> list:
+        """Return last N forecast accuracy entries."""
+        return self._forecast_accuracy[-count:]
 
     def get_status_dict(self) -> dict:
         """Return a summary dict for the API."""
