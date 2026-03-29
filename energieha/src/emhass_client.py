@@ -131,19 +131,59 @@ class EmhassClient:
     def get_optimization_results(self) -> dict | None:
         """Read cached optimization results directly from EMHASS API.
 
-        Returns dict with 'optim_status', 'P_batt', 'SOC_opt', etc.
-        Falls back to None if not available.
+        Tries multiple EMHASS endpoints to retrieve stored optimization data.
+        Returns dict with result data, or None if not available.
+        """
+        # Try multiple known endpoints for reading cached results
+        endpoints = [
+            "/action/get-data",
+            "/data",
+            "/results",
+        ]
+        for ep in endpoints:
+            try:
+                resp = requests.get(f"{self.url}{ep}", timeout=10)
+                if resp.status_code == 200 and resp.text:
+                    try:
+                        data = resp.json()
+                        if isinstance(data, dict) and len(data) > 0:
+                            logger.info("EMHASS: got cached results from %s (keys: %s)",
+                                       ep, list(data.keys())[:5])
+                            return data
+                    except ValueError:
+                        continue
+            except requests.RequestException:
+                continue
+        return None
+
+    def publish_data_and_read(self) -> dict | None:
+        """Call publish-data and then read the result from HA sensors.
+
+        Returns diagnostic info about what publish-data did.
         """
         try:
-            resp = requests.get(f"{self.url}/action/get-data", timeout=10)
-            if resp.status_code == 200 and resp.text:
-                try:
-                    return resp.json()
-                except ValueError:
-                    pass
-        except requests.RequestException:
-            pass
-        return None
+            resp = requests.post(f"{self.url}/action/publish-data",
+                                 json={}, timeout=30)
+            result = {
+                "publish_status": resp.status_code,
+                "publish_body": resp.text[:500] if resp.text else "(empty)",
+            }
+            logger.info("EMHASS publish-data: status=%d body=%s",
+                        resp.status_code, resp.text[:200] if resp.text else "(empty)")
+
+            # Also try reading the table-results endpoint if available
+            try:
+                table_resp = requests.get(f"{self.url}/action/table-results", timeout=10)
+                if table_resp.status_code == 200:
+                    result["table_status"] = table_resp.status_code
+                    result["table_body"] = table_resp.text[:500]
+            except requests.RequestException:
+                pass
+
+            return result
+        except requests.RequestException as e:
+            logger.warning("EMHASS publish-data failed: %s", e)
+            return None
 
     @staticmethod
     def validate_inputs(pv_forecast: list[float], load_forecast: list[float],

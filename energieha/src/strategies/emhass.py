@@ -96,36 +96,51 @@ def plan_emhass(
     # Publish EMHASS debug info to a diagnostic sensor
     from ..ha_client import HaClient
     ha = HaClient()
+
+    # EMHASS v0.17.1 returns plain text from dayahead-optim, not JSON results.
+    # The actual results must be retrieved separately.
+
+    # Step 1: Try to get cached results from EMHASS API endpoints
+    cached = client.get_optimization_results()
+    if cached:
+        logger.info("EMHASS: got cached results with keys: %s", list(cached.keys())[:10])
+        result = cached  # Use cached results instead of the text response
+
+    # Publish diagnostics (now with the best result we have)
     _publish_emhass_diag(ha, result, client)
 
-    # Try to extract results directly from API response first
-    batt_forecast = _extract_from_result(result, "P_batt", num_emhass_points)
-    soc_forecast = _extract_from_result(result, "SOC_opt", num_emhass_points)
+    # Step 2: Try to extract P_batt/SOC from the result
+    batt_forecast = []
+    soc_forecast = []
 
-    # Also try alternative EMHASS key names
-    if not batt_forecast:
-        for alt_key in ("p_batt_forecast", "P_batt_forecast", "opt_p_batt",
-                        "battery_power", "P_battery"):
-            batt_forecast = _extract_from_result(result, alt_key, num_emhass_points)
-            if batt_forecast:
-                logger.info("EMHASS: found batt data under key '%s'", alt_key)
-                break
+    # Try many possible key names
+    batt_keys = ("P_batt", "p_batt_forecast", "P_batt_forecast", "opt_p_batt",
+                 "battery_power", "P_battery", "p_batt")
+    soc_keys = ("SOC_opt", "soc_batt_forecast", "SOC_batt", "opt_soc",
+                "battery_soc", "SOC_battery", "soc_batt")
 
-    if not soc_forecast:
-        for alt_key in ("soc_batt_forecast", "SOC_batt", "opt_soc",
-                        "battery_soc", "SOC_battery"):
-            soc_forecast = _extract_from_result(result, alt_key, num_emhass_points)
-            if soc_forecast:
-                logger.info("EMHASS: found soc data under key '%s'", alt_key)
-                break
+    for key in batt_keys:
+        batt_forecast = _extract_from_result(result, key, num_emhass_points)
+        if batt_forecast:
+            logger.info("EMHASS: found batt data under key '%s' (%d points)", key, len(batt_forecast))
+            break
+
+    for key in soc_keys:
+        soc_forecast = _extract_from_result(result, key, num_emhass_points)
+        if soc_forecast:
+            logger.info("EMHASS: found SOC data under key '%s' (%d points)", key, len(soc_forecast))
+            break
 
     if batt_forecast:
-        logger.info("EMHASS: using direct API response (%d batt points)", len(batt_forecast))
+        logger.info("EMHASS: using API data (%d batt, %d soc points)",
+                    len(batt_forecast), len(soc_forecast))
     else:
-        # Fallback: read from HA sensors (may be stale)
-        logger.info("EMHASS: no direct result (keys: %s), reading HA sensors",
-                    list(result.keys()) if isinstance(result, dict) else "non-dict")
-        time.sleep(3)
+        # Step 3: Wait for publish-data to propagate, then read HA sensors
+        logger.info("EMHASS: no API data available, waiting for HA sensor update...")
+        pub_diag = client.publish_data_and_read()
+        if pub_diag:
+            logger.info("EMHASS publish-data result: %s", pub_diag.get("publish_body", "")[:100])
+        time.sleep(5)  # Give HA time to process sensor updates
 
         batt_forecast = _read_forecast_sensor(ha, "sensor.p_batt_forecast", num_emhass_points)
         soc_forecast = _read_forecast_sensor(ha, "sensor.soc_batt_forecast", num_emhass_points)
@@ -262,12 +277,24 @@ def _publish_emhass_diag(ha, result, client) -> None:
                     sample[k] = f"dict[{len(v)}]: {list(v.keys())[:3]}..."
                 else:
                     sample[k] = str(v)[:100]
+            # Also check cached results endpoint
+            cached_info = "N/A"
+            try:
+                cached = client.get_optimization_results()
+                if cached:
+                    cached_info = f"dict[{len(cached)}]: {list(cached.keys())[:10]}"
+                else:
+                    cached_info = "None (no cached results)"
+            except Exception:
+                cached_info = "Error"
+
             diag_attrs = {
                 "friendly_name": "EnergieHA EMHASS Diagnostics",
                 "icon": "mdi:bug",
                 "result_type": type(result).__name__,
                 "result_keys": keys,
                 "result_sample": sample,
+                "cached_results": cached_info,
                 "emhass_url": client.url,
                 "emhass_available": client.is_available(),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
