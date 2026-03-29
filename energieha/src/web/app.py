@@ -308,6 +308,50 @@ def create_app() -> Flask:
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)})
 
+    @app.route("/api/settings", methods=["POST"])
+    def api_settings():
+        """Update a config setting live (writes to options.json + memory)."""
+        try:
+            data = request.get_json(silent=True) or {}
+            key = data.get("key")
+            value = data.get("value")
+            if not key:
+                return jsonify({"error": "key required"}), 400
+
+            # Whitelist of settings adjustable via dashboard
+            allowed = {
+                "price_threshold_eur": float,
+                "grid_charge_target_soc": int,
+                "max_grid_charge_soc": int,
+                "min_soc_percent": int,
+                "max_soc_percent": int,
+                "load_planning_reserve_pct": int,
+            }
+            if key not in allowed:
+                return jsonify({"error": f"Setting '{key}' not adjustable"}), 400
+
+            value = allowed[key](value)
+
+            # Write to options.json
+            path = os.environ.get("ENERGIEHA_OPTIONS_PATH", "/data/options.json")
+            existing = {}
+            if os.path.exists(path):
+                with open(path) as f:
+                    existing = json.load(f)
+            existing[key] = value
+            with open(path, "w") as f:
+                json.dump(existing, f, indent=2)
+
+            # Update in-memory config
+            state = AppState()
+            if state.config:
+                setattr(state.config, key, value)
+
+            logger.info("Setting %s = %s (via GUI)", key, value)
+            return jsonify({"status": "ok", "key": key, "value": value})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/debug")
     def debug_info():
         rules = sorted([r.rule for r in app.url_map.iter_rules() if not r.rule.startswith("/static")])

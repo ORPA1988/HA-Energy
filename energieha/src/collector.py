@@ -64,13 +64,13 @@ class Collector:
             logger.debug("Grid charge power: %.0fA × %.1fV = %.0fW",
                          grid_charge_current, bat_voltage, grid_charge_w)
 
-        # Dynamic price threshold from HA input_number
-        dyn_price_threshold = 0.0
-        if self._config.entity_price_threshold:
+        # Price threshold: from config (set via GUI slider), HA helper as fallback
+        dyn_price_threshold = self._config.price_threshold_eur
+        if dyn_price_threshold <= 0 and self._config.entity_price_threshold:
             val = self._client.get_state_value(self._config.entity_price_threshold)
             if val is not None and val > 0:
                 dyn_price_threshold = val
-                logger.debug("Dynamic price threshold: %.4f EUR/kWh", val)
+        logger.debug("Price threshold: %.4f EUR/kWh (config)", dyn_price_threshold)
 
         return Snapshot(
             timestamp=datetime.now(timezone.utc),

@@ -164,6 +164,55 @@
     </div>
 </div>
 
+<!-- Quick Controls -->
+<div class="card card-wide" x-data="dashboardData()">
+    <div class="card-header">Steuerung</div>
+    <div class="card-body">
+        <div class="slider-row">
+            <div class="slider-group" title="Maximaler Strompreis fuer Netzladung. Nur Stunden mit Preis unter dieser Schwelle kommen fuer Grid-Charging in Frage. Wird im Preischart als rote Linie angezeigt.">
+                <label>Preisschwelle</label>
+                <div class="slider-control">
+                    <input type="range" min="5" max="40" step="1"
+                           :value="Math.round((config.price_threshold_eur||0.18)*100)"
+                           @change="setSetting('price_threshold_eur', $event.target.value/100)"
+                           class="range-slider">
+                    <span class="slider-value" x-text="Math.round((config.price_threshold_eur||0.18)*100) + ' ct/kWh'"></span>
+                </div>
+            </div>
+            <div class="slider-group" title="Ziel-SOC fuer Netzladung. Grid-Charging stoppt bei diesem SOC. PV darf hoeher laden.">
+                <label>Ziel-SOC Netzladung</label>
+                <div class="slider-control">
+                    <input type="range" min="20" max="100" step="5"
+                           :value="config.grid_charge_target_soc||80"
+                           @change="setSetting('grid_charge_target_soc', parseInt($event.target.value))"
+                           class="range-slider">
+                    <span class="slider-value" x-text="(config.grid_charge_target_soc||80) + '%'"></span>
+                </div>
+            </div>
+            <div class="slider-group" title="Planungsreserve auf den Durchschnittsverbrauch. 10% = plant mit 110% des gemessenen Verbrauchs.">
+                <label>Planungsreserve</label>
+                <div class="slider-control">
+                    <input type="range" min="0" max="50" step="5"
+                           :value="config.load_planning_reserve_pct||10"
+                           @change="setSetting('load_planning_reserve_pct', parseInt($event.target.value))"
+                           class="range-slider">
+                    <span class="slider-value" x-text="(config.load_planning_reserve_pct||10) + '%'"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Next Action + Stats -->
+<div class="card-grid" x-data="dashboardData()">
+    <div class="card card-wide" x-show="$store?.nextAction?.label" title="Naechste geplante Netzladung">
+        <div class="card-body" style="padding:0.6rem 1rem;display:flex;align-items:center;gap:1rem">
+            <span style="font-size:1.3rem">&#9889;</span>
+            <span x-text="$data.next_action || 'Keine Netzladung geplant'"></span>
+        </div>
+    </div>
+</div>
+
 <!-- Savings Summary -->
 <div class="card card-wide" x-data="dashboardData()">
     <div class="card-header">Tagesplan</div>
@@ -209,6 +258,7 @@ function dashboardData() {
         emhass_available: {{ status.get('emhass_available', false)|tojson }},
         emhass_last_ok: {{ status.get('emhass_last_ok')|tojson }},
         cycle_count: {{ status.get('cycle_count', 0)|tojson }},
+        next_action: {{ (status.get('next_action', {}).get('label', ''))|tojson }},
         init() {
             setInterval(() => this.refresh(), 15000);
         },
@@ -221,7 +271,24 @@ function dashboardData() {
                 this.emhass_available = data.emhass_available || false;
                 this.emhass_last_ok = data.emhass_last_ok;
                 this.cycle_count = data.cycle_count || 0;
+                this.next_action = data.next_action ? data.next_action.label : '';
             } catch(e) { console.warn('Refresh:', e); }
+        },
+        async setSetting(key, value) {
+            try {
+                const resp = await fetch('./api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({key, value})
+                });
+                const data = await resp.json();
+                if (data.status === 'ok') {
+                    this.config[key] = value;
+                    showToast(key + ' = ' + value, 'success', 2000);
+                } else {
+                    showToast('Fehler: ' + (data.error || '?'), 'error');
+                }
+            } catch(e) { showToast('Fehler: ' + e.message, 'error'); }
         },
         socColor(soc) {
             if (!soc) return '#888';

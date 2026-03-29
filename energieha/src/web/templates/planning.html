@@ -22,6 +22,32 @@
     </div>
 </div>
 
+<!-- Plan Summary -->
+{% if timeline %}
+<div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))">
+    {% set grid_import_kwh = timeline|selectattr('grid_w', 'gt', 0)|map(attribute='grid_w')|sum / 1000 * (config.slot_duration_min|default(60) / 60) %}
+    {% set total_cost = timeline[-1].total if timeline else 0 %}
+    {% set charge_slots = timeline|selectattr('grid_charge')|list|length %}
+    {% set discharge_slots = timeline|selectattr('mode', 'eq', 'discharge')|list|length %}
+    <div class="card" title="Geplanter Netz-Import ueber 24h">
+        <div class="card-header">Grid Import</div>
+        <div class="card-body"><div class="big-value">{{ "%.1f"|format(grid_import_kwh) }} kWh</div></div>
+    </div>
+    <div class="card" title="Geplante Gesamtkosten (Netz-Import × Preis)">
+        <div class="card-header">Kosten</div>
+        <div class="card-body"><div class="big-value">{{ "%.2f"|format(total_cost) }} EUR</div></div>
+    </div>
+    <div class="card" title="Anzahl Stunden mit Netzladung">
+        <div class="card-header">Lade-Slots</div>
+        <div class="card-body"><div class="big-value text-blue">{{ charge_slots }}</div></div>
+    </div>
+    <div class="card" title="Anzahl Stunden mit Batterie-Entladung">
+        <div class="card-header">Entlade-Slots</div>
+        <div class="card-body"><div class="big-value text-red">{{ discharge_slots }}</div></div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Plan Table -->
 <div class="card card-wide">
     <div class="card-header">

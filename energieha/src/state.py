@@ -259,8 +259,39 @@ class AppState:
                 "battery_capacity_kwh": config.battery_capacity_kwh,
                 "min_soc_percent": config.min_soc_percent,
                 "max_soc_percent": config.max_soc_percent,
+                "max_grid_charge_soc": config.max_grid_charge_soc,
+                "grid_charge_target_soc": config.grid_charge_target_soc,
+                "price_threshold_eur": config.price_threshold_eur,
+                "load_planning_reserve_pct": getattr(config, 'load_planning_reserve_pct', 10),
+                "estimated_daily_load_kwh": config.estimated_daily_load_kwh,
                 "sungrow_tou_enabled": config.sungrow_tou_enabled,
                 "phev_enabled": config.phev_enabled,
             }
+
+        # Next action countdown from plan
+        if plan and plan.slots:
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+            try:
+                now = datetime.now(ZoneInfo(plan.tz))
+                next_charge = None
+                for s in plan.slots:
+                    if s.planned_battery_mode == "charge" and s.planned_battery_w > 50:
+                        surplus = s.pv_forecast_w - s.load_estimate_w
+                        if s.planned_battery_w > max(0, surplus):  # grid charge
+                            if s.start > now:
+                                next_charge = s
+                                break
+                if next_charge:
+                    mins = int((next_charge.start - now).total_seconds() / 60)
+                    result["next_action"] = {
+                        "type": "grid_charge",
+                        "start": next_charge.start.strftime("%H:%M"),
+                        "minutes_until": max(0, mins),
+                        "label": f"Netzladung in {mins // 60}h {mins % 60}min ({next_charge.start.strftime('%H:%M')})"
+                            if mins > 0 else f"Netzladung JETZT ({next_charge.start.strftime('%H:%M')})",
+                    }
+            except Exception:
+                pass
 
         return result
