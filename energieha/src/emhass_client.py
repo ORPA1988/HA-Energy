@@ -185,6 +185,84 @@ class EmhassClient:
             logger.warning("EMHASS publish-data failed: %s", e)
             return None
 
+    def call_via_supervisor(self, api_path: str, payload: dict = None) -> str:
+        """Call EMHASS via the HA Supervisor proxy (like HA automations do).
+
+        HA automations use rest_command with localhost:5050 which goes through
+        the Supervisor proxy. This may work differently than direct Docker calls.
+        """
+        supervisor_url = "http://supervisor/addons/5b918bf2_emhass/proxy"
+        try:
+            import os
+            token = os.environ.get("SUPERVISOR_TOKEN", "")
+            headers = {"Authorization": f"Bearer {token}",
+                       "Content-Type": "application/json"}
+            resp = requests.post(f"{supervisor_url}/{api_path}",
+                                json=payload or {}, headers=headers, timeout=TIMEOUT)
+            logger.info("EMHASS via Supervisor: %s status=%d body=%s",
+                        api_path, resp.status_code, resp.text[:200] if resp.text else "")
+            return resp.text
+        except Exception as e:
+            logger.warning("EMHASS Supervisor proxy failed: %s", e)
+            return ""
+
+    def force_publish_sensors(self, ha_client, batt_forecast: list, soc_forecast: list,
+                               pv_forecast: list, load_forecast: list,
+                               num_points: int, time_step_min: int) -> bool:
+        """Write EMHASS forecast sensors directly to HA as last resort.
+
+        If EMHASS publish-data fails, EnergieHA writes the sensors itself.
+        """
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+
+        try:
+            # Write battery power forecast
+            if batt_forecast:
+                entries = []
+                for i, val in enumerate(batt_forecast[:num_points]):
+                    t = now + timedelta(minutes=i * time_step_min)
+                    entries.append({"date": t.isoformat(), "p_batt_forecast": str(round(val, 2))})
+                ha_client.set_state("sensor.p_batt_forecast", str(round(batt_forecast[0], 2)), {
+                    "friendly_name": "Battery Power Forecast",
+                    "device_class": "power",
+                    "unit_of_measurement": "W",
+                    "battery_scheduled_power": entries,
+                })
+
+            # Write SOC forecast
+            if soc_forecast:
+                entries = []
+                for i, val in enumerate(soc_forecast[:num_points]):
+                    t = now + timedelta(minutes=i * time_step_min)
+                    entries.append({"date": t.isoformat(), "soc_batt_forecast": str(round(val, 2))})
+                ha_client.set_state("sensor.soc_batt_forecast", str(round(soc_forecast[0], 2)), {
+                    "friendly_name": "Battery SOC Forecast",
+                    "device_class": "battery",
+                    "unit_of_measurement": "%",
+                    "battery_scheduled_soc": entries,
+                })
+
+            # Write PV forecast
+            if pv_forecast:
+                entries = []
+                for i, val in enumerate(pv_forecast[:num_points]):
+                    t = now + timedelta(minutes=i * time_step_min)
+                    entries.append({"date": t.isoformat(), "p_pv_forecast": str(round(val, 2))})
+                ha_client.set_state("sensor.p_pv_forecast", str(round(pv_forecast[0], 2)), {
+                    "friendly_name": "PV Power Forecast",
+                    "device_class": "power",
+                    "unit_of_measurement": "W",
+                    "forecasts": entries,
+                })
+
+            logger.info("EMHASS: force-published %d batt, %d soc, %d pv sensor entries",
+                        len(batt_forecast), len(soc_forecast), len(pv_forecast))
+            return True
+        except Exception as e:
+            logger.error("EMHASS: force-publish failed: %s", e)
+            return False
+
     @staticmethod
     def validate_inputs(pv_forecast: list[float], load_forecast: list[float],
                         prices: list[float], target_soc: float) -> list[str]:

@@ -135,29 +135,42 @@ def plan_emhass(
         logger.info("EMHASS: using API data (%d batt, %d soc points)",
                     len(batt_forecast), len(soc_forecast))
     else:
-        # EMHASS v0.17.1 returns plain text from API - results stored internally.
-        # Read from HA sensors (populated by publish-data via HA automation).
-        logger.info("EMHASS: API returned text only, reading HA sensors...")
+        # EMHASS v0.17.1 returns plain text. Try multiple approaches to get results.
+        logger.info("EMHASS: no direct API data, trying publish pipeline...")
 
-        # Trigger HA automation to run publish-data (fire-and-forget)
-        try:
-            ha.call_service("automation", "trigger",
-                           {"entity_id": "automation.energieha_emhass_optimierung_triggern"})
-            logger.info("EMHASS: triggered HA automation for optimization")
-        except Exception as e:
-            logger.warning("EMHASS: failed to trigger HA automation: %s", e)
-
-        time.sleep(8)  # Wait for optimization + publish-data
+        # Approach 1: Call publish-data via Supervisor proxy (like HA automations)
+        client.call_via_supervisor("action/publish-data", {})
+        time.sleep(5)
 
         batt_forecast = _read_forecast_sensor(ha, "sensor.p_batt_forecast", num_emhass_points)
         soc_forecast = _read_forecast_sensor(ha, "sensor.soc_batt_forecast", num_emhass_points)
 
-        # Check freshness - use generous limit since EMHASS publishes every 4h
-        # and publish-data may be broken (known EMHASS v0.17.1 issue)
-        EMHASS_MAX_AGE_SECONDS = 48 * 3600  # 48h - use old data rather than no data
-        EMHASS_WARN_AGE_SECONDS = 6 * 3600  # Warn after 6h
-
+        # Check if sensors actually updated (within last 5 minutes)
+        sensors_fresh = False
         batt_state = ha.get_state("sensor.p_batt_forecast")
+        if batt_state:
+            last_updated = batt_state.get("last_updated", "")
+            if last_updated:
+                try:
+                    updated_dt = datetime.fromisoformat(last_updated)
+                    age = (datetime.now(timezone.utc) - updated_dt).total_seconds()
+                    sensors_fresh = age < 300  # Updated within 5 minutes
+                except (ValueError, TypeError):
+                    pass
+            logger.info("EMHASS sensors: %d batt, %d soc (fresh=%s, updated=%s)",
+                        len(batt_forecast), len(soc_forecast), sensors_fresh, last_updated[:19])
+
+        # Approach 2: If sensors still stale, write them ourselves from our plan data
+        if not sensors_fresh and batt_forecast:
+            logger.warning("EMHASS sensors stale - writing forecast sensors directly")
+            client.force_publish_sensors(ha, batt_forecast, soc_forecast,
+                                         pv_w_list, load_w_list,
+                                         num_emhass_points, emhass_step)
+
+        # Use whatever data we have (even if stale)
+        EMHASS_MAX_AGE_SECONDS = 48 * 3600
+        EMHASS_WARN_AGE_SECONDS = 6 * 3600
+
         if batt_state:
             last_updated = batt_state.get("last_updated", "")
             logger.info("EMHASS sensors: %d batt, %d soc points (updated: %s)",
