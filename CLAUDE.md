@@ -21,10 +21,15 @@
 ### Batterie: Modus + Sungrow TOU-Steuerung
 Die Ladeleistung wird vom Sungrow-Wechselrichter bestimmt. Das Add-on gibt den Modus vor und programmiert die 6 TOU-Programme:
 
-**TOU-Mapping (PV und Grid getrennt!):**
-- PV-Surplus Ladung → `charging = "Disabled"` + SOC-Ziel (PV laedt Batterie, Haus aus Netz)
-- Grid-Ladung → `charging = "Grid"` + SOC-Ziel (Netz laedt Batterie bei guenstigen Preisen)
-- Entladung/Idle → `charging = "Disabled"` + SOC = min_soc (Load First entlaedt automatisch)
+**Sungrow TOU-Verhalten (Load First Modus):**
+- `"Disabled"` + beliebiger SOC = Batterie versorgt Haus (Load First). Strom wird direkt aus Batterie gezogen, egal welcher SOC eingestellt ist. Bei voller Batterie (SOC_ist >= SOC_soll) wird nur aus Netz gezogen.
+- `"Grid"` + SOC-Ziel = Netz laedt Batterie aktiv bis zum SOC-Ziel (bei guenstigen Preisen)
+- `"Disabled"` + hoher SOC = PV-Ueberschuss laedt Batterie, kein Grid-Import fuer Batterie
+
+**TOU-Strategie (PV und Grid getrennt!):**
+- Guenstige Stunden → `"Grid"` + SOC=80% (Netz laedt Batterie)
+- Teure Stunden → `"Disabled"` + SOC=min (Batterie versorgt Haus → kein teurer Netz-Import)
+- PV-Stunden → `"Disabled"` + SOC=85% (PV-Ueberschuss laedt Batterie, kein Grid)
 - Die TOU-Konsolidierung trennt PV-only und Grid-Charge in separate Programme
 
 **Beispiel-Layout bei PV + Grid-Ladung:**
