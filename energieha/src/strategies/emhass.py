@@ -31,39 +31,63 @@ except ImportError as e:
 
 
 def _build_emhass_configs(config: Config, snapshot: Snapshot, num_points: int, tz):
-    """Build the configuration dicts that EMHASS Optimization expects."""
+    """Build configuration dicts from EMHASS defaults + our overrides."""
+    import json
+
     freq = pd.Timedelta(minutes=config.emhass_optimization_time_step)
     eff_single = math.sqrt(config.round_trip_efficiency)
 
+    # Load EMHASS default config
+    try:
+        import emhass
+        defaults_path = pathlib.Path(emhass.__file__).parent / "data" / "config_defaults.json"
+        with open(defaults_path) as f:
+            defaults = json.load(f)
+        logger.debug("Loaded EMHASS defaults from %s", defaults_path)
+    except Exception:
+        defaults = {}
+        logger.warning("Could not load EMHASS defaults, using minimal config")
+
+    # retrieve_hass_conf - merge defaults with our settings
     retrieve_hass_conf = {
         "optimization_time_step": freq,
         "time_zone": tz,
-        "sensor_power_photovoltaics": "sensor.pv_power",
-        "sensor_power_load_no_var_loads": "sensor.load_power",
-        "method_ts_round": "nearest",
+        "sensor_power_photovoltaics": defaults.get("sensor_power_photovoltaics", "sensor.pv_power"),
+        "sensor_power_load_no_var_loads": defaults.get("sensor_power_load_no_var_loads", "sensor.load_power"),
+        "method_ts_round": defaults.get("method_ts_round", "nearest"),
         "continual_publish": False,
+        "delta_forecast_daily": defaults.get("delta_forecast_daily", 1),
     }
 
+    # optim_conf - defaults + our overrides
     optim_conf = {
         "set_use_battery": True,
-        "num_def_loads": 0,
         "number_of_deferrable_loads": 0,
-        "set_def_constant": [],
-        "set_def_timewindow": [],
-        "def_load_config": [],
-        "treat_def_as_semi_cont": [],
-        "set_nocharge_from_grid": False,
-        "set_nodischarge_to_grid": True,
-        "set_total_pv_sell": False,
-        "set_soc_recovery": False,
+        "nominal_power_of_deferrable_loads": [],
+        "minimum_power_of_deferrable_loads": [],
         "operating_hours_of_each_deferrable_load": [],
         "operating_timesteps_of_each_deferrable_load": [],
         "start_timesteps_of_each_deferrable_load": [],
         "end_timesteps_of_each_deferrable_load": [],
-        "weight_battery_discharge": 1.0,
-        "weight_battery_charge": 1.0,
+        "treat_deferrable_load_as_semi_cont": [],
+        "set_deferrable_load_single_constant": [],
+        "set_deferrable_startup_penalty": [],
+        "set_deferrable_max_startups": [],
+        "def_current_state": [],
+        "def_load_config": {},
+        "set_nocharge_from_grid": False,
+        "set_nodischarge_to_grid": True,
+        "set_total_pv_sell": False,
+        "set_battery_dynamic": defaults.get("set_battery_dynamic", False),
+        "weight_battery_discharge": defaults.get("weight_battery_discharge", 0.0),
+        "weight_battery_charge": defaults.get("weight_battery_charge", 0.0),
+        "lp_solver_timeout": defaults.get("lp_solver_timeout", 45),
+        "lp_solver_mip_rel_gap": defaults.get("lp_solver_mip_rel_gap", 0),
+        "num_threads": defaults.get("num_threads", 0),
+        "delta_forecast_daily": defaults.get("delta_forecast_daily", 1),
     }
 
+    # plant_conf - battery params + EMHASS plant defaults
     plant_conf = {
         "battery_nominal_energy_capacity": config.battery_capacity_kwh * 1000,
         "battery_minimum_state_of_charge": config.min_soc_percent / 100.0,
@@ -73,14 +97,20 @@ def _build_emhass_configs(config: Config, snapshot: Snapshot, num_points: int, t
         "battery_discharge_power_max": config.emhass_battery_discharge_power_max,
         "battery_charge_efficiency": eff_single,
         "battery_discharge_efficiency": eff_single,
+        "inverter_is_hybrid": False,
+        "compute_curtailment": False,
+        "pv_inverter_model": "",
+        "battery_dynamic_max": defaults.get("battery_dynamic_max", 0.9),
+        "battery_dynamic_min": defaults.get("battery_dynamic_min", -0.9),
+        "set_soc_recovery": False,
+        "soc_recovery_target": 0.5,
+        "soc_recovery_penalty": 0.0,
     }
 
     emhass_conf = {
         "data_path": pathlib.Path("/tmp/emhass_data"),
         "root_path": pathlib.Path("/app"),
     }
-
-    # Ensure data path exists
     emhass_conf["data_path"].mkdir(parents=True, exist_ok=True)
 
     return retrieve_hass_conf, optim_conf, plant_conf, emhass_conf
