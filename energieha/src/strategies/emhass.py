@@ -135,18 +135,28 @@ def plan_emhass(
         logger.info("EMHASS: using API data (%d batt, %d soc points)",
                     len(batt_forecast), len(soc_forecast))
     else:
-        # Step 3: Wait for publish-data to propagate, then read HA sensors
-        logger.info("EMHASS: no API data available, waiting for HA sensor update...")
-        pub_diag = client.publish_data_and_read()
-        if pub_diag:
-            logger.info("EMHASS publish-data result: %s", pub_diag.get("publish_body", "")[:100])
-        time.sleep(5)  # Give HA time to process sensor updates
+        # EMHASS v0.17.1 returns plain text from API - results stored internally.
+        # Read from HA sensors (populated by publish-data via HA automation).
+        logger.info("EMHASS: API returned text only, reading HA sensors...")
+
+        # Trigger HA automation to run publish-data (fire-and-forget)
+        try:
+            ha.call_service("automation", "trigger",
+                           {"entity_id": "automation.energieha_emhass_optimierung_triggern"})
+            logger.info("EMHASS: triggered HA automation for optimization")
+        except Exception as e:
+            logger.warning("EMHASS: failed to trigger HA automation: %s", e)
+
+        time.sleep(8)  # Wait for optimization + publish-data
 
         batt_forecast = _read_forecast_sensor(ha, "sensor.p_batt_forecast", num_emhass_points)
         soc_forecast = _read_forecast_sensor(ha, "sensor.soc_batt_forecast", num_emhass_points)
 
-        # Check freshness only for sensor-based data
-        EMHASS_MAX_AGE_SECONDS = 6 * 3600
+        # Check freshness - use generous limit since EMHASS publishes every 4h
+        # and publish-data may be broken (known EMHASS v0.17.1 issue)
+        EMHASS_MAX_AGE_SECONDS = 48 * 3600  # 48h - use old data rather than no data
+        EMHASS_WARN_AGE_SECONDS = 6 * 3600  # Warn after 6h
+
         batt_state = ha.get_state("sensor.p_batt_forecast")
         if batt_state:
             last_updated = batt_state.get("last_updated", "")
@@ -158,8 +168,12 @@ def plan_emhass(
                     age = (datetime.now(timezone.utc) - updated_dt).total_seconds()
                 except (ValueError, TypeError):
                     age = None
-                if age is not None and age > EMHASS_MAX_AGE_SECONDS:
-                    raise ValueError(f"EMHASS data stale ({age/3600:.1f}h old, max {EMHASS_MAX_AGE_SECONDS/3600:.0f}h)")
+                if age is not None:
+                    if age > EMHASS_MAX_AGE_SECONDS:
+                        raise ValueError(f"EMHASS data too old ({age/3600:.1f}h, max {EMHASS_MAX_AGE_SECONDS/3600:.0f}h)")
+                    elif age > EMHASS_WARN_AGE_SECONDS:
+                        logger.warning("EMHASS data stale (%.1fh old) - using anyway, "
+                                      "check EMHASS publish-data", age / 3600)
 
     if not batt_forecast:
         raise ValueError("EMHASS returned no battery forecast data")
