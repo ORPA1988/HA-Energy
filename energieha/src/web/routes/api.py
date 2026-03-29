@@ -58,20 +58,23 @@ def get_prices():
     if threshold <= 0 and config:
         threshold = config.price_threshold_eur
 
-    # Get planned grid-charge hours from the plan
-    charge_hours = []
+    # Get planned grid-charge time ranges from the plan (ISO timestamps)
+    charge_ranges = []
     plan = state.plan
     if plan and plan.slots:
         from ...strategies.helpers import is_grid_charging
         for s in plan.slots:
             if (s.planned_battery_mode == "charge" and s.planned_battery_w > 50
                     and is_grid_charging(s.pv_forecast_w, s.load_estimate_w, s.planned_battery_w)):
-                charge_hours.append(s.start.strftime("%H:00"))
+                charge_ranges.append({
+                    "start": s.start.isoformat(),
+                    "end": (s.start + __import__('datetime').timedelta(minutes=s.duration_min)).isoformat(),
+                })
 
     return jsonify({
         "prices": prices,
         "threshold": round(threshold, 4),
-        "charge_hours": charge_hours,
+        "charge_ranges": charge_ranges,
         "count": len(prices),
     })
 

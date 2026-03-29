@@ -15,6 +15,7 @@ OPTIONS_PATH = "/data/options.json"
 
 
 @bp.route("")
+@bp.route("/")
 def index():
     state = AppState()
     config = state.config

@@ -11,6 +11,7 @@ bp = Blueprint("inverter", __name__)
 
 
 @bp.route("")
+@bp.route("/")
 def index():
     state = AppState()
     config = state.config

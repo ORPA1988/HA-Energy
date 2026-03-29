@@ -7,6 +7,7 @@ bp = Blueprint("planning", __name__)
 
 
 @bp.route("")
+@bp.route("/")
 def index():
     state = AppState()
     plan = state.plan
