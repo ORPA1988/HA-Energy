@@ -56,6 +56,9 @@ def plan_emhass(
                     48 * 60 // slot_minutes)
 
     # --- Build input arrays with REAL data ---
+    hourly_profile = snapshot.hourly_load_profile  # {hour: avg_watts} from 7d history
+    has_profile = len(hourly_profile) >= 12
+
     pv_w_list = []
     load_w_list = []
     price_list = []
@@ -63,15 +66,14 @@ def plan_emhass(
         slot_start = now + timedelta(minutes=i * emhass_step)
         pv_w_list.append(get_forecast_for_time(pv_forecast, slot_start))
 
-        # Load: current for slot 0, day/night profile for rest
+        # Load: real hourly profile from 7d history, fallback to average
         if i == 0:
-            load_w_list.append(snapshot.load_power_w)
-        else:
+            load_w_list.append(snapshot.load_power_w)  # current measured
+        elif has_profile:
             h = slot_start.hour
-            if 6 <= h < 22:
-                load_w_list.append(config.load_per_slot_w * 1.15)  # Tag +15%
-            else:
-                load_w_list.append(config.load_per_slot_w * 0.7)   # Nacht -30%
+            load_w_list.append(hourly_profile.get(h, config.load_per_slot_w))
+        else:
+            load_w_list.append(config.load_per_slot_w)
 
         price_list.append(get_price_for_time(prices, slot_start))
 
@@ -87,9 +89,13 @@ def plan_emhass(
     logger.info("EMHASS: %d intervals (%.0fh), SOC=%.1f%%, costfun=%s, step=%dmin",
                 num_emhass_points, hours_until_end, snapshot.battery_soc,
                 config.emhass_costfun, emhass_step)
-    logger.info("EMHASS inputs: PV max=%.0fW, Load=%.0fW, Prices %.1f-%.1fct, "
+    load_min = min(load_w_list) if load_w_list else 0
+    load_max = max(load_w_list) if load_w_list else 0
+    logger.info("EMHASS inputs: PV max=%.0fW, Load %.0f-%.0fW (%s), Prices %.1f-%.1fct, "
                 "Batt charge=%.0fW, Grid max=%.0fW",
-                pv_max, config.load_per_slot_w, price_min * 100, price_max * 100,
+                pv_max, load_min, load_max,
+                "hourly profile" if has_profile else "static avg",
+                price_min * 100, price_max * 100,
                 charge_max, config.maximum_power_from_grid)
 
     # --- Build DataFrames ---

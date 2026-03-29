@@ -199,6 +199,17 @@
                     <span class="slider-value" x-text="(config.load_planning_reserve_pct||10) + '%'"></span>
                 </div>
             </div>
+            <div class="slider-group" title="EMHASS Kostenfunktion: profit=Gewinn max, cost=Kosten min, self-consumption=Eigenverbrauch max. Nur bei strategy=emhass relevant.">
+                <label>EMHASS Modus</label>
+                <div class="slider-control">
+                    <select class="input" style="flex:1;max-width:200px"
+                            @change="setSetting('emhass_costfun', $event.target.value)">
+                        <template x-for="opt in [{v:'profit',l:'Profit'},{v:'cost',l:'Kosten min'},{v:'self-consumption',l:'Eigenverbrauch'}]">
+                            <option :value="opt.v" :selected="(config.emhass_costfun||'profit')===opt.v" x-text="opt.l"></option>
+                        </template>
+                    </select>
+                </div>
+            </div>
         </div>
     </div>
 </div>

@@ -86,6 +86,41 @@ class Collector:
             dynamic_price_threshold=dyn_price_threshold,
         )
 
+    def get_hourly_load_profile(self, days: int = 7) -> dict:
+        """Build hourly load profile from HA history (avg W per hour 0-23).
+
+        Returns dict {0: avg_w, 1: avg_w, ..., 23: avg_w} based on
+        the last N days of load sensor history.
+        """
+        profile = {h: [] for h in range(24)}
+        try:
+            history = self._client.get_history(self._config.entity_load_power, days_back=days)
+            if not history or len(history) < 10:
+                return {}
+            for entry in history:
+                try:
+                    power = float(entry.get("state", 0))
+                    ts = entry.get("last_changed", "")
+                    if ts and 0 < power < 50000:
+                        hour = int(ts[11:13])
+                        profile[hour].append(power)
+                except (ValueError, TypeError, IndexError):
+                    continue
+            result = {}
+            for h, values in profile.items():
+                if values:
+                    result[h] = sum(values) / len(values)
+            if len(result) >= 12:
+                reserve_pct = getattr(self._config, 'load_planning_reserve_pct', 0)
+                if reserve_pct > 0:
+                    result = {h: v * (1.0 + reserve_pct / 100.0) for h, v in result.items()}
+                logger.info("Hourly load profile: %d hours, range %.0f-%.0fW",
+                           len(result), min(result.values()), max(result.values()))
+                return result
+        except Exception as e:
+            logger.warning("Failed to build hourly load profile: %s", e)
+        return {}
+
     def get_average_load_w(self, days: int = 7) -> float:
         """Calculate average load from HA history: sum(7d) / 7 / 24h + reserve.
 

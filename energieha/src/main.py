@@ -196,13 +196,15 @@ def _run_cycle(collector, executor, publisher, config, cycle_num,
     pv_forecast = collector.get_pv_forecast()
     sunrise_hour, sunset_hour = collector.get_sun_times()
 
-    # Update average load from history (once per hour, not every 5min cycle)
-    if cycle_num == 1 or cycle_num % 12 == 0:  # Every 12 cycles = 1 hour
+    # Update average load + hourly profile from history (once per hour)
+    if cycle_num == 1 or cycle_num % 12 == 0:
         avg_load = collector.get_average_load_w(days=7)
         if avg_load > 0:
             config.estimated_daily_load_kwh = avg_load * 24 / 1000.0
-            logger.info("Updated estimated daily load: %.1f kWh (%.0f W avg from 7d history)",
-                        config.estimated_daily_load_kwh, avg_load)
+            logger.info("Updated daily load: %.1f kWh (%.0f W avg)", config.estimated_daily_load_kwh, avg_load)
+        hourly_profile = collector.get_hourly_load_profile(days=7)
+        if hourly_profile:
+            snapshot.hourly_load_profile = hourly_profile
 
     logger.info("Cycle %d: SOC=%.1f%% PV=%.0fW Load=%.0fW Grid=%.0fW GridCharge=%.0fW | "
                 "Prices=%d Forecast=%d | Sun %d:00-%d:00",

@@ -358,6 +358,7 @@ class AppState:
                 "price_threshold_eur": config.price_threshold_eur,
                 "load_planning_reserve_pct": getattr(config, 'load_planning_reserve_pct', 10),
                 "estimated_daily_load_kwh": config.estimated_daily_load_kwh,
+                "emhass_costfun": getattr(config, 'emhass_costfun', 'profit'),
                 "sungrow_tou_enabled": config.sungrow_tou_enabled,
                 "phev_enabled": config.phev_enabled,
             }

@@ -45,6 +45,8 @@ class Snapshot:
     grid_charge_power_w: float = 5000.0
     # Dynamic price threshold from HA input_number (EUR/kWh)
     dynamic_price_threshold: float = 0.0
+    # Hourly load profile {hour: avg_watts} from 7-day history
+    hourly_load_profile: dict = field(default_factory=dict)
 
 
 @dataclass
