@@ -147,9 +147,19 @@ def plan_emhass(
     retrieve_hass_conf, optim_conf, plant_conf, emhass_conf = \
         _build_emhass_configs(config, snapshot, num_emhass_points, tz)
 
+    # Log input data summary
+    pv_sum = sum(pv_w_list)
+    pv_max = max(pv_w_list) if pv_w_list else 0
+    price_min = min(price_list) if price_list else 0
+    price_max = max(price_list) if price_list else 0
     logger.info("EMHASS direct: %d intervals, SOC=%.1f%%, target=%.1f%%, step=%dmin",
                 num_emhass_points, snapshot.battery_soc,
                 config.max_grid_charge_soc, emhass_step)
+    logger.info("EMHASS inputs: PV max=%.0fW sum=%.0fWh, Load=%.0fW (current=%.0fW), "
+                "Prices %.2f-%.2f ct, %d price points, %d forecast points",
+                pv_max, pv_sum * emhass_step / 60, config.load_per_slot_w,
+                snapshot.load_power_w, price_min * 100, price_max * 100,
+                len(prices), len(pv_forecast))
 
     # Build pandas DataFrames
     freq = pd.Timedelta(minutes=emhass_step)
@@ -189,6 +199,14 @@ def plan_emhass(
 
         logger.info("EMHASS optimization complete: %d rows, columns: %s",
                     len(opt_res), list(opt_res.columns))
+        # Log first few rows of results for debugging
+        if "P_batt" in opt_res.columns and "P_PV" in opt_res.columns:
+            for j in range(min(3, len(opt_res))):
+                row = opt_res.iloc[j]
+                logger.info("  [%d] PV=%.0f Load=%.0f Batt=%.0f Grid=%.0f SOC=%.1f%% Price=%.2fct",
+                           j, row.get("P_PV", 0), row.get("P_Load", 0),
+                           row.get("P_batt", 0), row.get("P_grid", 0),
+                           row.get("SOC_opt", 0) * 100, row.get("unit_load_cost", 0) * 100)
 
     except Exception as e:
         logger.warning("EMHASS direct failed: %s", e, exc_info=True)
