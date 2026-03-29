@@ -148,13 +148,27 @@ def plan_price_optimized(
                      slot.start.strftime("%d.%m %H:%M"), slot.price_eur_kwh * 100,
                      slot.pv_forecast_w, grid_import_w, grid_cost)
 
+    # Calculate average grid charge price (for discharge lock logic)
+    avg_grid_charge_price = 0.0
     if charge_count > 0:
         assigned = candidates[:charge_count]
         total_planned = sum(c[0] for c in assigned)
-        cheapest = assigned[0][2].price_eur_kwh * 100
-        most_exp = assigned[-1][2].price_eur_kwh * 100
-        logger.info("Assigned %d grid-charge slots (%.1f-%.1f ct, est. %.2f EUR total)",
-                    charge_count, cheapest, most_exp, total_planned)
+        charge_prices = [c[2].price_eur_kwh for c in assigned]
+        avg_grid_charge_price = sum(charge_prices) / len(charge_prices)
+        logger.info("Assigned %d grid-charge slots (avg %.2f ct, est. %.2f EUR total)",
+                    charge_count, avg_grid_charge_price * 100, total_planned)
+
+    # Minimum price for profitable discharge:
+    # Only discharge if grid price > (avg_charge_price / efficiency) + min_spread
+    # Below this, it's cheaper to use grid directly than stored battery energy.
+    eff = config.round_trip_efficiency
+    if avg_grid_charge_price > 0:
+        min_discharge_price = avg_grid_charge_price / eff + config.min_price_spread_eur
+    else:
+        min_discharge_price = 0  # No grid charging → PV-only energy → always profitable to discharge
+    logger.info("Discharge lock: avg charge %.2f ct / %.0f%% eff + %.2f ct spread = min %.2f ct",
+                avg_grid_charge_price * 100, eff * 100,
+                config.min_price_spread_eur * 100, min_discharge_price * 100)
 
     # --- PV surplus → charge battery (free energy) ---
     for slot in slots:
@@ -193,8 +207,16 @@ def plan_price_optimized(
         if slot.planned_battery_mode == "idle":
             deficit_w = slot.load_estimate_w - slot.pv_forecast_w
             if deficit_w > 0 and soc > config.min_soc_percent:
-                slot.planned_battery_w = -deficit_w
-                slot.planned_battery_mode = "discharge"
+                # Discharge lock: don't discharge if grid price is below
+                # the effective charge cost (avg_charge/eff + spread).
+                # It's cheaper to import from grid than use stored energy.
+                if min_discharge_price > 0 and slot.price_eur_kwh < min_discharge_price:
+                    # Lock battery: don't discharge, import from grid instead
+                    slot.planned_battery_w = 0
+                    slot.planned_battery_mode = "idle"
+                else:
+                    slot.planned_battery_w = -deficit_w
+                    slot.planned_battery_mode = "discharge"
             elif deficit_w < -50:
                 slot.planned_battery_w = -deficit_w
                 slot.planned_battery_mode = "charge"
