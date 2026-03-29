@@ -1,3 +1,3 @@
 """EnergieHA – Lightweight Home Assistant energy management add-on."""
 
-__version__ = "1.3.8"
+__version__ = "1.4.0"
