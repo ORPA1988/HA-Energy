@@ -11,23 +11,60 @@
     {% endif %}
 </div>
 
-<!-- Inverter Status Cards -->
+<!-- Live Values -->
 <div class="card-grid">
-    <div class="card">
+    <div class="card" title="Batterie SOC und Leistung. Entity: {{ config.entity_battery_soc if config else 'sensor.inverter_battery' }}">
+        <div class="card-header">Batterie</div>
+        <div class="card-body">
+            <div class="big-value">{{ "%.0f"|format(inverter.get('battery_soc', 0)) }}%</div>
+            <div class="card-detail">{{ "%.0f"|format(inverter.get('battery_power', 0)) }} W</div>
+        </div>
+    </div>
+    <div class="card" title="PV-Erzeugung. Entity: {{ config.entity_pv_power if config else 'sensor.inverter_pv_power' }}">
+        <div class="card-header">PV</div>
+        <div class="card-body">
+            <div class="big-value text-yellow">{{ "%.0f"|format(inverter.get('pv_power', 0)) }} W</div>
+        </div>
+    </div>
+    <div class="card" title="Netz Import(+)/Export(-). Entity: {{ config.entity_grid_power if config else 'sensor.inverter_grid_power' }}">
+        <div class="card-header">Netz</div>
+        <div class="card-body">
+            <div class="big-value {% if inverter.get('grid_power', 0) > 0 %}text-red{% else %}text-green{% endif %}">
+                {{ "%.0f"|format(inverter.get('grid_power', 0)) }} W
+            </div>
+            <div class="card-detail">{{ 'Import' if inverter.get('grid_power', 0) > 0 else 'Export' }}</div>
+        </div>
+    </div>
+    <div class="card" title="Hausverbrauch. Entity: {{ config.entity_load_power if config else 'sensor.inverter_load_power' }}">
+        <div class="card-header">Verbrauch</div>
+        <div class="card-body">
+            <div class="big-value">{{ "%.0f"|format(inverter.get('load_power', 0)) }} W</div>
+        </div>
+    </div>
+</div>
+
+<!-- Inverter Status -->
+<div class="card-grid">
+    <div class="card" title="Wechselrichter Betriebsmodus. Entity: select.inverter_work_mode">
         <div class="card-header">Betriebsmodus</div>
-        <div class="card-body"><div class="big-value">{{ inverter.get('work_mode', '--') }}</div></div>
+        <div class="card-body"><div class="big-value" style="font-size:0.9rem">{{ inverter.get('work_mode', '--') }}</div></div>
     </div>
-    <div class="card">
+    <div class="card" title="Energiemuster bestimmt Entlade-Prioritaet. Entity: select.inverter_energy_pattern">
         <div class="card-header">Energiemuster</div>
-        <div class="card-body"><div class="big-value">{{ inverter.get('energy_pattern', '--') }}</div></div>
+        <div class="card-body"><div class="big-value" style="font-size:0.9rem">{{ inverter.get('energy_pattern', '--') }}</div></div>
     </div>
-    <div class="card">
+    <div class="card" title="TOU Time-of-Use Steuerung aktiv/deaktiviert. Entity: select.inverter_time_of_use">
         <div class="card-header">TOU Status</div>
-        <div class="card-body"><div class="big-value">{{ inverter.get('tou_enabled', '--') }}</div></div>
+        <div class="card-body"><div class="big-value" style="font-size:0.9rem">{{ inverter.get('tou_enabled', '--') }}</div></div>
     </div>
-    <div class="card">
-        <div class="card-header">Netzlade-Strom</div>
-        <div class="card-body"><div class="big-value">{{ inverter.get('grid_charge_current', '--') }} A</div></div>
+    <div class="card" title="Netzlade-Strom in Ampere × Batteriespannung = Ladeleistung. Entity: {{ config.entity_grid_charge_current if config else 'number.inverter_battery_grid_charging_current' }}">
+        <div class="card-header">Netzladung</div>
+        <div class="card-body">
+            <div class="big-value">{{ inverter.get('grid_charge_current', '--') }} A</div>
+            <div class="card-detail">
+                {% if inverter.get('charge_power_w') %}≈ {{ "%.0f"|format(inverter.get('charge_power_w', 0)) }} W{% endif %}
+            </div>
+        </div>
     </div>
 </div>
 
@@ -103,15 +140,15 @@
 <div class="card card-wide">
     <div class="card-header">Schnellaktionen</div>
     <div class="card-body action-bar">
-        <button class="btn btn-primary"
+        <button class="btn btn-primary" title="Sofortige Neuplanung triggern (naechster Zyklus)"
                 onclick="apiAction('./api/replan')">
             Neu planen
         </button>
-        <button class="btn btn-warning"
+        <button class="btn btn-warning" title="Alle 6 TOU-Programme auf Disabled + SOC=0% setzen"
                 onclick="if(confirm('Alle TOU Programme auf Disabled setzen?')) apiAction('./api/inverter/reset-tou')">
             Alle TOU zuruecksetzen
         </button>
-        <button class="btn btn-danger"
+        <button class="btn btn-danger" title="NOTFALL: Alle Programme Disabled + sofortige Neuplanung"
                 onclick="if(confirm('NOTFALL: Alle Programme Disabled + Replan?')) apiAction('./api/inverter/emergency-idle')">
             Notfall: Alle Idle
         </button>

@@ -166,21 +166,29 @@
 
 <!-- Savings Summary -->
 <div class="card card-wide" x-data="dashboardData()">
-    <div class="card-header">Tagesplan Zusammenfassung</div>
+    <div class="card-header">Tagesplan</div>
     <div class="card-body savings-row">
-        <div class="savings-item" title="Aktive Optimierungsstrategie. Wird in der Konfiguration eingestellt.">
+        <div class="savings-item" title="Aktive Optimierungsstrategie">
             <span class="savings-label">Strategie</span>
             <span class="savings-value" x-text="plan.strategy || '--'"></span>
         </div>
-        <div class="savings-item" title="Projizierter Batterie-SOC am Ende des 24h Plans. Entity: sensor.energieha_planned_soc">
+        <div class="savings-item" title="Projizierter End-SOC nach 24h Plan">
             <span class="savings-label">Geplanter SOC</span>
-            <span class="savings-value" x-text="(plan.projected_soc||0).toFixed(1) + '%'"></span>
+            <span class="savings-value" x-text="(plan.projected_soc||0).toFixed(0) + '%'"></span>
         </div>
-        <div class="savings-item" title="Aktueller EPEX Spot Brutto-Strompreis in ct/kWh. Entity: sensor.epex_spot_data_total_price_3">
-            <span class="savings-label">Aktueller Preis</span>
+        <div class="savings-item" title="Aktueller EPEX Spot Brutto-Strompreis">
+            <span class="savings-label">Preis jetzt</span>
             <span class="savings-value" x-text="plan.current_price ? (plan.current_price*100).toFixed(1) + ' ct' : '--'"></span>
         </div>
-        <div class="savings-item" title="Anzahl abgeschlossener Planungszyklen seit dem letzten Addon-Start. Zyklus alle 5 Minuten.">
+        <div class="savings-item" title="Geschaetzte Netz-Import Kosten laut Plan. Entity: sensor.energieha_savings">
+            <span class="savings-label">Geplante Kosten</span>
+            <span class="savings-value" x-text="snapshot.savings_eur ? snapshot.savings_eur.toFixed(2) + ' EUR' : '--'"></span>
+        </div>
+        <div class="savings-item" title="Anteil Eigenverbrauch (PV + Batterie decken Last)">
+            <span class="savings-label">Eigenverbrauch</span>
+            <span class="savings-value" x-text="snapshot.self_consumption ? snapshot.self_consumption.toFixed(0) + '%' : '--'"></span>
+        </div>
+        <div class="savings-item" title="Planungszyklen seit Addon-Start (alle 5 Min)">
             <span class="savings-label">Zyklen</span>
             <span class="savings-value" x-text="cycle_count || 0"></span>
         </div>

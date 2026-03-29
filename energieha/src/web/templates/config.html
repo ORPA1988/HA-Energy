@@ -229,8 +229,37 @@
         </div>
     </div>
 
-    <div class="form-actions">
+    <div class="form-actions" style="gap:1rem;display:flex;flex-wrap:wrap">
         <button type="submit" class="btn btn-primary btn-large">Speichern &amp; Anwenden</button>
+        <button type="button" class="btn btn-large" style="background:var(--blue)"
+                onclick="validateEntities()">Entities pruefen</button>
     </div>
 </form>
+
+<!-- Validation Result -->
+<div id="validation-result" style="display:none" class="card card-wide">
+    <div class="card-header">Entity-Validierung</div>
+    <div class="card-body" id="validation-body"></div>
+</div>
+
+<script>
+async function validateEntities() {
+    try {
+        const resp = await fetch('./api/validate-entities', {method:'POST'});
+        const data = await resp.json();
+        const div = document.getElementById('validation-body');
+        const container = document.getElementById('validation-result');
+        if (data.error) { div.innerHTML = '<p class="text-red">' + data.error + '</p>'; container.style.display='block'; return; }
+        let html = '<p>' + data.ok + '/' + data.total + ' Entities gefunden</p><table class="table"><thead><tr><th>Feld</th><th>Entity ID</th><th>Status</th><th>Wert</th></tr></thead><tbody>';
+        for (const [key, r] of Object.entries(data.results)) {
+            const color = r.status === 'ok' ? 'text-green' : r.status === 'not_found' ? 'text-red' : 'text-warning';
+            const icon = r.status === 'ok' ? '✓' : r.status === 'not_found' ? '✗' : '–';
+            html += '<tr><td>' + key + '</td><td><code>' + (r.entity_id||'') + '</code></td><td class="' + color + '">' + icon + ' ' + r.status + '</td><td>' + (r.state||'') + '</td></tr>';
+        }
+        html += '</tbody></table>';
+        div.innerHTML = html;
+        container.style.display = 'block';
+    } catch(e) { showToast('Validierung fehlgeschlagen: ' + e.message, 'error'); }
+}
+</script>
 {% endblock %}

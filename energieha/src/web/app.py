@@ -314,6 +314,43 @@ def create_app() -> Flask:
         return jsonify({"routes": rules, "count": len(rules), "path": request.path,
                         "ingress": request.headers.get("X-Ingress-Path", ""), "version": __version__})
 
+    @app.route("/api/validate-entities", methods=["POST"])
+    def api_validate_entities():
+        """Check which configured entities exist in HA."""
+        try:
+            from ..ha_client import HaClient
+            ha = HaClient()
+            config = AppState().config
+            if not config:
+                return jsonify({"error": "No config loaded"}), 500
+
+            entities = {
+                "entity_battery_soc": config.entity_battery_soc,
+                "entity_battery_power": config.entity_battery_power,
+                "entity_pv_power": config.entity_pv_power,
+                "entity_grid_power": config.entity_grid_power,
+                "entity_load_power": config.entity_load_power,
+                "entity_epex_prices": config.entity_epex_prices,
+                "entity_solcast_forecast": config.entity_solcast_forecast,
+                "entity_grid_charge_current": config.entity_grid_charge_current,
+            }
+            results = {}
+            for key, eid in entities.items():
+                if not eid:
+                    results[key] = {"entity_id": "", "status": "empty"}
+                    continue
+                data = ha.get_state(eid)
+                if data is None:
+                    results[key] = {"entity_id": eid, "status": "not_found"}
+                else:
+                    state = data.get("state", "unknown")
+                    results[key] = {"entity_id": eid, "status": "ok", "state": str(state)[:30]}
+
+            ok = sum(1 for r in results.values() if r["status"] == "ok")
+            return jsonify({"results": results, "ok": ok, "total": len(results)})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     logger.info("Flask app: %d routes registered", len(list(app.url_map.iter_rules())))
     return app
 

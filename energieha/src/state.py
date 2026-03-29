@@ -193,6 +193,11 @@ class AppState:
                 "phev_soc": snap.phev_soc,
                 "timestamp": snap.timestamp.isoformat() if snap.timestamp else None,
             }
+            # Add savings from the plan
+            savings = self._savings
+            if savings:
+                result["snapshot"]["savings_eur"] = savings.get("cost_with_battery_eur", 0)
+                result["snapshot"]["self_consumption"] = savings.get("self_consumption_percent", 0)
 
         if plan:
             slot = plan.current_slot

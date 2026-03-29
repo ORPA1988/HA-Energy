@@ -170,6 +170,31 @@ class InverterController:
             state[key] = data.get("state", "unknown") if data else "unavailable"
 
         state["tou_programs"] = self.read_tou_programs()
+
+        # Live sensor values
+        live_entities = {
+            "battery_soc": self._config.entity_battery_soc,
+            "battery_power": self._config.entity_battery_power,
+            "pv_power": self._config.entity_pv_power,
+            "grid_power": self._config.entity_grid_power,
+            "load_power": self._config.entity_load_power,
+        }
+        for key, eid in live_entities.items():
+            try:
+                data = self._client.get_state(eid)
+                state[key] = float(data.get("state", 0)) if data else 0
+            except (ValueError, TypeError):
+                state[key] = 0
+
+        # Battery voltage from attributes
+        try:
+            batt_data = self._client.get_state(self._config.entity_battery_soc)
+            if batt_data:
+                state["battery_voltage"] = float(batt_data.get("attributes", {}).get("BMS Voltage", 0))
+                state["charge_power_w"] = state.get("battery_voltage", 0) * float(state.get("grid_charge_current", 0))
+        except (ValueError, TypeError):
+            pass
+
         return state
 
     def reset_failures(self):
