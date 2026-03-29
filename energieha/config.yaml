@@ -1,5 +1,5 @@
 name: "EnergieHA"
-version: "3.0.4"
+version: "3.1.0"
 slug: "energieha"
 description: "Energy management with integrated EMHASS optimization for PV, battery, grid and consumers"
 url: "https://github.com/ORPA1988/HA-Energy"
@@ -69,12 +69,19 @@ options:
   # Sungrow TOU Steuerung (programmiert die 6 TOU-Programme des Wechselrichters)
   sungrow_tou_enabled: false
 
-  # EMHASS Optimierung (erfordert laufendes EMHASS Add-on)
+  # EMHASS Optimierung (integriert)
   emhass_url: "http://localhost:5000"
   export_price_eur: 0.10
   emhass_optimization_time_step: 30
   emhass_battery_charge_power_max: 5000
   emhass_battery_discharge_power_max: 5000
+  emhass_costfun: "profit"
+  emhass_nocharge_from_grid: false
+  emhass_nodischarge_to_grid: true
+  emhass_weight_battery_discharge: 0.0
+  emhass_weight_battery_charge: 0.0
+  maximum_power_from_grid: 9500
+  maximum_power_to_grid: 9500
 
   # Executor
   mode_hold_seconds: 120
@@ -116,6 +123,13 @@ schema:
   emhass_optimization_time_step: "list(15|30|60)"
   emhass_battery_charge_power_max: "int(100,)"
   emhass_battery_discharge_power_max: "int(100,)"
+  emhass_costfun: "list(profit|cost|self-consumption)"
+  emhass_nocharge_from_grid: bool
+  emhass_nodischarge_to_grid: bool
+  emhass_weight_battery_discharge: "float(0,1)"
+  emhass_weight_battery_charge: "float(0,1)"
+  maximum_power_from_grid: "int(1000,)"
+  maximum_power_to_grid: "int(1000,)"
   mode_hold_seconds: "int(0,600)"
   direct_control: bool
   entity_price_threshold: str?

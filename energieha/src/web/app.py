@@ -146,7 +146,8 @@ def create_app() -> Flask:
                     except ValueError:
                         try: existing[key] = float(val)
                         except ValueError: existing[key] = val
-            for bk in ["dry_run", "direct_control", "phev_enabled", "sungrow_tou_enabled"]:
+            for bk in ["dry_run", "direct_control", "phev_enabled", "sungrow_tou_enabled",
+                       "emhass_nocharge_from_grid", "emhass_nodischarge_to_grid"]:
                 if bk not in request.form:
                     existing[bk] = False
             with open(path, "w") as f:
@@ -377,6 +378,7 @@ def create_app() -> Flask:
                 "min_soc_percent": int,
                 "max_soc_percent": int,
                 "load_planning_reserve_pct": int,
+                "emhass_costfun": str,
             }
             if key not in allowed:
                 return jsonify({"error": f"Setting '{key}' not adjustable"}), 400

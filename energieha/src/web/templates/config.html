@@ -156,18 +156,22 @@
 
     <!-- EMHASS -->
     <div class="card card-wide">
-        <div class="card-header">EMHASS</div>
+        <div class="card-header">EMHASS Optimierung (integriert)</div>
         <div class="card-body">
-            <div class="form-group">
-                <label>EMHASS URL</label>
-                <input type="text" name="emhass_url" value="{{ raw.get('emhass_url', 'http://localhost:5000') }}" class="input input-wide">
-            </div>
             <div class="form-row">
-                <div class="form-group">
+                <div class="form-group" title="Kostenfunktion: profit=Gewinn max (Import min + Export max), cost=Kosten min (nur Import), self-consumption=Eigenverbrauch max">
+                    <label>Kostenfunktion</label>
+                    <select name="emhass_costfun" class="input">
+                        {% for v, l in [('profit', 'Profit (Gewinn maximieren)'), ('cost', 'Cost (Kosten minimieren)'), ('self-consumption', 'Eigenverbrauch maximieren')] %}
+                        <option value="{{ v }}" {% if raw.get('emhass_costfun', 'profit') == v %}selected{% endif %}>{{ l }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" title="Einspeiseverguetung fuer PV-Export in EUR/kWh">
                     <label>Export-Preis (EUR/kWh)</label>
                     <input type="number" name="export_price_eur" value="{{ raw.get('export_price_eur', 0.10) }}" step="0.01" class="input">
                 </div>
-                <div class="form-group">
+                <div class="form-group" title="Optimierungs-Zeitschritt. 30min = Standard, 15min = feiner">
                     <label>Zeitschritt (Min)</label>
                     <select name="emhass_optimization_time_step" class="input">
                         {% for v in [15, 30, 60] %}
@@ -175,14 +179,50 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-group">
+            </div>
+            <div class="form-row">
+                <div class="form-group" title="Maximale Leistung Netz-Import (Hausanschluss)">
+                    <label>Max Grid Import (W)</label>
+                    <input type="number" name="maximum_power_from_grid" value="{{ raw.get('maximum_power_from_grid', 9500) }}" class="input">
+                </div>
+                <div class="form-group" title="Maximale Leistung Netz-Export (Einspeisung)">
+                    <label>Max Grid Export (W)</label>
+                    <input type="number" name="maximum_power_to_grid" value="{{ raw.get('maximum_power_to_grid', 9500) }}" class="input">
+                </div>
+                <div class="form-group" title="Max Batterie-Ladeleistung (Fallback wenn WR-Wert nicht lesbar)">
                     <label>Max Ladeleistung (W)</label>
                     <input type="number" name="emhass_battery_charge_power_max" value="{{ raw.get('emhass_battery_charge_power_max', 5000) }}" class="input">
                 </div>
-                <div class="form-group">
+                <div class="form-group" title="Max Batterie-Entladeleistung (Fallback)">
                     <label>Max Entladeleistung (W)</label>
                     <input type="number" name="emhass_battery_discharge_power_max" value="{{ raw.get('emhass_battery_discharge_power_max', 5000) }}" class="input">
                 </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group form-check" title="Netzladung verbieten: Batterie darf NUR aus PV geladen werden">
+                    <input type="checkbox" name="emhass_nocharge_from_grid" value="true" id="nocharge"
+                           {% if raw.get('emhass_nocharge_from_grid', false) %}checked{% endif %}>
+                    <label for="nocharge">Netzladung verbieten (nur PV)</label>
+                </div>
+                <div class="form-group form-check" title="Netzeinspeisung verbieten: Batterie speist nicht ins Netz ein">
+                    <input type="checkbox" name="emhass_nodischarge_to_grid" value="true" id="nodischarge"
+                           {% if raw.get('emhass_nodischarge_to_grid', true) %}checked{% endif %}>
+                    <label for="nodischarge">Netzeinspeisung verbieten</label>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" title="Strafkosten pro kWh Entladung (Batterie-Verschleiss). 0=keine Strafe, 0.02=moderat, 0.05=schonend">
+                    <label>Entlade-Zykluskosten (EUR/kWh)</label>
+                    <input type="number" name="emhass_weight_battery_discharge" value="{{ raw.get('emhass_weight_battery_discharge', 0.0) }}" step="0.01" min="0" max="1" class="input">
+                </div>
+                <div class="form-group" title="Strafkosten pro kWh Ladung (Batterie-Verschleiss). 0=keine Strafe">
+                    <label>Lade-Zykluskosten (EUR/kWh)</label>
+                    <input type="number" name="emhass_weight_battery_charge" value="{{ raw.get('emhass_weight_battery_charge', 0.0) }}" step="0.01" min="0" max="1" class="input">
+                </div>
+            </div>
+            <div class="form-group" title="EMHASS REST API URL (nur als Fallback, normalerweise direkte Python-Integration)">
+                <label>EMHASS URL (Fallback)</label>
+                <input type="text" name="emhass_url" value="{{ raw.get('emhass_url', 'http://localhost:5000') }}" class="input input-wide">
             </div>
         </div>
     </div>

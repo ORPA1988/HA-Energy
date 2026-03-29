@@ -145,6 +145,13 @@ class Config:
     emhass_optimization_time_step: int = 30  # EMHASS time step in minutes (default 30)
     emhass_battery_charge_power_max: int = 5000    # Max charge power in W
     emhass_battery_discharge_power_max: int = 5000  # Max discharge power in W
+    emhass_costfun: str = "profit"  # profit | cost | self-consumption
+    emhass_nocharge_from_grid: bool = False  # Verbiete Netzladung
+    emhass_nodischarge_to_grid: bool = True  # Verbiete Netzeinspeisung
+    emhass_weight_battery_discharge: float = 0.0  # Entlade-Zykluskosten ct/kWh
+    emhass_weight_battery_charge: float = 0.0     # Lade-Zykluskosten ct/kWh
+    maximum_power_from_grid: int = 9500  # Hausanschluss Import W
+    maximum_power_to_grid: int = 9500    # Hausanschluss Export W
 
     # Executor
     mode_hold_seconds: int = 120  # Hysteresis: min seconds between mode changes

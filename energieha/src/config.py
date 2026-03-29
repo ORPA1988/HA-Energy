@@ -72,6 +72,13 @@ def load_config() -> Config:
         emhass_optimization_time_step=int(data.get("emhass_optimization_time_step", 30)),
         emhass_battery_charge_power_max=int(data.get("emhass_battery_charge_power_max", 5000)),
         emhass_battery_discharge_power_max=int(data.get("emhass_battery_discharge_power_max", 5000)),
+        emhass_costfun=str(data.get("emhass_costfun", "profit")),
+        emhass_nocharge_from_grid=bool(data.get("emhass_nocharge_from_grid", False)),
+        emhass_nodischarge_to_grid=bool(data.get("emhass_nodischarge_to_grid", True)),
+        emhass_weight_battery_discharge=float(data.get("emhass_weight_battery_discharge", 0.0)),
+        emhass_weight_battery_charge=float(data.get("emhass_weight_battery_charge", 0.0)),
+        maximum_power_from_grid=int(data.get("maximum_power_from_grid", 9500)),
+        maximum_power_to_grid=int(data.get("maximum_power_to_grid", 9500)),
         mode_hold_seconds=int(data.get("mode_hold_seconds", 120)),
     )
 
