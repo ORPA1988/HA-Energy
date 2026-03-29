@@ -47,7 +47,7 @@ def get_plan():
 
 @bp.route("/prices")
 def get_prices():
-    """Return EPEX price data for charts."""
+    """Return EPEX price data for charts with planned charge hours."""
     state = AppState()
     prices = state.prices
     threshold = 0.0
@@ -57,9 +57,21 @@ def get_prices():
     config = state.config
     if threshold <= 0 and config:
         threshold = config.price_threshold_eur
+
+    # Get planned grid-charge hours from the plan
+    charge_hours = []
+    plan = state.plan
+    if plan and plan.slots:
+        from ...strategies.helpers import is_grid_charging
+        for s in plan.slots:
+            if (s.planned_battery_mode == "charge" and s.planned_battery_w > 50
+                    and is_grid_charging(s.pv_forecast_w, s.load_estimate_w, s.planned_battery_w)):
+                charge_hours.append(s.start.strftime("%H:00"))
+
     return jsonify({
         "prices": prices,
         "threshold": round(threshold, 4),
+        "charge_hours": charge_hours,
         "count": len(prices),
     })
 

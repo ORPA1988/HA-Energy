@@ -235,6 +235,7 @@ function priceChart() {
         async init() {
             const data = await (await fetch(INGRESS + '/api/prices')).json();
             if (!data.prices || !data.prices.length) return;
+            const chargeHours = data.charge_hours || [];
             const labels = data.prices.map(p => {
                 const d = new Date(p.start);
                 return d.getHours() + ':00';
@@ -244,6 +245,9 @@ function priceChart() {
             const now = new Date();
             const nowIdx = data.prices.findIndex(p => new Date(p.end) > now);
             const colors = prices.map((p, i) => {
+                const hour = labels[i];
+                // Highlight planned grid-charge hours
+                if (chargeHours.includes(hour)) return 'rgba(52,152,219,0.9)';
                 if (i === nowIdx) return '#3498db';
                 if (p > 20) return 'rgba(231,76,60,0.7)';
                 if (p < 12) return 'rgba(39,174,96,0.7)';

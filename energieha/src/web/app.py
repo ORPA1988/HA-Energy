@@ -18,6 +18,7 @@ def create_app() -> Flask:
         template_folder=os.path.join(os.path.dirname(__file__), "templates"),
         static_folder=os.path.join(os.path.dirname(__file__), "static"),
     )
+    app.url_map.strict_slashes = False
 
     # HA ingress path handling
     @app.before_request
