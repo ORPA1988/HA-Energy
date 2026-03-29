@@ -94,19 +94,45 @@ def plan_price_optimized(
 
     # --- Select charge slots ---
     if below_threshold:
-        # Normal: enough cheap hours below threshold
+        # Normal: cheap hours below threshold available
         below_threshold.sort(key=lambda x: x[0])
         candidates = below_threshold
         logger.info("Found %d slots below threshold %.2f ct (%d needed)",
                     len(below_threshold), threshold * 100, slots_needed)
     elif slots_needed > 0:
-        # FALLBACK: No prices below threshold - charge at cheapest anyway!
-        # The battery must be charged regardless of price level.
-        all_candidates.sort(key=lambda x: x[0])
-        candidates = all_candidates
-        logger.warning("NO prices below %.2f ct threshold! "
-                       "Fallback: charging at %d cheapest slots anyway",
-                       threshold * 100, slots_needed)
+        # FALLBACK: No prices below threshold.
+        # Only charge if the price spread (accounting for efficiency losses)
+        # makes it worthwhile: effective_cheap / η < expensive → net savings.
+        eff = config.round_trip_efficiency
+        all_prices = [s.price_eur_kwh for s in slots if s.price_eur_kwh > 0]
+        if all_prices:
+            cheapest_price = min(all_prices)
+            most_expensive = max(all_prices)
+            # Effective cost of charging at cheapest price, accounting for losses
+            effective_charge_cost = cheapest_price / eff
+            net_spread = most_expensive - effective_charge_cost
+
+            logger.info("Fallback check: cheapest=%.2fct, effective=%.2fct (÷%.0f%% eff), "
+                        "most_expensive=%.2fct, net_spread=%.2fct, min_spread=%.2fct",
+                        cheapest_price * 100, effective_charge_cost * 100, eff * 100,
+                        most_expensive * 100, net_spread * 100,
+                        config.min_price_spread_eur * 100)
+
+            if net_spread >= config.min_price_spread_eur:
+                # Spread is large enough → charge at cheapest, discharge at expensive
+                all_candidates.sort(key=lambda x: x[0])
+                candidates = all_candidates
+                logger.info("Fallback ACTIVE: net spread %.2f ct >= %.2f ct min → "
+                            "charging at %d cheapest slots above threshold",
+                            net_spread * 100, config.min_price_spread_eur * 100, slots_needed)
+            else:
+                # Spread too small → not worth charging with efficiency losses
+                candidates = []
+                logger.info("Fallback SKIPPED: net spread %.2f ct < %.2f ct min → "
+                            "grid charging not profitable after efficiency losses",
+                            net_spread * 100, config.min_price_spread_eur * 100)
+        else:
+            candidates = []
     else:
         candidates = []
 
