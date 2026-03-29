@@ -160,12 +160,13 @@ def plan_emhass(
             logger.info("EMHASS sensors: %d batt, %d soc (fresh=%s, updated=%s)",
                         len(batt_forecast), len(soc_forecast), sensors_fresh, last_updated[:19])
 
-        # Approach 2: If sensors still stale, write them ourselves from our plan data
-        if not sensors_fresh and batt_forecast:
-            logger.warning("EMHASS sensors stale - writing forecast sensors directly")
-            client.force_publish_sensors(ha, batt_forecast, soc_forecast,
-                                         pv_w_list, load_w_list,
-                                         num_emhass_points, emhass_step)
+        # If sensors still stale and no battery data available,
+        # don't fake it - let the fallback to Price strategy handle it
+        if not sensors_fresh and not batt_forecast:
+            logger.warning("EMHASS sensors stale and no battery data from API. "
+                          "EMHASS optimization result is lost. Falling back to Price strategy.")
+            raise ValueError("EMHASS optimization succeeded but results unavailable "
+                           "(publish-data failed, no API data). Use Price strategy instead.")
 
         # Use whatever data we have (even if stale)
         EMHASS_MAX_AGE_SECONDS = 48 * 3600
