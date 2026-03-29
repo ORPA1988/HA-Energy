@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>24h Planung</h1>
+    <h1>Planung Heute + Morgen</h1>
     {% if plan %}
     <span class="badge badge-info">{{ plan.strategy }}</span>
     <span class="badge badge-info">{{ plan.created_at.strftime('%H:%M') }}</span>
@@ -136,13 +136,14 @@ document.addEventListener('DOMContentLoaded', function() {
         return 'rgba(149,165,166,0.3)';
     });
 
-    // Dynamic axis ranges
-    const maxPower = Math.max(
-        Math.max(...pvData), Math.max(...loadData),
-        Math.max(...battData.map(Math.abs)), 1000
-    );
-    const powerMax = Math.ceil(maxPower / 1000) * 1000; // round up to nearest kW
-    const priceMax = Math.ceil(Math.max(...priceData) / 5) * 5; // round up to 5ct
+    // Dynamic axis ranges - separate for PV/Load and Battery
+    const maxPvLoad = Math.max(Math.max(...pvData), Math.max(...loadData), 500);
+    const pvLoadMax = Math.ceil(maxPvLoad / 500) * 500; // round to 500W steps
+
+    const maxBatt = Math.max(Math.max(...battData.map(Math.abs)), 500);
+    const battMax = Math.ceil(maxBatt / 1000) * 1000; // round to 1kW steps
+
+    const priceMax = Math.ceil(Math.max(...priceData) / 5) * 5;
     const priceMin = Math.floor(Math.min(...priceData) / 5) * 5;
 
     // Find current time index
@@ -230,18 +231,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     yAxisID: 'y2', tension: 0.1, pointRadius: 0, fill: false, order: 2
                 },
                 {
-                    type: 'line', label: 'PV W', data: pvData,
+                    type: 'line', label: 'PV kW', data: pvData.map(v => v/1000),
                     borderColor: '#f1c40f', borderWidth: 1.5,
                     yAxisID: 'y1', tension: 0.3, pointRadius: 0, fill: false, order: 3
                 },
                 {
-                    type: 'line', label: 'Last W', data: loadData,
+                    type: 'line', label: 'Last kW', data: loadData.map(v => v/1000),
                     borderColor: '#e67e22', borderWidth: 1, borderDash: [3,3],
                     yAxisID: 'y1', tension: 0.3, pointRadius: 0, fill: false, order: 4
                 },
                 {
-                    type: 'bar', label: 'Batterie W', data: battData,
-                    backgroundColor: battColors, yAxisID: 'y1', order: 5
+                    type: 'bar', label: 'Batterie kW', data: battData.map(v => v/1000),
+                    backgroundColor: battColors, yAxisID: 'y3', order: 5,
+                    barPercentage: 0.6,
                 },
             ]
         },
@@ -257,7 +259,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             const i = items[0]?.dataIndex;
                             if (i == null) return '';
                             const s = timeline[i];
-                            return `Netz: ${s.grid_w} W | ${s.grid_charge ? 'GRID-CHARGE' : s.mode}`;
+                            return `Batterie: ${(s.battery_w/1000).toFixed(1)} kW | Netz: ${(s.grid_w/1000).toFixed(1)} kW | ${s.grid_charge ? 'GRID' : s.mode}`;
                         }
                     }
                 }
@@ -277,15 +279,18 @@ document.addEventListener('DOMContentLoaded', function() {
                      ticks: { color: '#3498db', stepSize: 20 },
                      grid: { color: 'rgba(255,255,255,0.06)' } },
                 y1: { position: 'right',
-                      min: -powerMax, max: powerMax,
-                      title: { display: true, text: 'Leistung W', color: '#888' },
-                      ticks: { color: '#888', callback: v => (v/1000).toFixed(1) + 'kW' },
+                      min: 0, max: pvLoadMax / 1000,
+                      title: { display: true, text: 'PV/Last kW', color: '#f1c40f' },
+                      ticks: { color: '#f1c40f', callback: v => v.toFixed(1) },
                       grid: { drawOnChartArea: false } },
                 y2: { position: 'right', offset: true,
                       min: priceMin, max: priceMax,
                       title: { display: false },
                       ticks: { color: '#e94560', callback: v => v.toFixed(0) + ' ct', stepSize: 5 },
                       grid: { drawOnChartArea: false } },
+                y3: { display: false,
+                      min: -battMax / 1000, max: battMax / 1000,
+                },
             }
         },
         plugins: [modeBgPlugin, thresholdPlugin, nowLinePlugin]
