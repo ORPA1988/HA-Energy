@@ -25,8 +25,9 @@ def _load_emhass():
         from .strategies.emhass import plan_emhass
         STRATEGIES["emhass"] = plan_emhass
         _emhass_loaded = True
-    except ImportError as e:
-        logger.warning("EMHASS strategy not available: %s", e)
+        logger.info("EMHASS strategy loaded successfully")
+    except Exception as e:
+        logger.error("EMHASS strategy FAILED to load: %s: %s", type(e).__name__, e, exc_info=True)
 
 
 def _fallback_plan(snapshot, prices, pv_forecast, config, error_msg):
@@ -69,7 +70,7 @@ def create_plan(
         logger.warning("No PV forecast, falling back to price")
         strategy_name = "price" if prices else "surplus"
     elif strategy_name == "emhass" and "emhass" not in STRATEGIES:
-        logger.warning("EMHASS not available, falling back to price")
+        logger.warning("EMHASS not in STRATEGIES dict (import failed), falling back to price")
         strategy_name = "price" if prices else "surplus"
 
     strategy_fn = STRATEGIES.get(strategy_name)
