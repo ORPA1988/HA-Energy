@@ -32,19 +32,24 @@ def create_app() -> Flask:
         return {"ingress_path": ingress_path, "version": __version__}
 
     # Register blueprints WITHOUT url_prefix - routes have full paths
-    from .routes.dashboard import bp as dashboard_bp
-    from .routes.config_routes import bp as config_bp
-    from .routes.planning import bp as planning_bp
-    from .routes.inverter import bp as inverter_bp
-    from .routes.logs import bp as logs_bp
-    from .routes.api import bp as api_bp
-
-    app.register_blueprint(dashboard_bp)
-    app.register_blueprint(config_bp)
-    app.register_blueprint(planning_bp)
-    app.register_blueprint(inverter_bp)
-    app.register_blueprint(logs_bp)
-    app.register_blueprint(api_bp)
+    blueprint_errors = []
+    blueprints = [
+        ("dashboard", ".routes.dashboard"),
+        ("config", ".routes.config_routes"),
+        ("planning", ".routes.planning"),
+        ("inverter", ".routes.inverter"),
+        ("logs", ".routes.logs"),
+        ("api", ".routes.api"),
+    ]
+    for name, module_path in blueprints:
+        try:
+            import importlib
+            mod = importlib.import_module(module_path, package=__name__.rsplit(".", 1)[0] + ".web")
+            app.register_blueprint(mod.bp)
+            logger.info("Blueprint '%s' registered OK", name)
+        except Exception as e:
+            logger.error("Blueprint '%s' FAILED: %s", name, e, exc_info=True)
+            blueprint_errors.append(f"{name}: {e}")
 
     # Debug: log all registered routes
     with app.app_context():
@@ -86,9 +91,13 @@ def create_app() -> Flask:
             "friendly_name": "EnergieHA Routes",
             "icon": "mdi:routes",
             "routes": route_list,
+            "blueprint_errors": blueprint_errors,
+            "blueprints_ok": len(blueprints) - len(blueprint_errors),
         })
-    except Exception:
-        pass
+        logger.info("Published %d routes to HA sensor, %d blueprint errors",
+                    len(route_list), len(blueprint_errors))
+    except Exception as e:
+        logger.error("Failed to publish routes sensor: %s", e)
 
     return app
 
