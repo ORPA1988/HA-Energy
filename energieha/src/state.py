@@ -48,6 +48,9 @@ class AppState:
         self._emhass_available = False
         self._running = True
         self._cycle_count = 0
+        self._prices = []       # list of PricePoint-like dicts
+        self._pv_forecast = []  # list of ForecastPoint-like dicts
+        self._savings = {}      # savings summary dict
 
     @property
     def plan(self):
@@ -114,6 +117,36 @@ class AppState:
     def get_error_log(self, limit=20):
         with self._data_lock:
             return list(self._error_log)[:limit]
+
+    @property
+    def prices(self):
+        with self._data_lock:
+            return list(self._prices)
+
+    @prices.setter
+    def prices(self, value):
+        with self._data_lock:
+            self._prices = value or []
+
+    @property
+    def pv_forecast(self):
+        with self._data_lock:
+            return list(self._pv_forecast)
+
+    @pv_forecast.setter
+    def pv_forecast(self, value):
+        with self._data_lock:
+            self._pv_forecast = value or []
+
+    @property
+    def savings(self):
+        with self._data_lock:
+            return dict(self._savings) if self._savings else {}
+
+    @savings.setter
+    def savings(self, value):
+        with self._data_lock:
+            self._savings = value or {}
 
     @property
     def emhass_last_ok(self):

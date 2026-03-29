@@ -27,10 +27,11 @@ def create_app() -> Flask:
         request.ingress_path = ingress_path
 
     @app.context_processor
-    def inject_ingress():
-        """Make ingress_path available in all templates."""
+    def inject_globals():
+        """Make ingress_path and version available in all templates."""
+        from .. import __version__
         ingress_path = getattr(request, "ingress_path", "")
-        return {"ingress_path": ingress_path}
+        return {"ingress_path": ingress_path, "version": __version__}
 
     # Register route blueprints
     from .routes.dashboard import bp as dashboard_bp

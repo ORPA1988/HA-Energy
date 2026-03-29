@@ -27,7 +27,6 @@ def get_plan():
 
     slots = []
     for s in plan.slots[:96]:
-        hours = s.duration_min / 60.0
         slots.append({
             "time": s.start.strftime("%H:%M"),
             "mode": s.planned_battery_mode,
@@ -44,6 +43,42 @@ def get_plan():
         "created_at": plan.created_at.isoformat(),
         "slots": slots,
     })
+
+
+@bp.route("/prices")
+def get_prices():
+    """Return EPEX price data for charts."""
+    state = AppState()
+    prices = state.prices
+    threshold = 0.0
+    snap = state.snapshot
+    if snap:
+        threshold = snap.dynamic_price_threshold
+    config = state.config
+    if threshold <= 0 and config:
+        threshold = config.price_threshold_eur
+    return jsonify({
+        "prices": prices,
+        "threshold": round(threshold, 4),
+        "count": len(prices),
+    })
+
+
+@bp.route("/forecast")
+def get_forecast():
+    """Return PV forecast data with confidence bands."""
+    state = AppState()
+    return jsonify({
+        "forecast": state.pv_forecast,
+        "count": len(state.pv_forecast),
+    })
+
+
+@bp.route("/savings")
+def get_savings():
+    """Return savings summary."""
+    state = AppState()
+    return jsonify(state.savings or {})
 
 
 @bp.route("/cycles")
@@ -74,7 +109,45 @@ def get_errors():
 def trigger_replan():
     """Trigger an immediate planning cycle."""
     state = AppState()
-    # The planning loop checks this flag
     state._force_replan = True
     logger.info("Replan triggered via GUI")
     return jsonify({"status": "ok", "message": "Replan triggered"})
+
+
+@bp.route("/inverter/reset-tou", methods=["POST"])
+def reset_tou():
+    """Reset all TOU programs to Disabled."""
+    state = AppState()
+    config = state.config
+    if not config or config.dry_run:
+        return jsonify({"status": "dry_run", "message": "Dry run - no changes"})
+    try:
+        from ...ha_client import HaClient
+        from ...inverter_control import InverterController
+        ha = HaClient()
+        ctrl = InverterController(ha, config)
+        for i in range(1, 7):
+            ctrl.set_tou_program(i, "00:00:00", "", "Disabled", 0)
+        return jsonify({"status": "ok", "message": "Alle TOU Programme auf Disabled gesetzt"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@bp.route("/inverter/emergency-idle", methods=["POST"])
+def emergency_idle():
+    """Emergency: set all to idle and force replan."""
+    state = AppState()
+    config = state.config
+    if not config or config.dry_run:
+        return jsonify({"status": "dry_run", "message": "Dry run - no changes"})
+    try:
+        from ...ha_client import HaClient
+        from ...inverter_control import InverterController
+        ha = HaClient()
+        ctrl = InverterController(ha, config)
+        for i in range(1, 7):
+            ctrl.set_tou_program(i, "00:00:00", "", "Disabled", 0)
+        state._force_replan = True
+        return jsonify({"status": "ok", "message": "Notfall-Idle: Alle Programme Disabled + Replan"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500

@@ -61,6 +61,8 @@ class ForecastPoint:
     start: datetime
     end: datetime
     power_w: float
+    power_w_10: float = 0.0  # 10th percentile (pessimistic)
+    power_w_90: float = 0.0  # 90th percentile (optimistic)
 
 
 @dataclass

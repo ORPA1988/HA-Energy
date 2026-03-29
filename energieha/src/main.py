@@ -222,6 +222,12 @@ def _run_cycle(collector, executor, publisher, config, cycle_num,
     if state:
         state.plan = plan
         state.snapshot = snapshot
+        # Cache prices and forecast for web GUI charts
+        state.prices = [{"start": p.start.isoformat(), "end": p.end.isoformat(),
+                         "price": p.price_eur_kwh} for p in prices] if prices else []
+        state.pv_forecast = [{"start": f.start.isoformat(), "end": f.end.isoformat(),
+                              "power_w": f.power_w, "power_w_10": getattr(f, 'power_w_10', 0),
+                              "power_w_90": getattr(f, 'power_w_90', 0)} for f in pv_forecast] if pv_forecast else []
         slot = plan.current_slot
         state.add_cycle(CycleSummary(
             timestamp=datetime.now(),

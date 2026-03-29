@@ -185,11 +185,20 @@ class Collector:
                     if 0 < power < 100:
                         power *= 1000.0
 
+                    # Confidence bands
+                    p10 = float(item.get("pv_estimate10", 0) or 0)
+                    p90 = float(item.get("pv_estimate90", 0) or 0)
+                    if 0 < p10 < 100:
+                        p10 *= 1000.0
+                    if 0 < p90 < 100:
+                        p90 *= 1000.0
+
                     duration = int(item.get("period", 30))
                     if start:
                         end = start + timedelta(minutes=duration)
                         forecasts.append(ForecastPoint(
-                            start=start, end=end, power_w=power))
+                            start=start, end=end, power_w=power,
+                            power_w_10=p10, power_w_90=p90))
                 except (ValueError, TypeError, KeyError) as e:
                     logger.debug("Skipping forecast item: %s", e)
                     continue

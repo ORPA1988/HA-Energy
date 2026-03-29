@@ -10,8 +10,7 @@
 </div>
 
 <!-- Status Cards -->
-<div class="card-grid" hx-get="{{ ingress_path }}/api/state" hx-trigger="every 30s" hx-swap="none"
-     x-data="dashboardData()" x-init="init()">
+<div class="card-grid" x-data="dashboardData()" x-init="init()">
 
     <!-- Battery SOC -->
     <div class="card">
@@ -24,8 +23,8 @@
                 </div>
             </div>
             <div class="card-detail">
-                <span x-text="(snapshot.battery_power_w || 0).toFixed(0) + ' W'"></span>
-                <span class="label" x-text="plan.current_mode || 'idle'"></span>
+                <span x-text="formatPower(snapshot.battery_power_w)"></span>
+                <span class="mode-badge" :class="'mode-' + (plan.current_mode || 'idle')" x-text="plan.current_mode || 'idle'"></span>
             </div>
         </div>
     </div>
@@ -34,7 +33,7 @@
     <div class="card">
         <div class="card-header">PV Leistung</div>
         <div class="card-body">
-            <div class="big-value" x-text="(snapshot.pv_power_w || 0).toFixed(0) + ' W'"></div>
+            <div class="big-value text-yellow" x-text="formatPower(snapshot.pv_power_w)"></div>
             <div class="card-detail">
                 <span class="label">Erzeugung</span>
             </div>
@@ -46,7 +45,7 @@
         <div class="card-header">Netz</div>
         <div class="card-body">
             <div class="big-value" :class="(snapshot.grid_power_w || 0) > 0 ? 'text-red' : 'text-green'"
-                 x-text="Math.abs(snapshot.grid_power_w || 0).toFixed(0) + ' W'">
+                 x-text="formatPower(Math.abs(snapshot.grid_power_w || 0))">
             </div>
             <div class="card-detail">
                 <span class="label" x-text="(snapshot.grid_power_w || 0) > 0 ? 'Import' : 'Export'"></span>
@@ -58,20 +57,20 @@
     <div class="card">
         <div class="card-header">Verbrauch</div>
         <div class="card-body">
-            <div class="big-value" x-text="(snapshot.load_power_w || 0).toFixed(0) + ' W'"></div>
+            <div class="big-value" x-text="formatPower(snapshot.load_power_w)"></div>
             <div class="card-detail">
                 <span class="label">Haushalt</span>
             </div>
         </div>
     </div>
 
-    <!-- Strategy -->
+    <!-- Strategy + Price -->
     <div class="card">
         <div class="card-header">Strategie</div>
         <div class="card-body">
             <div class="big-value" x-text="plan.strategy || config.strategy || '--'"></div>
             <div class="card-detail">
-                <span class="label" x-text="'Preis: ' + (plan.current_price ? plan.current_price.toFixed(4) + ' EUR/kWh' : '--')"></span>
+                <span class="label" x-text="'Preis: ' + (plan.current_price ? plan.current_price.toFixed(2) + ' ct/kWh' : '--')"></span>
             </div>
         </div>
     </div>
@@ -84,55 +83,107 @@
                 <span x-text="emhass_available ? 'Verbunden' : 'Nicht verfuegbar'"></span>
             </div>
             <div class="card-detail">
-                <span class="label" x-text="emhass_last_ok ? 'Letztes Update: ' + new Date(emhass_last_ok).toLocaleTimeString('de') : 'Kein Update'"></span>
+                <span class="label" x-text="emhass_last_ok ? 'OK: ' + new Date(emhass_last_ok).toLocaleTimeString('de') : ''"></span>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Power Flow Diagram -->
-<div class="card card-wide">
+<!-- Animated Power Flow -->
+<div class="card card-wide" x-data="dashboardData()">
     <div class="card-header">Energiefluss</div>
     <div class="card-body">
-        <svg viewBox="0 0 600 300" class="power-flow-svg" x-data x-ref="flowsvg">
+        <svg viewBox="0 0 600 300" class="power-flow-svg">
             <!-- PV (top) -->
-            <g transform="translate(300,30)">
-                <circle r="35" class="flow-node flow-pv"/>
-                <text text-anchor="middle" dy="5" class="flow-label">PV</text>
-                <text text-anchor="middle" dy="55" class="flow-value"
-                      x-text="(snapshot.pv_power_w || 0).toFixed(0) + 'W'"></text>
+            <g transform="translate(300,40)">
+                <circle r="38" class="flow-node flow-pv"/>
+                <text text-anchor="middle" dy="-5" class="flow-label">PV</text>
+                <text text-anchor="middle" dy="12" class="flow-label-small" x-text="formatPower(snapshot.pv_power_w)"></text>
             </g>
             <!-- Battery (left) -->
-            <g transform="translate(100,150)">
-                <rect x="-35" y="-35" width="70" height="70" rx="8" class="flow-node flow-battery"/>
-                <text text-anchor="middle" dy="0" class="flow-label">Batterie</text>
-                <text text-anchor="middle" dy="15" class="flow-label-small"
-                      x-text="(snapshot.battery_soc || 0).toFixed(0) + '%'"></text>
-                <text text-anchor="middle" dy="55" class="flow-value"
-                      x-text="Math.abs(snapshot.battery_power_w || 0).toFixed(0) + 'W'"></text>
+            <g transform="translate(100,155)">
+                <rect x="-40" y="-40" width="80" height="80" rx="10" class="flow-node flow-battery"/>
+                <text text-anchor="middle" dy="-8" class="flow-label">Batterie</text>
+                <text text-anchor="middle" dy="10" class="flow-label-small" x-text="(snapshot.battery_soc||0).toFixed(0)+'%'"></text>
+                <text text-anchor="middle" dy="60" class="flow-value" x-text="formatPower(Math.abs(snapshot.battery_power_w||0))"></text>
             </g>
             <!-- Grid (right) -->
-            <g transform="translate(500,150)">
-                <rect x="-35" y="-35" width="70" height="70" rx="8" class="flow-node flow-grid"/>
-                <text text-anchor="middle" dy="0" class="flow-label">Netz</text>
-                <text text-anchor="middle" dy="55" class="flow-value"
-                      :class="(snapshot.grid_power_w || 0) > 0 ? 'text-red' : 'text-green'"
-                      x-text="Math.abs(snapshot.grid_power_w || 0).toFixed(0) + 'W'"></text>
+            <g transform="translate(500,155)">
+                <rect x="-40" y="-40" width="80" height="80" rx="10" class="flow-node flow-grid"/>
+                <text text-anchor="middle" dy="-5" class="flow-label">Netz</text>
+                <text text-anchor="middle" dy="12" class="flow-label-small"
+                      :class="(snapshot.grid_power_w||0)>0?'text-red':'text-green'"
+                      x-text="formatPower(Math.abs(snapshot.grid_power_w||0))"></text>
             </g>
             <!-- House (bottom) -->
             <g transform="translate(300,270)">
-                <rect x="-35" y="-25" width="70" height="50" rx="8" class="flow-node flow-house"/>
+                <rect x="-45" y="-25" width="90" height="50" rx="10" class="flow-node flow-house"/>
                 <text text-anchor="middle" dy="5" class="flow-label">Haus</text>
-                <text text-anchor="middle" dy="-35" class="flow-value"
-                      x-text="(snapshot.load_power_w || 0).toFixed(0) + 'W'"></text>
+                <text text-anchor="middle" dy="-35" class="flow-value" x-text="formatPower(snapshot.load_power_w)"></text>
             </g>
-            <!-- Flow lines -->
-            <line x1="300" y1="70" x2="300" y2="240" class="flow-line"/>
-            <line x1="265" y1="90" x2="140" y2="140" class="flow-line"/>
-            <line x1="335" y1="90" x2="460" y2="140" class="flow-line"/>
-            <line x1="140" y1="180" x2="265" y2="250" class="flow-line"/>
-            <line x1="460" y1="180" x2="335" y2="250" class="flow-line"/>
+
+            <!-- Animated flow paths -->
+            <!-- PV → House -->
+            <path d="M300,80 L300,242" class="flow-path"
+                  :class="(snapshot.pv_power_w||0)>50 ? 'flow-active flow-down' : 'flow-inactive'"/>
+            <!-- PV → Battery -->
+            <path d="M265,65 L145,120" class="flow-path"
+                  :class="(snapshot.battery_power_w||0)>50 && (snapshot.pv_power_w||0)>50 ? 'flow-active flow-down' : 'flow-inactive'"/>
+            <!-- PV → Grid (export) -->
+            <path d="M335,65 L455,120" class="flow-path"
+                  :class="(snapshot.grid_power_w||0)<-50 ? 'flow-active flow-down' : 'flow-inactive'"/>
+            <!-- Battery → House -->
+            <path d="M145,195 L260,250" class="flow-path"
+                  :class="(snapshot.battery_power_w||0)<-50 ? 'flow-active flow-down' : 'flow-inactive'"/>
+            <!-- Grid → House -->
+            <path d="M455,195 L340,250" class="flow-path"
+                  :class="(snapshot.grid_power_w||0)>50 ? 'flow-active flow-down' : 'flow-inactive'"/>
+            <!-- Grid → Battery (grid charging) -->
+            <path d="M460,155 L140,155" class="flow-path"
+                  :class="(snapshot.battery_power_w||0)>50 && (snapshot.grid_power_w||0)>50 ? 'flow-active flow-left' : 'flow-inactive'"/>
         </svg>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="chart-row">
+    <!-- EPEX Price Chart -->
+    <div class="card card-chart" x-data="priceChart()" x-init="init()">
+        <div class="card-header">Strompreis (48h)</div>
+        <div class="card-body">
+            <canvas x-ref="priceCanvas" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- PV Forecast Chart -->
+    <div class="card card-chart" x-data="forecastChart()" x-init="init()">
+        <div class="card-header">PV Prognose</div>
+        <div class="card-body">
+            <canvas x-ref="forecastCanvas" height="200"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Savings Summary -->
+<div class="card card-wide" x-data="dashboardData()">
+    <div class="card-header">Tagesplan Zusammenfassung</div>
+    <div class="card-body savings-row">
+        <div class="savings-item">
+            <span class="savings-label">Strategie</span>
+            <span class="savings-value" x-text="plan.strategy || '--'"></span>
+        </div>
+        <div class="savings-item">
+            <span class="savings-label">Geplanter SOC</span>
+            <span class="savings-value" x-text="(plan.projected_soc||0).toFixed(1) + '%'"></span>
+        </div>
+        <div class="savings-item">
+            <span class="savings-label">Aktueller Preis</span>
+            <span class="savings-value" x-text="plan.current_price ? (plan.current_price*100).toFixed(1) + ' ct' : '--'"></span>
+        </div>
+        <div class="savings-item">
+            <span class="savings-label">Zyklen</span>
+            <span class="savings-value" x-text="cycle_count || 0"></span>
+        </div>
     </div>
 </div>
 
@@ -140,6 +191,8 @@
 
 {% block scripts %}
 <script>
+const INGRESS = '{{ ingress_path }}';
+
 function dashboardData() {
     return {
         snapshot: {{ status.get('snapshot', {})|tojson }},
@@ -147,26 +200,171 @@ function dashboardData() {
         config: {{ status.get('config', {})|tojson }},
         emhass_available: {{ status.get('emhass_available', false)|tojson }},
         emhass_last_ok: {{ status.get('emhass_last_ok')|tojson }},
+        cycle_count: {{ status.get('cycle_count', 0)|tojson }},
         init() {
-            // Auto-refresh via SSE or polling
-            setInterval(() => this.refresh(), 30000);
+            setInterval(() => this.refresh(), 15000);
         },
         async refresh() {
             try {
-                const resp = await fetch('{{ ingress_path }}/api/state');
-                const data = await resp.json();
+                const data = await (await fetch(INGRESS + '/api/state')).json();
                 if (data.snapshot) this.snapshot = data.snapshot;
                 if (data.plan) this.plan = data.plan;
                 if (data.config) this.config = data.config;
                 this.emhass_available = data.emhass_available || false;
                 this.emhass_last_ok = data.emhass_last_ok;
-            } catch(e) { console.warn('Refresh failed:', e); }
+                this.cycle_count = data.cycle_count || 0;
+            } catch(e) { console.warn('Refresh:', e); }
         },
         socColor(soc) {
             if (!soc) return '#888';
             if (soc < 20) return '#e74c3c';
             if (soc < 50) return '#f39c12';
             return '#27ae60';
+        },
+        formatPower(w) { return w != null ? (Math.abs(w) >= 1000 ? (w/1000).toFixed(1)+' kW' : Math.round(w)+' W') : '--'; }
+    };
+}
+
+function formatPower(w) {
+    return w != null ? (Math.abs(w) >= 1000 ? (w/1000).toFixed(1)+' kW' : Math.round(w)+' W') : '--';
+}
+
+function priceChart() {
+    return {
+        chart: null,
+        async init() {
+            const data = await (await fetch(INGRESS + '/api/prices')).json();
+            if (!data.prices || !data.prices.length) return;
+            const labels = data.prices.map(p => {
+                const d = new Date(p.start);
+                return d.getHours() + ':00';
+            });
+            const prices = data.prices.map(p => p.price * 100); // ct/kWh
+            const threshold = data.threshold * 100;
+            const now = new Date();
+            const nowIdx = data.prices.findIndex(p => new Date(p.end) > now);
+            const colors = prices.map((p, i) => {
+                if (i === nowIdx) return '#3498db';
+                if (p > 20) return 'rgba(231,76,60,0.7)';
+                if (p < 12) return 'rgba(39,174,96,0.7)';
+                return 'rgba(149,165,166,0.5)';
+            });
+
+            this.chart = new Chart(this.$refs.priceCanvas, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Preis (ct/kWh)',
+                        data: prices,
+                        backgroundColor: colors,
+                        borderRadius: 2,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: ctx => ctx.parsed.y.toFixed(2) + ' ct/kWh' } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#aaa', maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#aaa', callback: v => v.toFixed(0) + ' ct' }, grid: { color: 'rgba(255,255,255,0.08)' } }
+                    }
+                },
+                plugins: [{
+                    id: 'thresholdLine',
+                    afterDraw(chart) {
+                        if (!threshold) return;
+                        const yScale = chart.scales.y;
+                        const y = yScale.getPixelForValue(threshold);
+                        const ctx = chart.ctx;
+                        ctx.save();
+                        ctx.strokeStyle = '#e74c3c';
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([6, 4]);
+                        ctx.beginPath();
+                        ctx.moveTo(chart.chartArea.left, y);
+                        ctx.lineTo(chart.chartArea.right, y);
+                        ctx.stroke();
+                        ctx.fillStyle = '#e74c3c';
+                        ctx.font = '11px sans-serif';
+                        ctx.fillText('Schwelle ' + (threshold).toFixed(1) + ' ct', chart.chartArea.right - 100, y - 5);
+                        ctx.restore();
+                    }
+                }]
+            });
+        }
+    };
+}
+
+function forecastChart() {
+    return {
+        chart: null,
+        async init() {
+            const data = await (await fetch(INGRESS + '/api/forecast')).json();
+            if (!data.forecast || !data.forecast.length) return;
+            const labels = data.forecast.map(f => {
+                const d = new Date(f.start);
+                return d.getHours() + ':' + String(d.getMinutes()).padStart(2,'0');
+            });
+            const power = data.forecast.map(f => (f.power_w / 1000).toFixed(2));
+            const p10 = data.forecast.map(f => ((f.power_w_10 || 0) / 1000).toFixed(2));
+            const p90 = data.forecast.map(f => ((f.power_w_90 || 0) / 1000).toFixed(2));
+
+            const datasets = [{
+                label: 'PV Prognose (kW)',
+                data: power,
+                borderColor: '#f1c40f',
+                backgroundColor: 'rgba(241,196,15,0.15)',
+                borderWidth: 2,
+                fill: false,
+                tension: 0.3,
+                pointRadius: 0,
+            }];
+
+            // Confidence band if available
+            if (p90.some(v => v > 0)) {
+                datasets.push({
+                    label: 'P90 (optimistisch)',
+                    data: p90,
+                    borderColor: 'rgba(241,196,15,0.3)',
+                    backgroundColor: 'rgba(241,196,15,0.08)',
+                    borderWidth: 1,
+                    borderDash: [4,4],
+                    fill: '+1',
+                    tension: 0.3,
+                    pointRadius: 0,
+                });
+                datasets.push({
+                    label: 'P10 (pessimistisch)',
+                    data: p10,
+                    borderColor: 'rgba(241,196,15,0.3)',
+                    backgroundColor: 'rgba(241,196,15,0.08)',
+                    borderWidth: 1,
+                    borderDash: [4,4],
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 0,
+                });
+            }
+
+            this.chart = new Chart(this.$refs.forecastCanvas, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false },
+                        tooltip: { callbacks: { label: ctx => ctx.parsed.y + ' kW' } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#aaa', maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#aaa', callback: v => v + ' kW' }, grid: { color: 'rgba(255,255,255,0.08)' }, min: 0 }
+                    }
+                }
+            });
         }
     };
 }

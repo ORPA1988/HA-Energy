@@ -9,29 +9,68 @@
     <script src="{{ ingress_path }}/static/alpine.min.js" defer></script>
     <script src="{{ ingress_path }}/static/chart.min.js"></script>
 </head>
-<body>
+<body x-data="{ navOpen: false }">
     <nav class="navbar">
         <div class="nav-brand">
             <span class="nav-icon">&#9889;</span>
             <span class="nav-title">EnergieHA</span>
+            <button class="nav-toggle" @click="navOpen = !navOpen" aria-label="Menu">&#9776;</button>
         </div>
-        <div class="nav-links">
-            <a href="{{ ingress_path }}/" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">Dashboard</a>
-            <a href="{{ ingress_path }}/planning" class="nav-link {% if active_page == 'planning' %}active{% endif %}">Planung</a>
-            <a href="{{ ingress_path }}/inverter" class="nav-link {% if active_page == 'inverter' %}active{% endif %}">Wechselrichter</a>
-            <a href="{{ ingress_path }}/config" class="nav-link {% if active_page == 'config' %}active{% endif %}">Konfiguration</a>
-            <a href="{{ ingress_path }}/logs" class="nav-link {% if active_page == 'logs' %}active{% endif %}">Logs</a>
+        <div class="nav-links" :class="{ 'nav-open': navOpen }">
+            <a href="{{ ingress_path }}/" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" @click="navOpen=false">Dashboard</a>
+            <a href="{{ ingress_path }}/planning" class="nav-link {% if active_page == 'planning' %}active{% endif %}" @click="navOpen=false">Planung</a>
+            <a href="{{ ingress_path }}/inverter" class="nav-link {% if active_page == 'inverter' %}active{% endif %}" @click="navOpen=false">Wechselrichter</a>
+            <a href="{{ ingress_path }}/config" class="nav-link {% if active_page == 'config' %}active{% endif %}" @click="navOpen=false">Konfiguration</a>
+            <a href="{{ ingress_path }}/logs" class="nav-link {% if active_page == 'logs' %}active{% endif %}" @click="navOpen=false">Logs</a>
         </div>
     </nav>
+
+    <!-- Toast Notifications -->
+    <div x-data="toastStore()" x-ref="toasts" class="toast-container">
+        <template x-for="t in toasts" :key="t.id">
+            <div class="toast" :class="'toast-' + t.type" x-show="t.show"
+                 x-transition:enter="toast-enter" x-transition:leave="toast-leave"
+                 @click="remove(t.id)">
+                <span x-text="t.message"></span>
+            </div>
+        </template>
+    </div>
 
     <main class="container">
         {% block content %}{% endblock %}
     </main>
 
     <footer class="footer">
-        <span>EnergieHA v1.0.0</span>
+        <span>EnergieHA v{{ version }}</span>
     </footer>
 
+    <script>
+    // Global toast notification system
+    window._toasts = [];
+    window._toastId = 0;
+    function toastStore() {
+        return {
+            toasts: window._toasts,
+            remove(id) { this.toasts = this.toasts.filter(t => t.id !== id); window._toasts = this.toasts; }
+        };
+    }
+    function showToast(message, type='info', duration=4000) {
+        const id = ++window._toastId;
+        window._toasts.push({id, message, type, show: true});
+        setTimeout(() => { window._toasts = window._toasts.filter(t => t.id !== id); }, duration);
+    }
+    // Helper for API actions with toast feedback
+    async function apiAction(url, method='POST') {
+        try {
+            const resp = await fetch(url, {method});
+            const data = await resp.json();
+            showToast(data.message || 'OK', data.status === 'error' ? 'error' : 'success');
+            return data;
+        } catch(e) {
+            showToast('Fehler: ' + e.message, 'error');
+        }
+    }
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
