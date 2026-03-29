@@ -11,6 +11,14 @@ def get_forecast_for_time(forecast: list[ForecastPoint], t) -> float:
     return 0.0
 
 
+def get_forecast_p10_for_time(forecast: list[ForecastPoint], t) -> float:
+    """Return pessimistic PV forecast (P10, W) for the given time, or 0."""
+    for fp in forecast:
+        if fp.start <= t < fp.end:
+            return getattr(fp, 'power_w_10', 0) or fp.power_w
+    return 0.0
+
+
 def get_price_for_time(prices: list[PricePoint], t) -> float:
     """Return electricity price (EUR/kWh) for the given time.
 

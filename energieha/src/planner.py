@@ -87,6 +87,24 @@ def create_plan(
 
         _enforce_soc_limits(plan, config)
 
+        # If EMHASS, also run Price for comparison
+        if strategy_name == "emhass" and prices:
+            try:
+                price_plan = plan_price_optimized(snapshot, prices, pv_forecast, config)
+                _enforce_soc_limits(price_plan, config)
+                emhass_cost = sum(max(0, s.planned_grid_w) / 1000 * s.duration_min / 60 * s.price_eur_kwh
+                                  for s in plan.slots)
+                price_cost = sum(max(0, s.planned_grid_w) / 1000 * s.duration_min / 60 * s.price_eur_kwh
+                                 for s in price_plan.slots)
+                logger.info("Strategy comparison: EMHASS=%.2f EUR vs Price=%.2f EUR",
+                           emhass_cost, price_cost)
+                if price_cost < emhass_cost * 0.95:  # Price >5% cheaper
+                    logger.info("Price strategy is significantly cheaper, using Price plan")
+                    plan = price_plan
+                    plan.strategy_error = f"Price chosen over EMHASS ({emhass_cost:.2f} vs {price_cost:.2f} EUR)"
+            except Exception as cmp_e:
+                logger.debug("Strategy comparison failed: %s", cmp_e)
+
         logger.info("Plan created: strategy=%s, slots=%d",
                      plan.strategy, len(plan.slots))
         return plan

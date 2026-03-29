@@ -16,7 +16,8 @@ from zoneinfo import ZoneInfo
 
 from ..models import Config, ForecastPoint, Plan, PricePoint, Snapshot, TimeSlot
 from .helpers import (calc_grid_balance, calc_phev_power, get_forecast_for_time,
-                      get_price_for_time, is_grid_charging, update_soc)
+                      get_forecast_p10_for_time, get_price_for_time,
+                      is_grid_charging, update_soc)
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,8 @@ def plan_emhass(
     price_list = []
     for i in range(num_emhass_points):
         slot_start = now + timedelta(minutes=i * emhass_step)
-        pv_w_list.append(get_forecast_for_time(pv_forecast, slot_start))
+        # Use pessimistic P10 forecast for EMHASS (conservative planning)
+        pv_w_list.append(get_forecast_p10_for_time(pv_forecast, slot_start))
 
         # Load: real hourly profile from 7d history, fallback to average
         if i == 0:

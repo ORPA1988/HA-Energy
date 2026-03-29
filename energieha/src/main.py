@@ -162,6 +162,13 @@ def planning_loop():
                     "consecutive_failures": consecutive_failures,
                     "version": __version__,
                 })
+                # HA persistent notification on 3rd consecutive failure
+                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                    client.call_service("persistent_notification", "create", {
+                        "title": "EnergieHA SAFE MODE",
+                        "message": f"3 Zyklusfehler → Safe Mode. Fehler: {e}",
+                        "notification_id": "energieha_safe_mode",
+                    })
             except Exception:
                 pass
 

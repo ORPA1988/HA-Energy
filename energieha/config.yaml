@@ -1,5 +1,5 @@
 name: "EnergieHA"
-version: "3.2.0"
+version: "3.3.0"
 slug: "energieha"
 description: "Energy management with integrated EMHASS optimization for PV, battery, grid and consumers"
 url: "https://github.com/ORPA1988/HA-Energy"
