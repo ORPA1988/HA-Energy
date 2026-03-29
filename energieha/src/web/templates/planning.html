@@ -51,8 +51,9 @@
                 </tr>
             </thead>
             <tbody>
+                {% set now_hhmm = None %}
                 {% for slot in timeline %}
-                <tr>
+                <tr {% if loop.index0 == 0 %}style="background:rgba(255,255,255,0.06)"{% endif %}>
                     <td><strong>{{ slot.time }}</strong></td>
                     <td>
                         <span class="mode-badge mode-{{ slot.mode }}">{{ slot.mode }}</span>
@@ -103,6 +104,33 @@ document.addEventListener('DOMContentLoaded', function() {
         if (s.mode === 'discharge') return 'rgba(231,76,60,0.6)';
         return 'rgba(149,165,166,0.3)';
     });
+
+    // Find current time index
+    const nowHHMM = new Date().toLocaleTimeString('de', {hour:'2-digit',minute:'2-digit'});
+    const nowIdx = labels.indexOf(nowHHMM) >= 0 ? labels.indexOf(nowHHMM) : 0;
+
+    // "Now" vertical line plugin
+    const nowLinePlugin = {
+        id: 'nowLine',
+        afterDraw(chart) {
+            if (nowIdx <= 0) return;
+            const xScale = chart.scales.x;
+            const x = xScale.getPixelForValue(nowIdx);
+            const ctx = chart.ctx;
+            ctx.save();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(x, chart.chartArea.top);
+            ctx.lineTo(x, chart.chartArea.bottom);
+            ctx.stroke();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillText('JETZT', x - 18, chart.chartArea.top - 4);
+            ctx.restore();
+        }
+    };
 
     // Mode background bands plugin
     const modeBgPlugin = {
@@ -209,7 +237,7 @@ document.addEventListener('DOMContentLoaded', function() {
                       grid: { drawOnChartArea: false } },
             }
         },
-        plugins: [modeBgPlugin, thresholdPlugin]
+        plugins: [modeBgPlugin, thresholdPlugin, nowLinePlugin]
     });
 });
 </script>

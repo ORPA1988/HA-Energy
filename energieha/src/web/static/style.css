@@ -175,39 +175,43 @@ body {
 /* Animated flow paths */
 .flow-path {
     fill: none;
-    stroke-width: 3;
     stroke-linecap: round;
+    transition: stroke-width 0.5s, opacity 0.5s;
 }
 
 .flow-inactive {
     stroke: var(--border);
-    opacity: 0.15;
+    stroke-width: 2;
+    opacity: 0.12;
     stroke-dasharray: none;
 }
 
 .flow-active {
     stroke: var(--yellow);
     opacity: 0.9;
-    stroke-dasharray: 12 6;
+    stroke-dasharray: 10 5;
+    filter: drop-shadow(0 0 4px rgba(241,196,15,0.4));
 }
+.flow-active.flow-pv-color { stroke: var(--yellow); filter: drop-shadow(0 0 4px rgba(241,196,15,0.4)); }
+.flow-active.flow-grid-color { stroke: var(--blue); filter: drop-shadow(0 0 4px rgba(52,152,219,0.4)); }
+.flow-active.flow-batt-color { stroke: var(--green); filter: drop-shadow(0 0 4px rgba(39,174,96,0.4)); }
+.flow-active.flow-red-color { stroke: var(--red); filter: drop-shadow(0 0 4px rgba(231,76,60,0.4)); }
 
-.flow-active.flow-down {
-    animation: flowDown 1.2s linear infinite;
-}
+/* Stroke width by power level */
+.flow-w-low { stroke-width: 2.5; }
+.flow-w-med { stroke-width: 4; }
+.flow-w-high { stroke-width: 6; }
+.flow-w-max { stroke-width: 8; }
 
-.flow-active.flow-left {
-    animation: flowLeft 1.2s linear infinite;
-}
+.flow-active.flow-down { animation: flowDown 1s linear infinite; }
+.flow-active.flow-up { animation: flowUp 1s linear infinite; }
+.flow-active.flow-left { animation: flowLeft 1s linear infinite; }
+.flow-active.flow-right { animation: flowRight 1s linear infinite; }
 
-@keyframes flowDown {
-    from { stroke-dashoffset: 18; }
-    to { stroke-dashoffset: 0; }
-}
-
-@keyframes flowLeft {
-    from { stroke-dashoffset: 0; }
-    to { stroke-dashoffset: 18; }
-}
+@keyframes flowDown { from { stroke-dashoffset: 15; } to { stroke-dashoffset: 0; } }
+@keyframes flowUp { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 15; } }
+@keyframes flowLeft { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 15; } }
+@keyframes flowRight { from { stroke-dashoffset: 15; } to { stroke-dashoffset: 0; } }
 
 /* ========== TOAST NOTIFICATIONS ========== */
 .toast-container {

@@ -122,25 +122,25 @@
                 <text text-anchor="middle" dy="-35" class="flow-value" x-text="formatPower(snapshot.load_power_w)"></text>
             </g>
 
-            <!-- Animated flow paths -->
+            <!-- Animated flow paths with dynamic width by power -->
             <!-- PV → House -->
             <path d="M300,80 L300,242" class="flow-path"
-                  :class="(snapshot.pv_power_w||0)>50 ? 'flow-active flow-down' : 'flow-inactive'"/>
-            <!-- PV → Battery -->
+                  :class="(snapshot.pv_power_w||0)>50 ? 'flow-active flow-down flow-pv-color ' + pw(snapshot.pv_power_w) : 'flow-inactive'"/>
+            <!-- PV → Battery (PV surplus charging) -->
             <path d="M265,65 L145,120" class="flow-path"
-                  :class="(snapshot.battery_power_w||0)>50 && (snapshot.pv_power_w||0)>50 ? 'flow-active flow-down' : 'flow-inactive'"/>
+                  :class="(snapshot.battery_power_w||0)>50 && (snapshot.pv_power_w||0)>50 && (snapshot.grid_power_w||0)<=50 ? 'flow-active flow-down flow-pv-color ' + pw(snapshot.battery_power_w) : 'flow-inactive'"/>
             <!-- PV → Grid (export) -->
             <path d="M335,65 L455,120" class="flow-path"
-                  :class="(snapshot.grid_power_w||0)<-50 ? 'flow-active flow-down' : 'flow-inactive'"/>
-            <!-- Battery → House -->
+                  :class="(snapshot.grid_power_w||0)<-50 ? 'flow-active flow-down flow-pv-color ' + pw(-snapshot.grid_power_w) : 'flow-inactive'"/>
+            <!-- Battery → House (discharge) -->
             <path d="M145,195 L260,250" class="flow-path"
-                  :class="(snapshot.battery_power_w||0)<-50 ? 'flow-active flow-down' : 'flow-inactive'"/>
-            <!-- Grid → House -->
+                  :class="(snapshot.battery_power_w||0)<-50 ? 'flow-active flow-down flow-batt-color ' + pw(-snapshot.battery_power_w) : 'flow-inactive'"/>
+            <!-- Grid → House (import) -->
             <path d="M455,195 L340,250" class="flow-path"
-                  :class="(snapshot.grid_power_w||0)>50 ? 'flow-active flow-down' : 'flow-inactive'"/>
+                  :class="(snapshot.grid_power_w||0)>50 ? 'flow-active flow-down flow-red-color ' + pw(snapshot.grid_power_w) : 'flow-inactive'"/>
             <!-- Grid → Battery (grid charging) -->
             <path d="M460,155 L140,155" class="flow-path"
-                  :class="(snapshot.battery_power_w||0)>50 && (snapshot.grid_power_w||0)>50 ? 'flow-active flow-left' : 'flow-inactive'"/>
+                  :class="(snapshot.battery_power_w||0)>50 && (snapshot.grid_power_w||0)>50 ? 'flow-active flow-left flow-grid-color ' + pw(snapshot.battery_power_w) : 'flow-inactive'"/>
         </svg>
     </div>
 </div>
@@ -227,6 +227,14 @@ function dashboardData() {
 
 function formatPower(w) {
     return w != null ? (Math.abs(w) >= 1000 ? (w/1000).toFixed(1)+' kW' : Math.round(w)+' W') : '--';
+}
+// Power-width class for flow path stroke thickness
+function pw(w) {
+    const a = Math.abs(w || 0);
+    if (a > 3000) return 'flow-w-max';
+    if (a > 1000) return 'flow-w-high';
+    if (a > 300) return 'flow-w-med';
+    return 'flow-w-low';
 }
 
 function priceChart() {
