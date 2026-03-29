@@ -256,6 +256,9 @@ def _run_cycle(collector, executor, publisher, config, cycle_num,
         elif config.strategy == "emhass" and hasattr(plan, 'strategy_error'):
             state.emhass_available = False
 
+        # Record daily statistics
+        state.record_daily_stats(snapshot, plan)
+
         # Save state to disk (survives addon restart)
         state.save_state()
 

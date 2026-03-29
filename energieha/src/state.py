@@ -53,6 +53,7 @@ class AppState:
         self._prices = []       # list of PricePoint-like dicts
         self._pv_forecast = []  # list of ForecastPoint-like dicts
         self._savings = {}      # savings summary dict
+        self._daily_stats = []  # list of daily stat dicts (last 30 days)
 
     @property
     def plan(self):
@@ -174,8 +175,10 @@ class AppState:
 
     STATE_FILE = "/data/energieha_state.json"
 
+    STATS_FILE = "/data/energieha_daily_stats.json"
+
     def save_state(self):
-        """Save prices, forecast, savings, cycle_count to disk."""
+        """Save prices, forecast, savings, cycle_count, daily_stats to disk."""
         try:
             data = {
                 "prices": self._prices,
@@ -187,7 +190,6 @@ class AppState:
             path = os.environ.get("ENERGIEHA_STATE_PATH", self.STATE_FILE)
             with open(path, "w") as f:
                 json.dump(data, f)
-            logger.debug("State saved to %s", path)
         except Exception as e:
             logger.warning("Failed to save state: %s", e)
 
@@ -203,11 +205,75 @@ class AppState:
             self._pv_forecast = data.get("pv_forecast", [])
             self._savings = data.get("savings", {})
             self._cycle_count = data.get("cycle_count", 0)
-            logger.info("State restored from %s (saved: %s, %d prices, %d forecast)",
-                        path, data.get("saved_at", "?"),
-                        len(self._prices), len(self._pv_forecast))
+            logger.info("State restored from %s (%d prices, %d forecast)",
+                        path, len(self._prices), len(self._pv_forecast))
         except Exception as e:
             logger.warning("Failed to load state: %s", e)
+        # Load daily stats separately
+        self._load_daily_stats()
+
+    def record_daily_stats(self, snapshot, plan):
+        """Record today's stats. Called once per cycle, accumulates over the day."""
+        try:
+            today = datetime.now().strftime("%Y-%m-%d")
+            # Find or create today's entry
+            entry = None
+            for s in self._daily_stats:
+                if s.get("date") == today:
+                    entry = s
+                    break
+            if not entry:
+                entry = {"date": today, "grid_import_wh": 0, "grid_export_wh": 0,
+                         "pv_wh": 0, "load_wh": 0, "cost_eur": 0, "cycles": 0}
+                self._daily_stats.append(entry)
+
+            # Accumulate energy for this 5-minute cycle (W × 5min/60 = Wh)
+            interval_h = 5.0 / 60.0  # 5 minutes
+            if snapshot:
+                grid = snapshot.grid_power_w
+                if grid > 0:
+                    entry["grid_import_wh"] += grid * interval_h
+                else:
+                    entry["grid_export_wh"] += abs(grid) * interval_h
+                entry["pv_wh"] += max(0, snapshot.pv_power_w) * interval_h
+                entry["load_wh"] += max(0, snapshot.load_power_w) * interval_h
+                # Cost for this interval
+                if plan and plan.current_slot and grid > 0:
+                    entry["cost_eur"] += grid / 1000.0 * interval_h * plan.current_slot.price_eur_kwh
+            entry["cycles"] += 1
+
+            # Keep only last 30 days
+            self._daily_stats = [s for s in self._daily_stats
+                                 if s.get("date", "") >= (datetime.now().replace(day=1)).strftime("%Y-%m-%d")][-30:]
+
+            # Save periodically (every 12 cycles = 1 hour)
+            if entry["cycles"] % 12 == 0:
+                self._save_daily_stats()
+        except Exception as e:
+            logger.warning("Daily stats error: %s", e)
+
+    def get_daily_stats(self, days: int = 7) -> list:
+        """Return last N days of stats as list of dicts."""
+        return self._daily_stats[-days:]
+
+    def _save_daily_stats(self):
+        try:
+            path = os.environ.get("ENERGIEHA_STATS_PATH", self.STATS_FILE)
+            with open(path, "w") as f:
+                json.dump(self._daily_stats, f, indent=2)
+        except Exception as e:
+            logger.warning("Failed to save daily stats: %s", e)
+
+    def _load_daily_stats(self):
+        try:
+            path = os.environ.get("ENERGIEHA_STATS_PATH", self.STATS_FILE)
+            if os.path.exists(path):
+                with open(path) as f:
+                    self._daily_stats = json.load(f)
+                logger.info("Loaded %d days of daily stats", len(self._daily_stats))
+        except Exception as e:
+            logger.warning("Failed to load daily stats: %s", e)
+            self._daily_stats = []
 
     def get_status_dict(self) -> dict:
         """Return a summary dict for the API."""

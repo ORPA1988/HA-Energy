@@ -244,6 +244,14 @@
     </div>
 </div>
 
+<!-- 7-Day History Chart -->
+<div class="card card-wide" x-data="weekChart()" x-init="init()" title="Taeglich: Grid Import (rot), PV Ertrag (gelb), Kosten (blau). Basiert auf kumulierten 5-Min-Messwerten.">
+    <div class="card-header">7-Tage Verlauf</div>
+    <div class="card-body" style="height:220px">
+        <canvas x-ref="weekCanvas"></canvas>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -471,6 +479,68 @@ function forecastChart() {
                 }
             });
             } catch(e) { console.warn('Forecast chart error:', e); }
+        }
+    };
+}
+
+function weekChart() {
+    return {
+        chart: null,
+        async init() {
+            try {
+                const resp = await fetch('./api/daily-stats?days=7');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (!data.stats || !data.stats.length) return;
+
+                const labels = data.stats.map(s => s.date.slice(5)); // MM-DD
+                const gridImport = data.stats.map(s => s.grid_import_kwh);
+                const pvKwh = data.stats.map(s => s.pv_kwh);
+                const costEur = data.stats.map(s => s.cost_eur);
+                const selfPct = data.stats.map(s => s.self_consumption_pct);
+
+                this.chart = new Chart(this.$refs.weekCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: 'Grid Import kWh', data: gridImport,
+                              backgroundColor: 'rgba(231,76,60,0.6)', yAxisID: 'y', order: 2 },
+                            { label: 'PV Ertrag kWh', data: pvKwh,
+                              backgroundColor: 'rgba(241,196,15,0.6)', yAxisID: 'y', order: 3 },
+                            { label: 'Kosten EUR', data: costEur,
+                              type: 'line', borderColor: '#3498db', borderWidth: 2,
+                              yAxisID: 'y1', pointRadius: 3, tension: 0.3, fill: false, order: 1 },
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { labels: { color: '#aaa', boxWidth: 12, font: { size: 10 } } },
+                            tooltip: {
+                                callbacks: {
+                                    afterBody(items) {
+                                        const i = items[0]?.dataIndex;
+                                        if (i == null) return '';
+                                        return 'Eigenverbrauch: ' + selfPct[i] + '%';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                            y: { position: 'left', min: 0,
+                                 title: { display: true, text: 'kWh', color: '#888' },
+                                 ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                            y1: { position: 'right', min: 0,
+                                  title: { display: true, text: 'EUR', color: '#3498db' },
+                                  ticks: { color: '#3498db' }, grid: { drawOnChartArea: false } },
+                        }
+                    }
+                });
+            } catch(e) { console.warn('Week chart error:', e); }
         }
     };
 }

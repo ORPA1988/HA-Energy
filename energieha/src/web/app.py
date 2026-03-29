@@ -289,6 +289,29 @@ def create_app() -> Flask:
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)})
 
+    @app.route("/api/daily-stats")
+    def api_daily_stats():
+        try:
+            days = int(request.args.get("days", 7))
+            stats = AppState().get_daily_stats(days)
+            # Convert Wh to kWh for display
+            result = []
+            for s in stats:
+                result.append({
+                    "date": s.get("date", ""),
+                    "grid_import_kwh": round(s.get("grid_import_wh", 0) / 1000, 2),
+                    "grid_export_kwh": round(s.get("grid_export_wh", 0) / 1000, 2),
+                    "pv_kwh": round(s.get("pv_wh", 0) / 1000, 2),
+                    "load_kwh": round(s.get("load_wh", 0) / 1000, 2),
+                    "cost_eur": round(s.get("cost_eur", 0), 2),
+                    "self_consumption_pct": round(
+                        (1 - s.get("grid_import_wh", 0) / max(s.get("load_wh", 1), 1)) * 100, 1
+                    ) if s.get("load_wh", 0) > 0 else 0,
+                })
+            return jsonify({"stats": result, "days": len(result)})
+        except Exception as e:
+            return jsonify({"stats": [], "error": str(e)}), 500
+
     @app.route("/api/inverter/reset-tou", methods=["POST"])
     def api_reset_tou():
         try:
