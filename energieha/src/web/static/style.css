@@ -331,6 +331,38 @@ select.input { cursor: pointer; }
 .tou-mode { font-weight: 600; }
 .tou-soc { color: var(--text-muted); }
 
+/* TOU 24h Bar Timeline */
+.tou-bar-container { margin-bottom: 0.5rem; }
+.tou-bar {
+    display: flex;
+    height: 40px;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+.tou-bar-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    overflow: hidden;
+    transition: opacity 0.2s;
+    cursor: default;
+}
+.tou-bar-slot:hover { opacity: 0.8; }
+.tou-bar-grid { background: rgba(52,152,219,0.35); border-right: 1px solid var(--border); }
+.tou-bar-disabled { background: rgba(149,165,166,0.1); border-right: 1px solid var(--border); }
+.tou-bar-label { font-weight: 600; color: var(--text); font-size: 0.7rem; }
+.tou-bar-mode { color: var(--text-muted); font-size: 0.65rem; }
+.tou-bar-axis {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    padding: 0.2rem 0;
+}
+
 /* Action bar */
 .action-bar { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
 

@@ -5,62 +5,71 @@
 <div class="page-header">
     <h1>24h Planung</h1>
     {% if plan %}
-    <span class="badge badge-info">{{ plan.strategy }} | {{ plan.created_at.strftime('%H:%M') }}</span>
+    <span class="badge badge-info">{{ plan.strategy }}</span>
+    <span class="badge badge-info">{{ plan.created_at.strftime('%H:%M') }}</span>
     {% endif %}
-    <button class="btn btn-primary"
-            hx-post="{{ ingress_path }}/api/replan"
-            hx-swap="none">
-        Jetzt neu planen
+    <button class="btn btn-primary btn-small"
+            onclick="apiAction('{{ ingress_path }}/api/replan').then(()=>setTimeout(()=>location.reload(),8000))">
+        Neu planen
     </button>
 </div>
 
-<!-- Charts -->
+<!-- Combined Chart: SOC + Power + Price -->
 <div class="card card-wide">
-    <div class="card-header">SOC &amp; Leistung</div>
-    <div class="card-body">
-        <canvas id="planChart" height="200"></canvas>
-    </div>
-</div>
-
-<div class="card card-wide">
-    <div class="card-header">Strompreis</div>
-    <div class="card-body">
-        <canvas id="priceChart" height="120"></canvas>
+    <div class="card-header">SOC, Leistung &amp; Preis</div>
+    <div class="card-body" style="height:320px">
+        <canvas id="planChart"></canvas>
     </div>
 </div>
 
 <!-- Plan Table -->
 <div class="card card-wide">
-    <div class="card-header">Planungstabelle</div>
+    <div class="card-header">
+        Planungstabelle
+        {% if timeline %}
+        <span style="float:right;font-weight:400;text-transform:none">
+            {{ timeline|selectattr('mode','eq','charge')|list|length }} Lade /
+            {{ timeline|selectattr('mode','eq','discharge')|list|length }} Entlade-Slots |
+            Gesamt: {{ "%.2f"|format(timeline[-1].total if timeline else 0) }} EUR
+        </span>
+        {% endif %}
+    </div>
     <div class="card-body table-scroll">
         <table class="table">
             <thead>
                 <tr>
                     <th>Zeit</th>
                     <th>Modus</th>
-                    <th>SOC %</th>
-                    <th>Batterie W</th>
-                    <th>PV W</th>
-                    <th>Last W</th>
-                    <th>Netz W</th>
-                    <th>Preis EUR/kWh</th>
-                    <th>Kosten EUR</th>
-                    <th>Gesamt EUR</th>
+                    <th>SOC</th>
+                    <th>Batterie</th>
+                    <th>PV</th>
+                    <th>Last</th>
+                    <th>Netz</th>
+                    <th>Preis</th>
+                    <th>Kosten</th>
+                    <th>Gesamt</th>
                 </tr>
             </thead>
             <tbody>
                 {% for slot in timeline %}
-                <tr class="mode-{{ slot.mode }}">
-                    <td>{{ slot.time }}</td>
-                    <td><span class="mode-badge mode-{{ slot.mode }}">{{ slot.mode }}</span></td>
-                    <td>{{ slot.soc }}</td>
-                    <td>{{ slot.battery_w }}</td>
-                    <td>{{ slot.pv_w }}</td>
-                    <td>{{ slot.load_w }}</td>
-                    <td class="{% if slot.grid_w > 0 %}text-red{% elif slot.grid_w < 0 %}text-green{% endif %}">{{ slot.grid_w }}</td>
-                    <td>{{ "%.4f"|format(slot.price) }}</td>
-                    <td>{{ "%.4f"|format(slot.cost) }}</td>
-                    <td>{{ "%.2f"|format(slot.total) }}</td>
+                <tr>
+                    <td><strong>{{ slot.time }}</strong></td>
+                    <td>
+                        <span class="mode-badge mode-{{ slot.mode }}">{{ slot.mode }}</span>
+                        {% if slot.grid_charge %}<span class="badge badge-info" style="font-size:0.65rem;margin-left:2px">GRID</span>{% endif %}
+                    </td>
+                    <td>{{ slot.soc }}%</td>
+                    <td class="{% if slot.battery_w > 0 %}text-green{% elif slot.battery_w < 0 %}text-red{% endif %}">
+                        {{ slot.battery_w }} W
+                    </td>
+                    <td class="text-yellow">{{ slot.pv_w }} W</td>
+                    <td>{{ slot.load_w }} W</td>
+                    <td class="{% if slot.grid_w > 0 %}text-red{% elif slot.grid_w < 0 %}text-green{% endif %}">
+                        {{ slot.grid_w }} W
+                    </td>
+                    <td>{{ "%.2f"|format(slot.price * 100) }} ct</td>
+                    <td>{% if slot.cost > 0 %}{{ "%.2f"|format(slot.cost) }}{% else %}-{% endif %}</td>
+                    <td><strong>{{ "%.2f"|format(slot.total) }}</strong></td>
                 </tr>
                 {% endfor %}
                 {% if not timeline %}
@@ -76,6 +85,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const timeline = {{ timeline|tojson }};
+    const threshold = {{ threshold|tojson }};
     if (!timeline.length) return;
 
     const labels = timeline.map(s => s.time);
@@ -83,48 +93,123 @@ document.addEventListener('DOMContentLoaded', function() {
     const pvData = timeline.map(s => s.pv_w);
     const loadData = timeline.map(s => s.load_w);
     const battData = timeline.map(s => s.battery_w);
-    const priceData = timeline.map(s => s.price);
-    const modeColors = timeline.map(s => {
-        if (s.mode === 'charge') return 'rgba(39,174,96,0.7)';
-        if (s.mode === 'discharge') return 'rgba(231,76,60,0.7)';
-        return 'rgba(149,165,166,0.5)';
+    const priceData = timeline.map(s => s.price * 100); // ct/kWh
+    const gridData = timeline.map(s => s.grid_w);
+
+    // Battery bar colors: green=charge, blue=grid-charge, red=discharge
+    const battColors = timeline.map(s => {
+        if (s.grid_charge) return 'rgba(52,152,219,0.8)';
+        if (s.mode === 'charge') return 'rgba(39,174,96,0.6)';
+        if (s.mode === 'discharge') return 'rgba(231,76,60,0.6)';
+        return 'rgba(149,165,166,0.3)';
     });
 
-    // SOC + Power chart
+    // Mode background bands plugin
+    const modeBgPlugin = {
+        id: 'modeBands',
+        beforeDraw(chart) {
+            const ctx = chart.ctx;
+            const xScale = chart.scales.x;
+            const area = chart.chartArea;
+            timeline.forEach((s, i) => {
+                if (s.mode === 'idle') return;
+                const x0 = xScale.getPixelForValue(i) - (xScale.getPixelForValue(1) - xScale.getPixelForValue(0)) / 2;
+                const x1 = x0 + (xScale.getPixelForValue(1) - xScale.getPixelForValue(0));
+                ctx.save();
+                ctx.fillStyle = s.grid_charge ? 'rgba(52,152,219,0.06)' :
+                    s.mode === 'charge' ? 'rgba(39,174,96,0.05)' : 'rgba(231,76,60,0.05)';
+                ctx.fillRect(x0, area.top, x1 - x0, area.bottom - area.top);
+                ctx.restore();
+            });
+        }
+    };
+
+    // Threshold line plugin
+    const thresholdPlugin = {
+        id: 'priceLine',
+        afterDraw(chart) {
+            if (!threshold) return;
+            const yScale = chart.scales.y2;
+            if (!yScale) return;
+            const y = yScale.getPixelForValue(threshold * 100);
+            const ctx = chart.ctx;
+            ctx.save();
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([6, 3]);
+            ctx.beginPath();
+            ctx.moveTo(chart.chartArea.left, y);
+            ctx.lineTo(chart.chartArea.right, y);
+            ctx.stroke();
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = '10px sans-serif';
+            ctx.fillText(Math.round(threshold * 100) + ' ct', chart.chartArea.right - 35, y - 4);
+            ctx.restore();
+        }
+    };
+
     new Chart(document.getElementById('planChart'), {
-        type: 'line',
         data: {
-            labels: labels,
+            labels,
             datasets: [
-                { label: 'SOC %', data: socData, borderColor: '#3498db', yAxisID: 'y', tension: 0.3, pointRadius: 0 },
-                { label: 'PV W', data: pvData, borderColor: '#f1c40f', yAxisID: 'y1', tension: 0.3, pointRadius: 0 },
-                { label: 'Last W', data: loadData, borderColor: '#e67e22', yAxisID: 'y1', tension: 0.3, pointRadius: 0 },
-                { label: 'Batterie W', data: battData, type: 'bar', backgroundColor: modeColors, yAxisID: 'y1' },
+                {
+                    type: 'line', label: 'SOC %', data: socData,
+                    borderColor: '#3498db', borderWidth: 2.5,
+                    yAxisID: 'y', tension: 0.3, pointRadius: 0, fill: false, order: 1
+                },
+                {
+                    type: 'line', label: 'Preis ct/kWh', data: priceData,
+                    borderColor: 'rgba(233,69,96,0.6)', borderWidth: 1.5, borderDash: [4,2],
+                    yAxisID: 'y2', tension: 0.1, pointRadius: 0, fill: false, order: 2
+                },
+                {
+                    type: 'line', label: 'PV W', data: pvData,
+                    borderColor: '#f1c40f', borderWidth: 1.5,
+                    yAxisID: 'y1', tension: 0.3, pointRadius: 0, fill: false, order: 3
+                },
+                {
+                    type: 'line', label: 'Last W', data: loadData,
+                    borderColor: '#e67e22', borderWidth: 1, borderDash: [3,3],
+                    yAxisID: 'y1', tension: 0.3, pointRadius: 0, fill: false, order: 4
+                },
+                {
+                    type: 'bar', label: 'Batterie W', data: battData,
+                    backgroundColor: battColors, yAxisID: 'y1', order: 5
+                },
             ]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { color: '#aaa', boxWidth: 12, font: { size: 11 } } },
+                tooltip: {
+                    callbacks: {
+                        afterBody(items) {
+                            const i = items[0]?.dataIndex;
+                            if (i == null) return '';
+                            const s = timeline[i];
+                            return `Netz: ${s.grid_w} W | ${s.grid_charge ? 'GRID-CHARGE' : s.mode}`;
+                        }
+                    }
+                }
+            },
             scales: {
-                y: { position: 'left', min: 0, max: 100, title: { display: true, text: 'SOC %' } },
-                y1: { position: 'right', title: { display: true, text: 'Leistung W' }, grid: { drawOnChartArea: false } }
+                x: { ticks: { color: '#888', maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                y: { position: 'left', min: 0, max: 100,
+                     title: { display: true, text: 'SOC %', color: '#3498db' },
+                     ticks: { color: '#3498db' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                y1: { position: 'right',
+                      title: { display: true, text: 'Leistung W', color: '#888' },
+                      ticks: { color: '#888' }, grid: { drawOnChartArea: false } },
+                y2: { position: 'right', offset: true, min: 0,
+                      title: { display: false },
+                      ticks: { color: '#e94560', callback: v => v.toFixed(0) + ' ct' },
+                      grid: { drawOnChartArea: false } },
             }
-        }
-    });
-
-    // Price chart
-    new Chart(document.getElementById('priceChart'), {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{ label: 'Preis EUR/kWh', data: priceData,
-                backgroundColor: priceData.map(p => p > 0.20 ? 'rgba(231,76,60,0.7)' : p < 0.10 ? 'rgba(39,174,96,0.7)' : 'rgba(52,152,219,0.7)')
-            }]
         },
-        options: {
-            responsive: true,
-            scales: { y: { title: { display: true, text: 'EUR/kWh' } } }
-        }
+        plugins: [modeBgPlugin, thresholdPlugin]
     });
 });
 </script>
