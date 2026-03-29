@@ -51,6 +51,45 @@ def create_app() -> Flask:
         rules = [f"{r.rule} [{','.join(r.methods - {'OPTIONS','HEAD'})}]" for r in app.url_rules]
         logger.info("Registered %d routes: %s", len(rules), "; ".join(rules))
 
+    # Debug endpoint: shows routes + request info
+    @app.route("/debug")
+    def debug_routes():
+        from flask import jsonify
+        rules = []
+        for r in app.url_rules:
+            rules.append({"rule": r.rule, "endpoint": r.endpoint,
+                          "methods": list(r.methods - {"OPTIONS", "HEAD"})})
+        return jsonify({
+            "routes": rules,
+            "request_path": request.path,
+            "request_url": request.url,
+            "ingress_path": request.headers.get("X-Ingress-Path", ""),
+            "host": request.host,
+            "headers": {k: v for k, v in request.headers if k.startswith("X-")},
+        })
+
+    # Log every request for debugging 404s
+    @app.after_request
+    def log_request(response):
+        if response.status_code >= 400:
+            logger.warning("HTTP %d: %s %s (ingress=%s)",
+                          response.status_code, request.method, request.path,
+                          request.headers.get("X-Ingress-Path", ""))
+        return response
+
+    # Publish route info to HA sensor on startup
+    try:
+        from ..ha_client import HaClient
+        ha = HaClient()
+        route_list = [r.rule for r in app.url_rules if r.rule != "/static/<path:filename>"]
+        ha.set_state("sensor.energieha_routes", str(len(route_list)), {
+            "friendly_name": "EnergieHA Routes",
+            "icon": "mdi:routes",
+            "routes": route_list,
+        })
+    except Exception:
+        pass
+
     return app
 
 
