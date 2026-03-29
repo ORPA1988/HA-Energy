@@ -233,7 +233,10 @@ function priceChart() {
     return {
         chart: null,
         async init() {
-            const data = await (await fetch(INGRESS + '/api/prices')).json();
+            try {
+            const resp = await fetch(INGRESS + '/api/prices');
+            if (!resp.ok) return;
+            const data = await resp.json();
             if (!data.prices || !data.prices.length) return;
             const chargeRanges = data.charge_ranges || [];
             const labels = data.prices.map((p, i) => {
@@ -310,6 +313,7 @@ function priceChart() {
                     }
                 }]
             });
+            } catch(e) { console.warn('Price chart error:', e); }
         }
     };
 }
@@ -318,7 +322,10 @@ function forecastChart() {
     return {
         chart: null,
         async init() {
-            const data = await (await fetch(INGRESS + '/api/forecast')).json();
+            try {
+            const resp = await fetch(INGRESS + '/api/forecast');
+            if (!resp.ok) return;
+            const data = await resp.json();
             if (!data.forecast || !data.forecast.length) return;
             const labels = data.forecast.map(f => {
                 const d = new Date(f.start);
@@ -380,6 +387,7 @@ function forecastChart() {
                     }
                 }
             });
+            } catch(e) { console.warn('Forecast chart error:', e); }
         }
     };
 }

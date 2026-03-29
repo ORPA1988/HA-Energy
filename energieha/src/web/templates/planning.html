@@ -86,7 +86,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     const timeline = {{ timeline|tojson }};
     const threshold = {{ threshold|tojson }};
-    if (!timeline.length) return;
+    if (!timeline || !timeline.length) return;
 
     const labels = timeline.map(s => s.time);
     const socData = timeline.map(s => s.soc);
