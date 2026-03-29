@@ -80,107 +80,137 @@ class SungrowTouAdapter:
     def _build_programs(self, plan: Plan, tz) -> list[dict]:
         """Build 6 sequential programs from the plan.
 
-        Scans plan for charge window, determines if grid-charging is needed,
-        and sets P2 accordingly:
-        - Grid-charge needed → P2 = "Grid" + SOC target (grid actively charges battery)
-        - PV-only charging  → P2 = "Disabled" + SOC target (PV→battery, house from grid)
-        - No charging at all → P2 = minimal dummy window
+        Distinguishes between PV-only charge and grid charge:
+        - PV-only → "Disabled" + SOC target (PV charges battery, house from grid)
+        - Grid charge → "Grid" + SOC target (grid actively charges battery)
+
+        Program layout (up to 3 active + 3 dummy):
+        - P1: Before first charge block → Disabled, min_soc (normal discharge)
+        - P2: PV-only charge block → Disabled + SOC target
+        - P3: Grid charge block → Grid + SOC target
+        - If only grid or only PV, use P2 for the charge block, P3 for after
         """
         from .strategies.helpers import is_grid_charging
 
-        # Scan plan for the FIRST contiguous charge block.
-        # Important: plan may span midnight (e.g. 23:15 today → 23:15 tomorrow).
-        # We only use the first charge block to avoid wrap-around issues.
-        charge_start = None
-        charge_end = None
-        charge_max_soc = 0
-        has_grid_charge = False
-        in_charge_block = False
+        min_soc = self._config.min_soc_percent
+
+        # Scan plan for grid-charge and PV-charge blocks separately
+        grid_start = None
+        grid_end = None
+        grid_max_soc = 0
+        pv_start = None
+        pv_end = None
+        pv_max_soc = 0
 
         for slot in plan.slots:
             is_charge = (slot.planned_battery_mode == "charge"
                          and slot.planned_battery_w > 50)
+            if not is_charge:
+                continue
 
-            if is_charge:
-                local = slot.start.astimezone(tz)
-                local_end = local + timedelta(minutes=slot.duration_min)
+            local = slot.start.astimezone(tz)
+            local_end = local + timedelta(minutes=slot.duration_min)
+            t_start = local.strftime("%H:%M")
+            t_end = local_end.strftime("%H:%M")
 
-                if charge_start is None:
-                    charge_start = local.strftime("%H:%M")
-                    in_charge_block = True
-
-                if in_charge_block:
-                    charge_end = local_end.strftime("%H:%M")
-                    charge_max_soc = max(charge_max_soc, round(slot.projected_soc))
-                    if is_grid_charging(slot.pv_forecast_w, slot.load_estimate_w,
-                                        slot.planned_battery_w):
-                        has_grid_charge = True
-
-            elif in_charge_block:
-                # First non-charge slot after charge block → block ended
-                break
-
-        min_soc = self._config.min_soc_percent
-
-        # Determine P2 charging mode and SOC target
-        if charge_start and charge_max_soc > min_soc:
-            if has_grid_charge:
-                p2_charging = "Grid"
-                p2_soc = min(charge_max_soc, self._config.max_grid_charge_soc)
+            if is_grid_charging(slot.pv_forecast_w, slot.load_estimate_w,
+                                slot.planned_battery_w):
+                # Grid charging slot
+                if grid_start is None:
+                    grid_start = t_start
+                grid_end = t_end
+                grid_max_soc = max(grid_max_soc, round(slot.projected_soc))
             else:
-                p2_charging = "Disabled"
-                p2_soc = min(charge_max_soc, self._config.max_soc_percent)
+                # PV-only charging slot
+                if pv_start is None:
+                    pv_start = t_start
+                pv_end = t_end
+                pv_max_soc = max(pv_max_soc, round(slot.projected_soc))
 
-            # Wrap-around protection: if end < start (crosses midnight),
-            # extend to end of day. SOC target remains → WR charges until reached.
-            if charge_end <= charge_start:
-                logger.warning("TOU: Charge window crosses midnight (%s→%s), "
-                               "extending to 23:50. SOC target %d%% stays active.",
-                               charge_start, charge_end, p2_soc)
-                charge_end = "23:50"
+        # Build programs based on what we found
+        if grid_start and pv_start:
+            # Both PV and grid charge - use 3 active programs
+            grid_soc = min(grid_max_soc, self._config.max_grid_charge_soc)
+            pv_soc = min(pv_max_soc, self._config.max_soc_percent)
 
-            p1_end = charge_start
-            p2_start = charge_start
-            p2_end = charge_end
-            p3_start = charge_end
-        else:
-            # No charging needed — minimal dummy P2
-            p2_charging = "Disabled"
-            p2_soc = min_soc
-            p1_end = "23:44"
-            p2_start = "23:44"
-            p2_end = "23:46"
-            p3_start = "23:46"
-
-        programs = [
-            {"start": "00:00",  "end": p1_end,  "charging": "Disabled", "soc": min_soc},
-            {"start": p2_start, "end": p2_end,  "charging": p2_charging, "soc": p2_soc},
-            {"start": p3_start, "end": "23:50", "charging": "Disabled", "soc": min_soc},
-            {"start": "23:50",  "end": "23:52", "charging": "Disabled", "soc": min_soc},
-            {"start": "23:52",  "end": "23:54", "charging": "Disabled", "soc": min_soc},
-            {"start": "23:54",  "end": "23:56", "charging": "Disabled", "soc": min_soc},
-        ]
-
-        # Build human-readable explanation for dashboard
-        if charge_start and charge_max_soc > min_soc:
-            if has_grid_charge:
-                reason = (f"Netzladung {charge_start}-{charge_end}: "
-                          f"EMHASS plant Batterie-Ladung die PV-Überschuss übersteigt → "
-                          f"Grid-Charging bis {p2_soc}% SOC (max_grid_charge_soc={self._config.max_grid_charge_soc}%)")
+            # Determine order: PV first or Grid first?
+            if pv_start <= grid_start:
+                # PV block → Grid block → rest
+                programs = [
+                    {"start": "00:00",    "end": pv_start,   "charging": "Disabled", "soc": min_soc},
+                    {"start": pv_start,   "end": grid_start, "charging": "Disabled", "soc": pv_soc},
+                    {"start": grid_start, "end": grid_end,   "charging": "Grid",     "soc": grid_soc},
+                    {"start": grid_end,   "end": "23:50",    "charging": "Disabled", "soc": min_soc},
+                    {"start": "23:50",    "end": "23:52",    "charging": "Disabled", "soc": min_soc},
+                    {"start": "23:52",    "end": "23:54",    "charging": "Disabled", "soc": min_soc},
+                ]
+                reason = (f"PV-Ladung {pv_start}-{grid_start} (SOC {pv_soc}%) "
+                          f"+ Netzladung {grid_start}-{grid_end} (Grid bis {grid_soc}%)")
             else:
-                reason = (f"PV-Ladung {charge_start}-{charge_end}: "
-                          f"EMHASS plant Ladung nur aus PV-Überschuss → "
-                          f"Disabled + SOC-Ziel {p2_soc}% (PV→Batterie, Haus aus Netz)")
-        else:
-            reason = ("Keine Ladung geplant: EMHASS sieht keinen Vorteil in Batterie-Ladung "
-                      "bei aktuellen Preisen/PV-Prognose → alle Programme Disabled")
+                # Grid block → PV block → rest
+                programs = [
+                    {"start": "00:00",    "end": grid_start, "charging": "Disabled", "soc": min_soc},
+                    {"start": grid_start, "end": grid_end,   "charging": "Grid",     "soc": grid_soc},
+                    {"start": grid_end,   "end": pv_end,     "charging": "Disabled", "soc": pv_soc},
+                    {"start": pv_end,     "end": "23:50",    "charging": "Disabled", "soc": min_soc},
+                    {"start": "23:50",    "end": "23:52",    "charging": "Disabled", "soc": min_soc},
+                    {"start": "23:52",    "end": "23:54",    "charging": "Disabled", "soc": min_soc},
+                ]
+                reason = (f"Netzladung {grid_start}-{grid_end} (Grid bis {grid_soc}%) "
+                          f"+ PV-Ladung {grid_end}-{pv_end} (SOC {pv_soc}%)")
 
-        # Store explanation as instance attribute for entity publishing
+        elif grid_start:
+            # Only grid charge
+            grid_soc = min(grid_max_soc, self._config.max_grid_charge_soc)
+
+            # Wrap-around protection
+            if grid_end <= grid_start:
+                grid_end = "23:50"
+
+            programs = [
+                {"start": "00:00",    "end": grid_start, "charging": "Disabled", "soc": min_soc},
+                {"start": grid_start, "end": grid_end,   "charging": "Grid",     "soc": grid_soc},
+                {"start": grid_end,   "end": "23:50",    "charging": "Disabled", "soc": min_soc},
+                {"start": "23:50",    "end": "23:52",    "charging": "Disabled", "soc": min_soc},
+                {"start": "23:52",    "end": "23:54",    "charging": "Disabled", "soc": min_soc},
+                {"start": "23:54",    "end": "23:56",    "charging": "Disabled", "soc": min_soc},
+            ]
+            reason = f"Netzladung {grid_start}-{grid_end}: Grid-Charging bis {grid_soc}% SOC"
+
+        elif pv_start:
+            # Only PV charge
+            pv_soc = min(pv_max_soc, self._config.max_soc_percent)
+
+            if pv_end <= pv_start:
+                pv_end = "23:50"
+
+            programs = [
+                {"start": "00:00",  "end": pv_start, "charging": "Disabled", "soc": min_soc},
+                {"start": pv_start, "end": pv_end,   "charging": "Disabled", "soc": pv_soc},
+                {"start": pv_end,   "end": "23:50",  "charging": "Disabled", "soc": min_soc},
+                {"start": "23:50",  "end": "23:52",  "charging": "Disabled", "soc": min_soc},
+                {"start": "23:52",  "end": "23:54",  "charging": "Disabled", "soc": min_soc},
+                {"start": "23:54",  "end": "23:56",  "charging": "Disabled", "soc": min_soc},
+            ]
+            reason = (f"PV-Ladung {pv_start}-{pv_end}: Nur PV-Überschuss → "
+                      f"Disabled + SOC-Ziel {pv_soc}%")
+        else:
+            # No charging
+            programs = [
+                {"start": "00:00",  "end": "23:44", "charging": "Disabled", "soc": min_soc},
+                {"start": "23:44",  "end": "23:46", "charging": "Disabled", "soc": min_soc},
+                {"start": "23:46",  "end": "23:50", "charging": "Disabled", "soc": min_soc},
+                {"start": "23:50",  "end": "23:52", "charging": "Disabled", "soc": min_soc},
+                {"start": "23:52",  "end": "23:54", "charging": "Disabled", "soc": min_soc},
+                {"start": "23:54",  "end": "23:56", "charging": "Disabled", "soc": min_soc},
+            ]
+            reason = "Keine Ladung geplant → alle Programme Disabled"
+
         self.last_tou_reason = reason
 
-        logger.info("TOU: P2=%s SOC=%d%% window=%s-%s (grid_charge=%s)",
-                     p2_charging, p2_soc if charge_start else min_soc,
-                     charge_start or "none", charge_end or "none", has_grid_charge)
+        logger.info("TOU: grid=%s-%s pv=%s-%s",
+                     grid_start or "-", grid_end or "-",
+                     pv_start or "-", pv_end or "-")
         logger.info("TOU Begründung: %s", reason)
 
         return programs
