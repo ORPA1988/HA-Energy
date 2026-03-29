@@ -10,14 +10,14 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("api", __name__)
 
 
-@bp.route("/state")
+@bp.route("/api/state")
 def get_state():
     """Return current system state as JSON."""
     state = AppState()
     return jsonify(state.get_status_dict())
 
 
-@bp.route("/plan")
+@bp.route("/api/plan")
 def get_plan():
     """Return current plan timeline as JSON."""
     state = AppState()
@@ -45,7 +45,7 @@ def get_plan():
     })
 
 
-@bp.route("/prices")
+@bp.route("/api/prices")
 def get_prices():
     """Return EPEX price data for charts with planned charge hours."""
     state = AppState()
@@ -79,7 +79,7 @@ def get_prices():
     })
 
 
-@bp.route("/forecast")
+@bp.route("/api/forecast")
 def get_forecast():
     """Return PV forecast data with confidence bands."""
     state = AppState()
@@ -89,14 +89,14 @@ def get_forecast():
     })
 
 
-@bp.route("/savings")
+@bp.route("/api/savings")
 def get_savings():
     """Return savings summary."""
     state = AppState()
     return jsonify(state.savings or {})
 
 
-@bp.route("/cycles")
+@bp.route("/api/cycles")
 def get_cycles():
     """Return recent cycle history."""
     state = AppState()
@@ -113,14 +113,14 @@ def get_cycles():
     } for c in cycles])
 
 
-@bp.route("/errors")
+@bp.route("/api/errors")
 def get_errors():
     """Return recent errors."""
     state = AppState()
     return jsonify(state.get_error_log(20))
 
 
-@bp.route("/replan", methods=["POST"])
+@bp.route("/api/replan", methods=["POST"])
 def trigger_replan():
     """Trigger an immediate planning cycle."""
     state = AppState()
@@ -129,7 +129,7 @@ def trigger_replan():
     return jsonify({"status": "ok", "message": "Replan triggered"})
 
 
-@bp.route("/inverter/reset-tou", methods=["POST"])
+@bp.route("/api/inverter/reset-tou", methods=["POST"])
 def reset_tou():
     """Reset all TOU programs to Disabled."""
     state = AppState()
@@ -148,7 +148,7 @@ def reset_tou():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@bp.route("/inverter/emergency-idle", methods=["POST"])
+@bp.route("/api/inverter/emergency-idle", methods=["POST"])
 def emergency_idle():
     """Emergency: set all to idle and force replan."""
     state = AppState()

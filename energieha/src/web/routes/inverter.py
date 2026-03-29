@@ -10,8 +10,7 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("inverter", __name__)
 
 
-@bp.route("")
-@bp.route("/")
+@bp.route("/inverter")
 def index():
     state = AppState()
     config = state.config
@@ -32,7 +31,7 @@ def index():
                            active_page="inverter")
 
 
-@bp.route("/tou/<int:program_num>", methods=["POST"])
+@bp.route("/inverter/tou/<int:program_num>", methods=["POST"])
 def set_tou(program_num):
     """Set a single TOU program."""
     state = AppState()
@@ -59,7 +58,7 @@ def set_tou(program_num):
     return redirect(f"{ingress}/inverter")
 
 
-@bp.route("/phev", methods=["POST"])
+@bp.route("/inverter/phev", methods=["POST"])
 def set_phev():
     """Set PHEV charge current."""
     state = AppState()

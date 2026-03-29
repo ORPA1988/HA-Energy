@@ -14,8 +14,7 @@ bp = Blueprint("config_routes", __name__)
 OPTIONS_PATH = "/data/options.json"
 
 
-@bp.route("")
-@bp.route("/")
+@bp.route("/config")
 def index():
     state = AppState()
     config = state.config
@@ -35,7 +34,7 @@ def index():
                            active_page="config")
 
 
-@bp.route("/save", methods=["POST"])
+@bp.route("/config/save", methods=["POST"])
 def save():
     """Save configuration changes with validation."""
     path = os.environ.get("ENERGIEHA_OPTIONS_PATH", OPTIONS_PATH)

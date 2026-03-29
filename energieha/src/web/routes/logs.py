@@ -11,8 +11,7 @@ bp = Blueprint("logs", __name__)
 logger = logging.getLogger(__name__)
 
 
-@bp.route("")
-@bp.route("/")
+@bp.route("/logs")
 def index():
     state = AppState()
     return render_template("logs.html",
@@ -21,7 +20,7 @@ def index():
                            active_page="logs")
 
 
-@bp.route("/stream")
+@bp.route("/logs/stream")
 def stream():
     """SSE endpoint for real-time log updates."""
     def generate():

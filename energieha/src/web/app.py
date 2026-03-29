@@ -2,7 +2,6 @@
 
 import logging
 import os
-import threading
 
 from flask import Flask, request
 
@@ -23,18 +22,16 @@ def create_app() -> Flask:
     # HA ingress path handling
     @app.before_request
     def handle_ingress_path():
-        """Set ingress base path from HA header for URL generation."""
         ingress_path = request.headers.get("X-Ingress-Path", "")
         request.ingress_path = ingress_path
 
     @app.context_processor
     def inject_globals():
-        """Make ingress_path and version available in all templates."""
         from .. import __version__
         ingress_path = getattr(request, "ingress_path", "")
         return {"ingress_path": ingress_path, "version": __version__}
 
-    # Register route blueprints
+    # Register blueprints WITHOUT url_prefix - routes have full paths
     from .routes.dashboard import bp as dashboard_bp
     from .routes.config_routes import bp as config_bp
     from .routes.planning import bp as planning_bp
@@ -43,11 +40,16 @@ def create_app() -> Flask:
     from .routes.api import bp as api_bp
 
     app.register_blueprint(dashboard_bp)
-    app.register_blueprint(config_bp, url_prefix="/config")
-    app.register_blueprint(planning_bp, url_prefix="/planning")
-    app.register_blueprint(inverter_bp, url_prefix="/inverter")
-    app.register_blueprint(logs_bp, url_prefix="/logs")
-    app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(config_bp)
+    app.register_blueprint(planning_bp)
+    app.register_blueprint(inverter_bp)
+    app.register_blueprint(logs_bp)
+    app.register_blueprint(api_bp)
+
+    # Debug: log all registered routes
+    with app.app_context():
+        rules = [f"{r.rule} [{','.join(r.methods - {'OPTIONS','HEAD'})}]" for r in app.url_rules]
+        logger.info("Registered %d routes: %s", len(rules), "; ".join(rules))
 
     return app
 
@@ -61,7 +63,6 @@ def start_server():
     port = int(os.environ.get("INGRESS_PORT", 5050))
     logger.info("Starting EnergieHA web server v%s on port %d", __version__, port)
 
-    # Run Flask in production mode (no reloader in addon container)
     app.run(
         host="0.0.0.0",
         port=port,
