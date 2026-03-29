@@ -7,7 +7,7 @@
 **EnergieHA** ist ein Home Assistant Add-on fuer Energiemanagement mit integriertem Web-GUI. Es steuert eine Hausbatterie ueber Sungrow TOU-Programme, optimiert Netzladung nach guenstigstem Gesamtstrompreis (EPEX Spot), nutzt PV-Prognosen (Solcast) und bietet 4 Optimierungsstrategien.
 
 **Repository**: https://github.com/ORPA1988/HA-Energy
-**Version**: 1.5.3 (stable branch: `Version_1.5.3_stable`)
+**Version**: 2.2.3 (stable branches: `Version_1.5.3_stable`, `Version_1.9.1_stable`, `Version_2.2.3_stable`)
 **Sprache**: Python + Flask (Web-GUI), Jinja2 + HTMX + Alpine.js + Chart.js (Frontend)
 **Deployment**: HA Add-on Container (Alpine + Python + Flask)
 
@@ -175,27 +175,32 @@ WICHTIG: Feld heisst `price_per_kwh`, Entity ist `sensor.epex_spot_data_total_pr
 ```
 WICHTIG: `pv_estimate` ist in **kW**. Collector konvertiert automatisch (< 100 → ×1000).
 
-## Status (v1.5.3, Stand 2026-03-29)
+## Status (v2.2.3, Stand 2026-03-29)
 
 **LIVE-Betrieb** mit `strategy=price`, `sungrow_tou_enabled=true`, `dry_run=false`.
 
 ### Funktionierende Features
-- [x] Web-GUI mit 4 Seiten (Flask + HTMX + Alpine.js + Chart.js, HA Ingress)
-- [x] Price Strategy: Guenstigste Gesamtkosten (Grid-Import × Preis, PV-Offset beruecksichtigt)
-- [x] Dynamische Preisschwelle aus HA input_number
-- [x] Ladeleistung aus WR gelesen (grid_charging_current × battery_voltage)
+- [x] Web-GUI mit 4 Seiten + integrierte Slider-Steuerung
+- [x] **48h Planungshorizont** (heute + morgen)
+- [x] Price Strategy: Guenstigste Gesamtkosten mit PV-Offset
+- [x] **Fallback mit Effizienz-Pruefung**: Laedt oberhalb Schwelle nur wenn lohnend
+- [x] **Entlade-Sperre**: Nicht entladen wenn Netzpreis < Ladekosten/η + Spread
+- [x] **Dashboard Slider**: Preisschwelle, Ziel-SOC, Planungsreserve (kein HA Helper noetig)
+- [x] **Naechste-Aktion Countdown** auf Dashboard
+- [x] **7-Tage Verbrauchs-History** fuer dynamische Lastberechnung
+- [x] **Planungsreserve %** konfigurierbar
+- [x] **SOC-Simulation realistisch**: Load-First Entladung bei idle Slots
 - [x] TOU-Konsolidierung: Separate PV-only und Grid-Charge Programme
-- [x] 48h Preischart mit Lade-Stunden-Markierung (blau)
-- [x] PV Forecast Chart mit Konfidenzband (P10/P90)
-- [x] Sungrow TOU: 4 aktive + 2 Dummy-Programme
-- [x] Quick Actions: Reset-TOU, Emergency-Idle, Replan
-- [x] SOC Safety Net + max_grid_charge_soc
-- [x] Modus-Hysterese (120s)
+- [x] Animierter Power-Flow mit dynamischer Strichstaerke
+- [x] Chart: Heute + Morgen, dynamische kW-Skalierung
+- [x] Wechselrichter: Live-Werte, BMS Details, TOU-Reason
+- [x] Strategie-Sofort-Wechsel Button + Entity-Validation
+- [x] EMHASS Fallback → Price (statt Surplus)
+- [x] Mobile responsive + Persistent State
 - [x] Globaler Error Handler (Flask crasht nie permanent)
 
 ### Bekannte Probleme
-- [ ] EMHASS publish-data funktioniert nicht (Sensoren stale seit 25.03)
-- [ ] EMHASS Strategy faellt auf Surplus zurueck (48h Staleness-Workaround)
+- [ ] EMHASS publish-data funktioniert nicht (extern: EMHASS v0.17.1 Bug)
 
 ## Dateistruktur
 

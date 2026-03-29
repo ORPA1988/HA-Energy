@@ -1,5 +1,67 @@
 # Changelog
 
+## [2.2.3] - 2026-03-29
+
+### Added
+- **48h Planungshorizont** - Plant bis Ende morgen (statt nur 24h)
+- **Fallback mit Effizienz-Pruefung** - Laedt oberhalb Schwelle nur wenn Spread nach Wirkungsgrad lohnt
+- **Entlade-Sperre** - Batterie entlaedt nicht wenn Netzpreis < effektive Ladekosten + Spread
+- **Dashboard Slider** - Preisschwelle, Ziel-SOC, Planungsreserve direkt einstellbar
+- **Naechste-Aktion Countdown** - Zeigt wann naechste Netzladung geplant ist
+- **Wechselrichter BMS Details** - Spannung, Strom, Temperatur, Zyklen
+- **TOU-Reason Anzeige** - Erklaert warum TOU-Programme so gesetzt sind
+- **Strategie-Sofort-Wechsel** - Button in Config mit Replan
+- **Entity-Validation** - Prueft ob konfigurierte Entities in HA existieren
+- **Planning Summary Cards** - Grid Import kWh, Kosten, Lade-/Entlade-Slots
+- **7-Tage Verbrauchs-History** - Durchschnittslast aus HA History API
+- **Planungsreserve** - Konfigurierbarer Aufschlag auf Durchschnittsverbrauch
+
+### Changed
+- **EMHASS Fallback → Price** statt Surplus (immer bestmoegliche Optimierung)
+- **HA Helper entfernt** - input_number.epex_preisschwelle_netzladung durch GUI-Slider ersetzt
+- **Chart: Heute + Morgen** mit dynamischer Skalierung aller Achsen
+- **SOC-Simulation** realistisch: Idle-Slots simulieren Sungrow Load-First Verhalten
+
+### Fixed
+- **Chart Skalierung** - Alle Leistungswerte (PV, Last, Batterie) auf einer kW-Achse
+
+## [2.0.0] - 2026-03-29
+
+### Added
+- **Dashboard Quick Controls** - Slider fuer Preisschwelle, Ziel-SOC, Reserve
+- **POST /api/settings** - Live-Aenderung von Config-Werten via GUI
+
+## [1.9.1] - 2026-03-29
+
+### Added
+- **Dynamischer Verbrauch** aus 7-Tage HA History (sum/7/24h + Reserve)
+- **Planungsreserve %** als Config-Option
+
+## [1.9.0] - 2026-03-29
+
+### Fixed
+- **SOC-Simulation** - Idle-Slots simulieren Batterie-Entladung (Load First)
+- **Dynamische Last** aus HA History statt statischem Config-Wert
+
+## [1.8.0] - 2026-03-29
+
+### Added
+- **Mobile responsive** - Hamburger Menu, responsive Charts/Tabellen
+- **Persistent State** - Plan/Preise/Forecast ueberleben Addon-Restart
+
+## [1.7.0] - 2026-03-29
+
+### Added
+- **Wechselrichter Live-Werte** - SOC, PV, Grid, Load direkt vom WR
+- **Savings-Anzeige** auf Dashboard (Kosten, Eigenverbrauch)
+- **Entity-Validation** - Prueft ob Entities in HA existieren
+
+## [1.6.0] - 2026-03-29
+
+### Added
+- **Animierter Power-Flow** - Dynamische Strichstaerke, farbcodierte Pfade, Glow
+- **JETZT-Markierung** im Planungschart
+
 ## [1.5.3] - 2026-03-29
 
 ### Fixed
