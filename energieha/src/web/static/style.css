@@ -407,22 +407,55 @@ select.input { cursor: pointer; }
 
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
+    /* Hamburger menu */
     .nav-toggle { display: block; }
-    .nav-links { display: none; flex-direction: column; width: 100%; padding: 0.5rem 0; }
+    .nav-links {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        padding: 0.5rem 0;
+        background: var(--bg-nav);
+        border-top: 1px solid var(--border);
+    }
     .nav-links.nav-open { display: flex; }
     .navbar { flex-wrap: wrap; height: auto; padding: 0.5rem 1rem; }
     .nav-brand { width: 100%; justify-content: space-between; }
+    .nav-link { padding: 0.75rem 1rem; font-size: 0.95rem; border-radius: 0; }
+    .nav-link:hover { background: rgba(255,255,255,0.08); }
 
-    .card-grid { grid-template-columns: 1fr 1fr; }
+    /* Layout */
+    .container { padding: 0.75rem; }
+    .card-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
     .chart-row { grid-template-columns: 1fr; }
-    .card-chart .card-body { height: 180px; }
+    .card-chart .card-body { height: 200px; }
     .form-row { grid-template-columns: 1fr; }
-    .savings-row { gap: 1rem; }
-    .savings-value { font-size: 1.1rem; }
-    .container { padding: 1rem; }
-    .big-value { font-size: 1.4rem; }
+    .big-value { font-size: 1.3rem; }
+    .page-header h1 { font-size: 1.2rem; }
+
+    /* Savings compact */
+    .savings-row { gap: 0.5rem; flex-wrap: wrap; }
+    .savings-item { min-width: 30%; }
+    .savings-value { font-size: 1rem; }
+
+    /* Power flow SVG responsive */
+    .power-flow-svg { max-height: 200px; }
+
+    /* Table: horizontal scroll + smaller font */
+    .table { font-size: 0.75rem; }
+    .table th, .table td { padding: 0.3rem 0.5rem; }
+
+    /* TOU bar compact */
+    .tou-bar { height: 32px; }
+    .tou-bar-label { font-size: 0.6rem; }
+
+    /* Action bar wrap */
+    .action-bar { flex-direction: column; }
+    .action-bar .btn { width: 100%; }
 }
 
 @media (max-width: 480px) {
-    .card-grid { grid-template-columns: 1fr; }
+    .card-grid { grid-template-columns: 1fr; gap: 0.5rem; }
+    .savings-item { min-width: 45%; }
+    .card-body { padding: 0.5rem 0.75rem; }
+    .card-header { padding: 0.4rem 0.75rem; font-size: 0.7rem; }
 }

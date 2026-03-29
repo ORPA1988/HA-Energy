@@ -1,5 +1,7 @@
 """Thread-safe shared application state between planning loop and web server."""
 
+import json
+import os
 import threading
 import logging
 from collections import deque
@@ -167,6 +169,45 @@ class AppState:
     def emhass_available(self, value):
         with self._data_lock:
             self._emhass_available = value
+
+    # ---- Persistent State (survives addon restart) ----
+
+    STATE_FILE = "/data/energieha_state.json"
+
+    def save_state(self):
+        """Save prices, forecast, savings, cycle_count to disk."""
+        try:
+            data = {
+                "prices": self._prices,
+                "pv_forecast": self._pv_forecast,
+                "savings": self._savings,
+                "cycle_count": self._cycle_count,
+                "saved_at": datetime.now().isoformat(),
+            }
+            path = os.environ.get("ENERGIEHA_STATE_PATH", self.STATE_FILE)
+            with open(path, "w") as f:
+                json.dump(data, f)
+            logger.debug("State saved to %s", path)
+        except Exception as e:
+            logger.warning("Failed to save state: %s", e)
+
+    def load_state(self):
+        """Restore saved state from disk (called on startup)."""
+        try:
+            path = os.environ.get("ENERGIEHA_STATE_PATH", self.STATE_FILE)
+            if not os.path.exists(path):
+                return
+            with open(path) as f:
+                data = json.load(f)
+            self._prices = data.get("prices", [])
+            self._pv_forecast = data.get("pv_forecast", [])
+            self._savings = data.get("savings", {})
+            self._cycle_count = data.get("cycle_count", 0)
+            logger.info("State restored from %s (saved: %s, %d prices, %d forecast)",
+                        path, data.get("saved_at", "?"),
+                        len(self._prices), len(self._pv_forecast))
+        except Exception as e:
+            logger.warning("Failed to load state: %s", e)
 
     def get_status_dict(self) -> dict:
         """Return a summary dict for the API."""

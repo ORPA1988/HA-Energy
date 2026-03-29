@@ -49,6 +49,9 @@ def planning_loop():
 
     state.config = config
 
+    # Restore persistent state from last run
+    state.load_state()
+
     logger.info("Strategy: %s | Cycle: %ds | Slots: %dmin | Battery: %.0f kWh (SOC %d%%-%d%%)",
                 config.strategy, config.cycle_seconds, config.slot_duration_min,
                 config.battery_capacity_kwh, config.min_soc_percent, config.max_soc_percent)
@@ -244,6 +247,9 @@ def _run_cycle(collector, executor, publisher, config, cycle_num,
             state.emhass_last_ok = datetime.now()
         elif config.strategy == "emhass" and hasattr(plan, 'strategy_error'):
             state.emhass_available = False
+
+        # Save state to disk (survives addon restart)
+        state.save_state()
 
 
 def main():
