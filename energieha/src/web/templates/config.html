@@ -6,6 +6,14 @@
     <h1>Konfiguration</h1>
 </div>
 
+{% if msg %}
+<div class="card card-wide" style="border-color: var(--{{ 'green' if msg_type == 'success' else 'red' if msg_type == 'error' else 'yellow' }})">
+    <div class="card-body" style="padding:0.75rem 1rem;color:var(--{{ 'green' if msg_type == 'success' else 'red' if msg_type == 'error' else 'yellow' }})">
+        {{ msg }}
+    </div>
+</div>
+{% endif %}
+
 <form method="POST" action="{{ ingress_path }}/config/save">
     <!-- General -->
     <div class="card card-wide">
@@ -171,7 +179,7 @@
                     <input type="number" name="min_price_spread_eur" value="{{ raw.get('min_price_spread_eur', 0.04) }}" step="0.01" class="input">
                 </div>
                 <div class="form-group">
-                    <label>Preis-Schwelle (EUR)</label>
+                    <label>Preis-Schwelle Fallback (EUR/kWh)</label>
                     <input type="number" name="price_threshold_eur" value="{{ raw.get('price_threshold_eur', 0.25) }}" step="0.01" class="input">
                 </div>
                 <div class="form-group">
@@ -183,6 +191,27 @@
                     <input type="number" name="mode_hold_seconds" value="{{ raw.get('mode_hold_seconds', 120) }}" min="0" max="600" class="input">
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Price Strategy -->
+    <div class="card card-wide">
+        <div class="card-header">Guenstigster-Preis-Ladung (Price Strategy)</div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Preisschwelle Entity (HA input_number)</label>
+                    <input type="text" name="entity_price_threshold" value="{{ raw.get('entity_price_threshold', 'input_number.epex_preisschwelle_netzladung') }}" class="input input-wide">
+                </div>
+                <div class="form-group">
+                    <label>Ziel-SOC Netzladung (%)</label>
+                    <input type="number" name="grid_charge_target_soc" value="{{ raw.get('grid_charge_target_soc', 80) }}" min="0" max="100" class="input">
+                </div>
+            </div>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin-top:0.5rem">
+                Die Preisschwelle wird dynamisch aus dem HA input_number gelesen (aktuell via Slider in HA einstellbar).
+                Die billigsten Stunden unter dieser Schwelle werden fuer Grid-Ladung bis zum Ziel-SOC gewaehlt.
+            </p>
         </div>
     </div>
 

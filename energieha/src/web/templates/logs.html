@@ -9,53 +9,59 @@
 <!-- Errors -->
 {% if errors %}
 <div class="card card-wide">
-    <div class="card-header text-red">Letzte Fehler</div>
-    <div class="card-body">
+    <div class="card-header text-red">Letzte Fehler ({{ errors|length }})</div>
+    <div class="card-body log-container">
         {% for err in errors %}
         <div class="log-entry log-error">
-            <span class="log-time">{{ err.timestamp }}</span>
-            <span class="log-msg">{{ err.error }}</span>
+            <span class="log-time">{{ err.timestamp[:19] }}</span>
+            <span>{{ err.error }}</span>
         </div>
         {% endfor %}
     </div>
 </div>
 {% endif %}
 
-<!-- Cycle History -->
-<div class="card card-wide">
-    <div class="card-header">Zyklusverlauf</div>
-    <div class="card-body table-scroll"
-         hx-get="{{ ingress_path }}/api/cycles"
-         hx-trigger="every 60s"
-         hx-swap="innerHTML">
+<!-- Cycle History with Filter -->
+<div class="card card-wide" x-data="{ filter: 'all' }">
+    <div class="card-header">
+        Zyklusverlauf ({{ cycles|length }})
+        <span style="float:right;display:flex;gap:0.25rem">
+            <button class="btn btn-small" :class="filter==='all' ? 'btn-primary' : ''" @click="filter='all'" style="padding:0.2rem 0.5rem;font-size:0.7rem">Alle</button>
+            <button class="btn btn-small" :class="filter==='error' ? 'btn-danger' : ''" @click="filter='error'" style="padding:0.2rem 0.5rem;font-size:0.7rem">Fehler</button>
+            <button class="btn btn-small" :class="filter==='charge' ? 'btn-success' : ''" @click="filter='charge'" style="padding:0.2rem 0.5rem;font-size:0.7rem">Laden</button>
+            <button class="btn btn-small" :class="filter==='discharge' ? 'btn-warning' : ''" @click="filter='discharge'" style="padding:0.2rem 0.5rem;font-size:0.7rem">Entladen</button>
+        </span>
+    </div>
+    <div class="card-body table-scroll">
         <table class="table">
             <thead>
                 <tr>
                     <th>Zeit</th>
                     <th>Strategie</th>
                     <th>Modus</th>
-                    <th>SOC %</th>
-                    <th>PV W</th>
-                    <th>Netz W</th>
-                    <th>Last W</th>
+                    <th>SOC</th>
+                    <th>PV</th>
+                    <th>Netz</th>
+                    <th>Last</th>
                     <th>Fehler</th>
                 </tr>
             </thead>
             <tbody>
                 {% for c in cycles %}
-                <tr class="{% if c.error %}row-error{% endif %}">
+                <tr class="{% if c.error %}row-error{% endif %}"
+                    x-show="filter==='all' || (filter==='error' && '{{ c.error }}') || filter==='{{ c.battery_mode }}'">
                     <td>{{ c.timestamp.strftime('%H:%M:%S') if c.timestamp else '--' }}</td>
                     <td>{{ c.strategy }}</td>
                     <td><span class="mode-badge mode-{{ c.battery_mode }}">{{ c.battery_mode }}</span></td>
-                    <td>{{ "%.1f"|format(c.battery_soc) }}</td>
-                    <td>{{ "%.0f"|format(c.pv_power_w) }}</td>
+                    <td>{{ "%.1f"|format(c.battery_soc) }}%</td>
+                    <td class="text-yellow">{{ "%.0f"|format(c.pv_power_w) }}</td>
                     <td class="{% if c.grid_power_w > 0 %}text-red{% else %}text-green{% endif %}">{{ "%.0f"|format(c.grid_power_w) }}</td>
                     <td>{{ "%.0f"|format(c.load_power_w) }}</td>
-                    <td class="text-red">{{ c.error }}</td>
+                    <td class="text-red" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">{{ c.error }}</td>
                 </tr>
                 {% endfor %}
                 {% if not cycles %}
-                <tr><td colspan="8" class="text-center">Noch keine Zyklen aufgezeichnet</td></tr>
+                <tr><td colspan="8" class="text-center">Noch keine Zyklen</td></tr>
                 {% endif %}
             </tbody>
         </table>
@@ -68,7 +74,11 @@
     <div class="card-body">
         <div id="live-log" class="log-container" x-data="liveLog()" x-init="connect()">
             <template x-for="msg in messages" :key="msg.id">
-                <div class="log-entry" x-text="msg.text"></div>
+                <div class="log-entry">
+                    <span class="log-time" x-text="msg.time"></span>
+                    <span class="mode-badge" :class="'mode-' + msg.mode" x-text="msg.mode" style="font-size:0.65rem"></span>
+                    <span x-text="msg.text"></span>
+                </div>
             </template>
             <div x-show="!connected" class="text-warning">Verbindung wird hergestellt...</div>
         </div>
@@ -91,13 +101,12 @@ function liveLog() {
                     const data = JSON.parse(e.data);
                     const snap = data.snapshot || {};
                     const plan = data.plan || {};
-                    const text = `[${new Date().toLocaleTimeString('de')}] `
-                        + `SOC=${(snap.battery_soc||0).toFixed(1)}% `
-                        + `PV=${(snap.pv_power_w||0).toFixed(0)}W `
-                        + `Grid=${(snap.grid_power_w||0).toFixed(0)}W `
-                        + `Mode=${plan.current_mode||'?'} `
-                        + `Strategy=${plan.strategy||'?'}`;
-                    this.messages.unshift({id: this.msgId++, text: text});
+                    this.messages.unshift({
+                        id: this.msgId++,
+                        time: new Date().toLocaleTimeString('de'),
+                        mode: plan.current_mode || 'idle',
+                        text: `SOC ${(snap.battery_soc||0).toFixed(1)}% | PV ${(snap.pv_power_w||0).toFixed(0)}W | Grid ${(snap.grid_power_w||0).toFixed(0)}W | Load ${(snap.load_power_w||0).toFixed(0)}W | ${plan.strategy||'?'}`
+                    });
                     if (this.messages.length > 100) this.messages.pop();
                 } catch(err) {}
             };
