@@ -21,7 +21,7 @@
             Allgemein <span x-text="open ? '&#9660;' : '&#9654;'"></span>
         </div>
         <div class="card-body" x-data="{open:true}" x-show="open">
-            <div class="form-group">
+            <div class="form-group" title="Optimierungsstrategie: price=guenstigste Gesamtkosten (empfohlen), surplus=nur PV-Ueberschuss, forecast=Solcast-basiert, emhass=LP-Optimierung (benoetigt EMHASS Add-on)">
                 <label>Strategie</label>
                 <select name="strategy" class="input">
                     {% for s in ['surplus', 'price', 'forecast', 'emhass'] %}
@@ -29,23 +29,23 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="form-group">
+            <div class="form-group" title="Planungszyklus in Sekunden. Alle X Sekunden wird ein neuer 24h Plan erstellt. Standard: 300 (5 Min)">
                 <label>Zyklus (Sekunden)</label>
                 <input type="number" name="cycle_seconds" value="{{ raw.get('cycle_seconds', 300) }}" min="60" max="900" class="input">
             </div>
-            <div class="form-group">
+            <div class="form-group" title="Zeitaufloesung der Planungs-Slots. 60 Min = 24 Slots/Tag (1 pro Stunde, passend zu EPEX), 15 Min = 96 Slots/Tag (feiner)">
                 <label>Slot-Dauer (Minuten)</label>
                 <select name="slot_duration_min" class="input">
                     <option value="15" {% if raw.get('slot_duration_min', 15) == 15 %}selected{% endif %}>15</option>
                     <option value="60" {% if raw.get('slot_duration_min', 15) == 60 %}selected{% endif %}>60</option>
                 </select>
             </div>
-            <div class="form-group form-check">
+            <div class="form-group form-check" title="Dry Run: Plant und publiziert Sensoren, sendet aber KEINE Steuerbefehle an den Wechselrichter. Sicher zum Testen.">
                 <input type="checkbox" name="dry_run" value="true" id="dry_run"
                        {% if raw.get('dry_run', true) %}checked{% endif %}>
                 <label for="dry_run">Dry Run (keine Steuerkommandos)</label>
             </div>
-            <div class="form-group form-check">
+            <div class="form-group form-check" title="Direct Control: Steuert den Wechselrichter direkt ueber HA Service-Calls (number.set_value, select.select_option). Ohne diese Option werden nur Sensoren publiziert.">
                 <input type="checkbox" name="direct_control" value="true" id="direct_control"
                        {% if raw.get('direct_control', false) %}checked{% endif %}>
                 <label for="direct_control">Direct Control (Wechselrichter direkt steuern)</label>
@@ -58,24 +58,24 @@
         <div class="card-header">Batterie</div>
         <div class="card-body">
             <div class="form-row">
-                <div class="form-group">
+                <div class="form-group" title="Nennkapazitaet der Hausbatterie in kWh. Nutzbar ist weniger (SOC-Bereich). Entity: sensor.inverter_battery_capacity">
                     <label>Kapazitaet (kWh)</label>
                     <input type="number" name="battery_capacity_kwh" value="{{ raw.get('battery_capacity_kwh', 30) }}" step="0.1" class="input">
                 </div>
-                <div class="form-group">
+                <div class="form-group" title="Minimaler SOC in %. Batterie entlaedt nie unter diesen Wert (Sicherheitsnetz). Typisch: 10-20%">
                     <label>Min SOC %</label>
                     <input type="number" name="min_soc_percent" value="{{ raw.get('min_soc_percent', 15) }}" min="0" max="100" class="input">
                 </div>
-                <div class="form-group">
+                <div class="form-group" title="Maximaler SOC in %. Batterie laedt nie ueber diesen Wert. PV-Ladung stoppt hier. Typisch: 90-100%">
                     <label>Max SOC %</label>
                     <input type="number" name="max_soc_percent" value="{{ raw.get('max_soc_percent', 95) }}" min="0" max="100" class="input">
                 </div>
-                <div class="form-group">
+                <div class="form-group" title="Wirkungsgrad Lade-/Entladezyklus (0.85 = 15% Verlust). Wird symmetrisch aufgeteilt: sqrt(0.85)=92% pro Richtung.">
                     <label>Effizienz</label>
                     <input type="number" name="round_trip_efficiency" value="{{ raw.get('round_trip_efficiency', 0.85) }}" step="0.01" min="0.5" max="1.0" class="input">
                 </div>
             </div>
-            <div class="form-group">
+            <div class="form-group" title="Maximaler SOC fuer Netzladung. Grid-Charging stoppt bei diesem SOC. PV darf hoeher laden. Spart Kosten: Netz nur bis 80%, Rest aus PV.">
                 <label>Max Grid-Charge SOC %</label>
                 <input type="number" name="max_grid_charge_soc" value="{{ raw.get('max_grid_charge_soc', 80) }}" min="0" max="100" class="input">
             </div>
@@ -86,13 +86,27 @@
     <div class="card card-wide">
         <div class="card-header">Sensor-Entitaeten</div>
         <div class="card-body">
+            <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:1rem">
+                HA Entity-IDs der Sensoren die EnergieHA ausliest. Pruefen mit HA Developer Tools → States.
+            </p>
+            {% set entity_hints = {
+                'entity_battery_soc': 'Batterie SOC in % (z.B. sensor.inverter_battery). Muss 0-100 liefern.',
+                'entity_battery_power': 'Batterie-Leistung in W. Positiv=Ladung, Negativ=Entladung.',
+                'entity_pv_power': 'PV-Erzeugung in W (alle Strings kombiniert).',
+                'entity_grid_power': 'Netz-Leistung in W. Positiv=Import, Negativ=Export.',
+                'entity_load_power': 'Hausverbrauch in W (ohne Wechselrichter).',
+                'entity_epex_prices': 'EPEX Spot Preise. Muss Attribut "data" mit [{start_time, end_time, price_per_kwh}] haben.',
+                'entity_solcast_forecast': 'Solcast Prognose heute. Attribut "detailedForecast" mit [{period_start, pv_estimate (kW!)}].',
+                'entity_solcast_forecast_tomorrow': 'Solcast Prognose morgen (gleiche Struktur wie heute).',
+                'entity_grid_charge_current': 'Grid-Ladestrom in Ampere. Wird mit Batteriespannung multipliziert fuer Ladeleistung in W.'
+            } %}
             {% for key in ['entity_battery_soc', 'entity_battery_power', 'entity_pv_power',
                            'entity_grid_power', 'entity_load_power', 'entity_epex_prices',
                            'entity_solcast_forecast', 'entity_solcast_forecast_tomorrow',
                            'entity_grid_charge_current'] %}
-            <div class="form-group">
+            <div class="form-group" title="{{ entity_hints.get(key, '') }}">
                 <label>{{ key }}</label>
-                <input type="text" name="{{ key }}" value="{{ raw.get(key, '') }}" class="input input-wide">
+                <input type="text" name="{{ key }}" value="{{ raw.get(key, '') }}" class="input input-wide" placeholder="{{ entity_hints.get(key, '')[:50] }}">
             </div>
             {% endfor %}
         </div>

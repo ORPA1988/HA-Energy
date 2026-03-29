@@ -13,7 +13,7 @@
 <div class="card-grid" x-data="dashboardData()" x-init="init()">
 
     <!-- Battery SOC -->
-    <div class="card">
+    <div class="card" title="Hausbatterie: SOC (State of Charge) in Prozent. Gruen >50%, Gelb 20-50%, Rot <20%. Darunter: aktuelle Lade-/Entladeleistung und Betriebsmodus (charge/discharge/idle). Entity: sensor.inverter_battery">
         <div class="card-header">Batterie</div>
         <div class="card-body">
             <div class="gauge-container">
@@ -30,7 +30,7 @@
     </div>
 
     <!-- PV Power -->
-    <div class="card">
+    <div class="card" title="Aktuelle PV-Erzeugung in Watt. Solarpanels PV1+PV2 kombiniert. Entity: sensor.inverter_pv_power">
         <div class="card-header">PV Leistung</div>
         <div class="card-body">
             <div class="big-value text-yellow" x-text="formatPower(snapshot.pv_power_w)"></div>
@@ -41,7 +41,7 @@
     </div>
 
     <!-- Grid Power -->
-    <div class="card">
+    <div class="card" title="Netz-Import/Export. Rot=Import (Strom aus Netz), Gruen=Export (Einspeisung). Entity: sensor.inverter_grid_power. Positiv=Import, Negativ=Export.">
         <div class="card-header">Netz</div>
         <div class="card-body">
             <div class="big-value" :class="(snapshot.grid_power_w || 0) > 0 ? 'text-red' : 'text-green'"
@@ -54,7 +54,7 @@
     </div>
 
     <!-- Load -->
-    <div class="card">
+    <div class="card" title="Aktueller Hausverbrauch (ohne Wechselrichter). Entity: sensor.inverter_load_power">
         <div class="card-header">Verbrauch</div>
         <div class="card-body">
             <div class="big-value" x-text="formatPower(snapshot.load_power_w)"></div>
@@ -65,7 +65,7 @@
     </div>
 
     <!-- Strategy + Price -->
-    <div class="card">
+    <div class="card" title="Aktive Planungsstrategie: price=guenstigste Gesamtkosten, surplus=PV-Ueberschuss, forecast=Solcast-basiert, emhass=LP-Optimierung. Darunter: aktueller EPEX Brutto-Strompreis. Entity: sensor.energieha_status">
         <div class="card-header">Strategie</div>
         <div class="card-body">
             <div class="big-value" x-text="plan.strategy || config.strategy || '--'"></div>
@@ -76,7 +76,7 @@
     </div>
 
     <!-- EMHASS Status -->
-    <div class="card">
+    <div class="card" title="EMHASS Add-on Status. Verbunden=EMHASS API erreichbar unter http://5b918bf2-emhass:5000. EMHASS fuehrt LP-Optimierung durch (nur bei strategy=emhass aktiv). Entity: sensor.energieha_emhass_diag">
         <div class="card-header">EMHASS</div>
         <div class="card-body">
             <div class="status-indicator" :class="emhass_available ? 'status-ok' : 'status-warn'">
@@ -90,7 +90,7 @@
 </div>
 
 <!-- Animated Power Flow -->
-<div class="card card-wide" x-data="dashboardData()">
+<div class="card card-wide" x-data="dashboardData()" title="Live-Energiefluss zwischen PV-Anlage, Batterie, Hausnetz und Stromnetz. Gelbe Pfeile zeigen die Energierichtung. Die Dicke entspricht der Leistung.">
     <div class="card-header">Energiefluss</div>
     <div class="card-body">
         <svg viewBox="0 0 600 300" class="power-flow-svg">
@@ -148,7 +148,7 @@
 <!-- Charts Row -->
 <div class="chart-row">
     <!-- EPEX Price Chart -->
-    <div class="card card-chart" x-data="priceChart()" x-init="init()">
+    <div class="card card-chart" x-data="priceChart()" x-init="init()" title="EPEX Spot Brutto-Strompreise (inkl. Steuern + Netzentgelte) fuer 48-72h. Blaue Balken=geplante Netzladung. Rote gestrichelte Linie=Preisschwelle (input_number.epex_preisschwelle_netzladung). Weisser Balken=aktuelle Stunde. Entity: sensor.epex_spot_data_total_price_3">
         <div class="card-header">Strompreis (48h)</div>
         <div class="card-body">
             <canvas x-ref="priceCanvas" height="200"></canvas>
@@ -156,7 +156,7 @@
     </div>
 
     <!-- PV Forecast Chart -->
-    <div class="card card-chart" x-data="forecastChart()" x-init="init()">
+    <div class="card card-chart" x-data="forecastChart()" x-init="init()" title="Solcast PV-Prognose in kW fuer heute+morgen. Gelbe Linie=Erwartungswert. Schattierter Bereich=Konfidenzband (P10 pessimistisch bis P90 optimistisch). Entity: sensor.solcast_pv_forecast_prognose_heute/morgen">
         <div class="card-header">PV Prognose</div>
         <div class="card-body">
             <canvas x-ref="forecastCanvas" height="200"></canvas>
@@ -168,19 +168,19 @@
 <div class="card card-wide" x-data="dashboardData()">
     <div class="card-header">Tagesplan Zusammenfassung</div>
     <div class="card-body savings-row">
-        <div class="savings-item">
+        <div class="savings-item" title="Aktive Optimierungsstrategie. Wird in der Konfiguration eingestellt.">
             <span class="savings-label">Strategie</span>
             <span class="savings-value" x-text="plan.strategy || '--'"></span>
         </div>
-        <div class="savings-item">
+        <div class="savings-item" title="Projizierter Batterie-SOC am Ende des 24h Plans. Entity: sensor.energieha_planned_soc">
             <span class="savings-label">Geplanter SOC</span>
             <span class="savings-value" x-text="(plan.projected_soc||0).toFixed(1) + '%'"></span>
         </div>
-        <div class="savings-item">
+        <div class="savings-item" title="Aktueller EPEX Spot Brutto-Strompreis in ct/kWh. Entity: sensor.epex_spot_data_total_price_3">
             <span class="savings-label">Aktueller Preis</span>
             <span class="savings-value" x-text="plan.current_price ? (plan.current_price*100).toFixed(1) + ' ct' : '--'"></span>
         </div>
-        <div class="savings-item">
+        <div class="savings-item" title="Anzahl abgeschlossener Planungszyklen seit dem letzten Addon-Start. Zyklus alle 5 Minuten.">
             <span class="savings-label">Zyklen</span>
             <span class="savings-value" x-text="cycle_count || 0"></span>
         </div>
