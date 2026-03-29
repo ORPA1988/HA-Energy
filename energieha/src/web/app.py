@@ -246,7 +246,7 @@ def create_app() -> Flask:
             if state.snapshot and state.snapshot.dynamic_price_threshold > 0:
                 threshold = state.snapshot.dynamic_price_threshold
             elif state.config:
-                threshold = config.price_threshold_eur if hasattr(state.config, 'price_threshold_eur') else 0
+                threshold = state.config.price_threshold_eur
             charge_ranges = []
             try:
                 if state.plan and state.plan.slots:
@@ -332,11 +332,11 @@ def create_app() -> Flask:
 
     @app.route("/debug")
     def debug_info():
-        rules = sorted([r.rule for r in app.url_rules if not r.rule.startswith("/static")])
+        rules = sorted([r.rule for r in app.url_map.iter_rules() if not r.rule.startswith("/static")])
         return jsonify({"routes": rules, "count": len(rules), "path": request.path,
                         "ingress": request.headers.get("X-Ingress-Path", ""), "version": __version__})
 
-    logger.info("Flask app: %d routes registered", len(list(app.url_rules)))
+    logger.info("Flask app: %d routes registered", len(list(app.url_map.iter_rules())))
     return app
 
 
