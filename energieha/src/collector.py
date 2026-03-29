@@ -64,6 +64,14 @@ class Collector:
             logger.debug("Grid charge power: %.0fA × %.1fV = %.0fW",
                          grid_charge_current, bat_voltage, grid_charge_w)
 
+        # Dynamic price threshold from HA input_number
+        dyn_price_threshold = 0.0
+        if self._config.entity_price_threshold:
+            val = self._client.get_state_value(self._config.entity_price_threshold)
+            if val is not None and val > 0:
+                dyn_price_threshold = val
+                logger.debug("Dynamic price threshold: %.4f EUR/kWh", val)
+
         return Snapshot(
             timestamp=datetime.now(timezone.utc),
             battery_soc=soc,
@@ -75,6 +83,7 @@ class Collector:
             phev_soc=phev_soc,
             phev_power_w=phev_power,
             grid_charge_power_w=grid_charge_w,
+            dynamic_price_threshold=dyn_price_threshold,
         )
 
     def get_prices(self) -> list[PricePoint]:

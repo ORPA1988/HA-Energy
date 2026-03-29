@@ -43,6 +43,8 @@ class Snapshot:
     phev_power_w: float = 0.0  # current charging power
     # Grid charging: constant power set by inverter (current × voltage)
     grid_charge_power_w: float = 5000.0
+    # Dynamic price threshold from HA input_number (EUR/kWh)
+    dynamic_price_threshold: float = 0.0
 
 
 @dataclass
@@ -119,6 +121,11 @@ class Config:
     min_price_spread_eur: float = 0.04
     price_threshold_eur: float = 0.25  # Updated for brutto prices
     estimated_daily_load_kwh: float = 12.0
+
+    # Guenstigster-Preis-Ladung: Lade aus Netz wenn Preis < Grenze
+    entity_price_threshold: str = "input_number.epex_preisschwelle_netzladung"
+    grid_charge_target_soc: int = 80  # Ziel-SOC fuer Netzladung (%)
+    entity_battery_voltage: str = "sensor.inverter_battery"  # Attribut "BMS Voltage"
 
     dry_run: bool = False
     direct_control: bool = False

@@ -1,5 +1,5 @@
 name: "EnergieHA"
-version: "1.0.5"
+version: "1.1.0"
 slug: "energieha"
 description: "Lightweight energy management for PV, battery, grid and consumers"
 url: "https://github.com/ORPA1988/HA-Energy"
@@ -56,6 +56,10 @@ options:
   min_price_spread_eur: 0.04
   price_threshold_eur: 0.25
   estimated_daily_load_kwh: 12.0
+
+  # Guenstigster-Preis-Ladung (Price Strategy)
+  entity_price_threshold: "input_number.epex_preisschwelle_netzladung"
+  grid_charge_target_soc: 80
 
   dry_run: true
   direct_control: false
@@ -115,3 +119,5 @@ schema:
   emhass_battery_discharge_power_max: "int(100,)"
   mode_hold_seconds: "int(0,600)"
   direct_control: bool
+  entity_price_threshold: str?
+  grid_charge_target_soc: "int(0,100)"
