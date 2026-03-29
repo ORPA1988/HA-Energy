@@ -93,8 +93,8 @@ def _build_emhass_configs(config: Config, snapshot: Snapshot, num_points: int, t
         "battery_minimum_state_of_charge": config.min_soc_percent / 100.0,
         "battery_maximum_state_of_charge": config.max_soc_percent / 100.0,
         "battery_target_state_of_charge": config.max_grid_charge_soc / 100.0,
-        "battery_charge_power_max": config.emhass_battery_charge_power_max,
-        "battery_discharge_power_max": config.emhass_battery_discharge_power_max,
+        "battery_charge_power_max": snapshot.grid_charge_power_w if snapshot.grid_charge_power_w > 0 else config.emhass_battery_charge_power_max,
+        "battery_discharge_power_max": snapshot.grid_charge_power_w if snapshot.grid_charge_power_w > 0 else config.emhass_battery_discharge_power_max,
         "battery_charge_efficiency": eff_single,
         "battery_discharge_efficiency": eff_single,
         "inverter_is_hybrid": False,
@@ -155,10 +155,14 @@ def plan_emhass(
     logger.info("EMHASS direct: %d intervals, SOC=%.1f%%, target=%.1f%%, step=%dmin",
                 num_emhass_points, snapshot.battery_soc,
                 config.max_grid_charge_soc, emhass_step)
+    charge_max = plant_conf["battery_charge_power_max"]
+    discharge_max = plant_conf["battery_discharge_power_max"]
     logger.info("EMHASS inputs: PV max=%.0fW sum=%.0fWh, Load=%.0fW (current=%.0fW), "
-                "Prices %.2f-%.2f ct, %d price points, %d forecast points",
+                "Prices %.2f-%.2f ct, Batt charge=%.0fW discharge=%.0fW, "
+                "%d price points, %d forecast points",
                 pv_max, pv_sum * emhass_step / 60, config.load_per_slot_w,
                 snapshot.load_power_w, price_min * 100, price_max * 100,
+                charge_max, discharge_max,
                 len(prices), len(pv_forecast))
 
     # Build pandas DataFrames
