@@ -191,7 +191,7 @@
 
 {% block scripts %}
 <script>
-const INGRESS = '{{ ingress_path }}';
+const INGRESS = '.'; // relative paths for HA ingress iframe
 
 function dashboardData() {
     return {
@@ -206,7 +206,7 @@ function dashboardData() {
         },
         async refresh() {
             try {
-                const data = await (await fetch(INGRESS + '/api/state')).json();
+                const data = await (await fetch('./api/state')).json();
                 if (data.snapshot) this.snapshot = data.snapshot;
                 if (data.plan) this.plan = data.plan;
                 if (data.config) this.config = data.config;
@@ -234,7 +234,7 @@ function priceChart() {
         chart: null,
         async init() {
             try {
-            const resp = await fetch(INGRESS + '/api/prices');
+            const resp = await fetch('./api/prices');
             if (!resp.ok) return;
             const data = await resp.json();
             if (!data.prices || !data.prices.length) return;
@@ -323,7 +323,7 @@ function forecastChart() {
         chart: null,
         async init() {
             try {
-            const resp = await fetch(INGRESS + '/api/forecast');
+            const resp = await fetch('./api/forecast');
             if (!resp.ok) return;
             const data = await resp.json();
             if (!data.forecast || !data.forecast.length) return;

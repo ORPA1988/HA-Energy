@@ -94,7 +94,7 @@ function liveLog() {
         connected: false,
         msgId: 0,
         connect() {
-            const es = new EventSource('{{ ingress_path }}/logs/stream');
+            const es = new EventSource('./logs/stream');
             es.onopen = () => { this.connected = true; };
             es.onmessage = (e) => {
                 try {

@@ -65,7 +65,7 @@
             <tbody>
                 {% for prog in inverter.get('tou_programs', []) %}
                 <tr>
-                    <form method="POST" action="{{ ingress_path }}/inverter/tou/{{ prog.number }}">
+                    <form method="POST" action="./inverter/tou/{{ prog.number }}">
                         <td><strong>P{{ prog.number }}</strong></td>
                         <td><input type="time" name="start_time" value="{{ prog.start_time[:5] }}" class="input" style="max-width:110px"></td>
                         <td>
@@ -89,7 +89,7 @@
 <div class="card card-wide">
     <div class="card-header">PHEV Ladesteuerung</div>
     <div class="card-body">
-        <form method="POST" action="{{ ingress_path }}/inverter/phev" class="form-inline">
+        <form method="POST" action="./inverter/phev" class="form-inline">
             <label>Ladestrom (A):</label>
             <input type="number" name="ampere" value="0" min="0" max="16" class="input input-narrow">
             <button type="submit" class="btn btn-primary btn-small">Setzen</button>
@@ -104,15 +104,15 @@
     <div class="card-header">Schnellaktionen</div>
     <div class="card-body action-bar">
         <button class="btn btn-primary"
-                onclick="apiAction('{{ ingress_path }}/api/replan')">
+                onclick="apiAction('./api/replan')">
             Neu planen
         </button>
         <button class="btn btn-warning"
-                onclick="if(confirm('Alle TOU Programme auf Disabled setzen?')) apiAction('{{ ingress_path }}/api/inverter/reset-tou')">
+                onclick="if(confirm('Alle TOU Programme auf Disabled setzen?')) apiAction('./api/inverter/reset-tou')">
             Alle TOU zuruecksetzen
         </button>
         <button class="btn btn-danger"
-                onclick="if(confirm('NOTFALL: Alle Programme Disabled + Replan?')) apiAction('{{ ingress_path }}/api/inverter/emergency-idle')">
+                onclick="if(confirm('NOTFALL: Alle Programme Disabled + Replan?')) apiAction('./api/inverter/emergency-idle')">
             Notfall: Alle Idle
         </button>
     </div>

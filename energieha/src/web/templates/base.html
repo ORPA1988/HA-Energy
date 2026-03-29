@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EnergieHA{% block title_suffix %}{% endblock %}</title>
-    <link rel="stylesheet" href="{{ ingress_path }}/static/style.css">
-    <script src="{{ ingress_path }}/static/htmx.min.js" defer></script>
-    <script src="{{ ingress_path }}/static/alpine.min.js" defer></script>
-    <script src="{{ ingress_path }}/static/chart.min.js"></script>
+    <link rel="stylesheet" href="./static/style.css">
+    <script src="./static/htmx.min.js" defer></script>
+    <script src="./static/alpine.min.js" defer></script>
+    <script src="./static/chart.min.js"></script>
 </head>
 <body x-data="{ navOpen: false }">
     <nav class="navbar">
@@ -17,11 +17,11 @@
             <button class="nav-toggle" @click="navOpen = !navOpen" aria-label="Menu">&#9776;</button>
         </div>
         <div class="nav-links" :class="{ 'nav-open': navOpen }">
-            <a href="{{ ingress_path }}/" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" @click="navOpen=false">Dashboard</a>
-            <a href="{{ ingress_path }}/planning" class="nav-link {% if active_page == 'planning' %}active{% endif %}" @click="navOpen=false">Planung</a>
-            <a href="{{ ingress_path }}/inverter" class="nav-link {% if active_page == 'inverter' %}active{% endif %}" @click="navOpen=false">Wechselrichter</a>
-            <a href="{{ ingress_path }}/config" class="nav-link {% if active_page == 'config' %}active{% endif %}" @click="navOpen=false">Konfiguration</a>
-            <a href="{{ ingress_path }}/logs" class="nav-link {% if active_page == 'logs' %}active{% endif %}" @click="navOpen=false">Logs</a>
+            <a href="./" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" @click="navOpen=false">Dashboard</a>
+            <a href="./planning" class="nav-link {% if active_page == 'planning' %}active{% endif %}" @click="navOpen=false">Planung</a>
+            <a href="./inverter" class="nav-link {% if active_page == 'inverter' %}active{% endif %}" @click="navOpen=false">Wechselrichter</a>
+            <a href="./config" class="nav-link {% if active_page == 'config' %}active{% endif %}" @click="navOpen=false">Konfiguration</a>
+            <a href="./logs" class="nav-link {% if active_page == 'logs' %}active{% endif %}" @click="navOpen=false">Logs</a>
         </div>
     </nav>
 

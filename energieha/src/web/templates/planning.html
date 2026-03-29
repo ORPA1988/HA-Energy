@@ -9,7 +9,7 @@
     <span class="badge badge-info">{{ plan.created_at.strftime('%H:%M') }}</span>
     {% endif %}
     <button class="btn btn-primary btn-small"
-            onclick="apiAction('{{ ingress_path }}/api/replan').then(()=>setTimeout(()=>location.reload(),8000))">
+            onclick="apiAction('./api/replan').then(()=>setTimeout(()=>location.reload(),8000))">
         Neu planen
     </button>
 </div>
