@@ -198,7 +198,7 @@ def _run_cycle(collector, executor, publisher, config, cycle_num,
 
     # Update average load from history (once per hour, not every 5min cycle)
     if cycle_num == 1 or cycle_num % 12 == 0:  # Every 12 cycles = 1 hour
-        avg_load = collector.get_average_load_w(days=7, divisor=5)
+        avg_load = collector.get_average_load_w(days=7)
         if avg_load > 0:
             config.estimated_daily_load_kwh = avg_load * 24 / 1000.0
             logger.info("Updated estimated daily load: %.1f kWh (%.0f W avg from 7d history)",

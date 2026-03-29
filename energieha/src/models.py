@@ -128,6 +128,7 @@ class Config:
     entity_price_threshold: str = "input_number.epex_preisschwelle_netzladung"
     grid_charge_target_soc: int = 80  # Ziel-SOC fuer Netzladung (%)
     entity_battery_voltage: str = "sensor.inverter_battery"  # Attribut "BMS Voltage"
+    load_planning_reserve_pct: int = 10  # Planungsreserve in % auf Durchschnittsverbrauch
 
     dry_run: bool = False
     direct_control: bool = False

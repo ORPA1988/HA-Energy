@@ -62,6 +62,7 @@ def load_config() -> Config:
         entity_price_threshold=str(data.get("entity_price_threshold", "input_number.epex_preisschwelle_netzladung")),
         grid_charge_target_soc=int(data.get("grid_charge_target_soc", 80)),
         entity_battery_voltage=str(data.get("entity_battery_voltage", "sensor.inverter_battery")),
+        load_planning_reserve_pct=int(data.get("load_planning_reserve_pct", 10)),
         dry_run=bool(data.get("dry_run", False)),
         direct_control=bool(data.get("direct_control", False)),
         max_grid_charge_soc=int(data.get("max_grid_charge_soc", 80)),

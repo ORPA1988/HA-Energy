@@ -86,14 +86,11 @@ class Collector:
             dynamic_price_threshold=dyn_price_threshold,
         )
 
-    def get_average_load_w(self, days: int = 7, divisor: int = 5) -> float:
-        """Calculate average load from HA history: sum(7d) / divisor / 24h.
+    def get_average_load_w(self, days: int = 7) -> float:
+        """Calculate average load from HA history: sum(7d) / 7 / 24h + reserve.
 
-        Args:
-            days: Number of days of history to fetch (default 7)
-            divisor: Divisor for the total (default 5: 7d consumption / 5 = avg daily)
-
-        Returns average load in Watts, or config fallback if history unavailable.
+        Returns average load in Watts (with planning reserve applied),
+        or config fallback if history unavailable.
         """
         try:
             history = self._client.get_history(self._config.entity_load_power, days_back=days)
@@ -123,12 +120,18 @@ class Collector:
 
             # Total consumption in Wh over the period
             total_kwh = total_wh / 1000.0
-            # Average daily: total / divisor (7d consumption / 5 = avg daily kWh)
-            avg_daily_kwh = total_kwh / divisor
+            # Average daily: total / 7 / 24h
+            avg_daily_kwh = total_kwh / days
             avg_w = avg_daily_kwh * 1000.0 / 24.0
 
-            logger.info("Load history: %.0f kWh over %.0fh → %.0f kWh/day (/%d) → %.0f W avg",
-                        total_kwh, total_hours, avg_daily_kwh, divisor, avg_w)
+            # Apply planning reserve (e.g. 10% = multiply by 1.10)
+            reserve_pct = getattr(self._config, 'load_planning_reserve_pct', 0)
+            if reserve_pct > 0:
+                avg_w *= (1.0 + reserve_pct / 100.0)
+
+            logger.info("Load history: %.0f kWh over %.0fh → %.1f kWh/day → %.0f W avg "
+                        "(+%d%% reserve)",
+                        total_kwh, total_hours, avg_daily_kwh, avg_w, reserve_pct)
             return avg_w
 
         except Exception as e:

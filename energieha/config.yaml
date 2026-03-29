@@ -1,5 +1,5 @@
 name: "EnergieHA"
-version: "1.9.0"
+version: "1.9.1"
 slug: "energieha"
 description: "Lightweight energy management for PV, battery, grid and consumers"
 url: "https://github.com/ORPA1988/HA-Energy"
@@ -60,6 +60,7 @@ options:
   # Guenstigster-Preis-Ladung (Price Strategy)
   entity_price_threshold: "input_number.epex_preisschwelle_netzladung"
   grid_charge_target_soc: 80
+  load_planning_reserve_pct: 10
 
   dry_run: true
   direct_control: false
@@ -121,3 +122,4 @@ schema:
   direct_control: bool
   entity_price_threshold: str?
   grid_charge_target_soc: "int(0,100)"
+  load_planning_reserve_pct: "int(0,100)"

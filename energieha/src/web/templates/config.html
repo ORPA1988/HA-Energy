@@ -213,18 +213,22 @@
         <div class="card-header">Guenstigster-Preis-Ladung (Price Strategy)</div>
         <div class="card-body">
             <div class="form-row">
-                <div class="form-group">
-                    <label>Preisschwelle Entity (HA input_number)</label>
+                <div class="form-group" title="HA Entity-ID des input_number fuer die dynamische Preisschwelle. Kann in HA per Slider eingestellt werden.">
+                    <label>Preisschwelle Entity</label>
                     <input type="text" name="entity_price_threshold" value="{{ raw.get('entity_price_threshold', 'input_number.epex_preisschwelle_netzladung') }}" class="input input-wide">
                 </div>
-                <div class="form-group">
+                <div class="form-group" title="Maximaler SOC bis zu dem aus dem Netz geladen wird. PV darf hoeher laden.">
                     <label>Ziel-SOC Netzladung (%)</label>
                     <input type="number" name="grid_charge_target_soc" value="{{ raw.get('grid_charge_target_soc', 80) }}" min="0" max="100" class="input">
                 </div>
+                <div class="form-group" title="Planungsreserve auf den 7-Tage-Durchschnittsverbrauch. 10% = plant mit 110% des gemessenen Verbrauchs. Schuetzt gegen Unterversorgung.">
+                    <label>Planungsreserve (%)</label>
+                    <input type="number" name="load_planning_reserve_pct" value="{{ raw.get('load_planning_reserve_pct', 10) }}" min="0" max="100" class="input">
+                </div>
             </div>
             <p style="color:var(--text-muted);font-size:0.8rem;margin-top:0.5rem">
-                Die Preisschwelle wird dynamisch aus dem HA input_number gelesen (aktuell via Slider in HA einstellbar).
-                Die billigsten Stunden unter dieser Schwelle werden fuer Grid-Ladung bis zum Ziel-SOC gewaehlt.
+                Verbrauch wird automatisch aus 7-Tage-History berechnet (aktualisiert stuendlich).
+                Planungsreserve erhoet den Wert um X% als Sicherheitspuffer.
             </p>
         </div>
     </div>
