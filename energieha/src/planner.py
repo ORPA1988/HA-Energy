@@ -29,6 +29,19 @@ def _load_emhass():
         logger.warning("EMHASS strategy not available: %s", e)
 
 
+def _fallback_plan(snapshot, prices, pv_forecast, config, error_msg):
+    """Create a fallback plan using price strategy (or surplus if no prices)."""
+    if prices:
+        logger.warning("Fallback to PRICE strategy: %s", error_msg)
+        plan = plan_price_optimized(snapshot, prices, pv_forecast, config)
+        plan.strategy_error = error_msg
+    else:
+        logger.warning("Fallback to SURPLUS (no prices): %s", error_msg)
+        plan = plan_surplus(snapshot, prices, pv_forecast, config)
+        plan.strategy_error = error_msg
+    return plan
+
+
 def create_plan(
     snapshot: Snapshot,
     prices: list[PricePoint],
@@ -39,8 +52,8 @@ def create_plan(
 ) -> Plan:
     """Create an energy plan using the configured strategy.
 
-    Falls back to surplus mode if the selected strategy fails
-    or if required data is missing.
+    Fallback chain: configured strategy → price → surplus.
+    Price strategy is preferred over surplus because it optimizes costs.
     """
     strategy_name = config.strategy
 
@@ -48,42 +61,38 @@ def create_plan(
     if strategy_name == "emhass" and not _emhass_loaded:
         _load_emhass()
 
-    # Validate data availability for advanced strategies
+    # Validate data availability
     if strategy_name == "price" and not prices:
-        logger.warning("No price data available, falling back to surplus mode")
+        logger.warning("No price data, falling back to surplus")
         strategy_name = "surplus"
     elif strategy_name == "forecast" and not pv_forecast:
-        logger.warning("No PV forecast available, falling back to surplus mode")
-        strategy_name = "surplus"
+        logger.warning("No PV forecast, falling back to price")
+        strategy_name = "price" if prices else "surplus"
     elif strategy_name == "emhass" and "emhass" not in STRATEGIES:
-        logger.warning("EMHASS strategy not available, falling back to surplus")
-        strategy_name = "surplus"
+        logger.warning("EMHASS not available, falling back to price")
+        strategy_name = "price" if prices else "surplus"
 
     strategy_fn = STRATEGIES.get(strategy_name)
     if not strategy_fn:
-        logger.error("Unknown strategy '%s', falling back to surplus", strategy_name)
-        strategy_fn = plan_surplus
+        logger.error("Unknown strategy '%s', falling back to price", strategy_name)
+        strategy_fn = plan_price_optimized if prices else plan_surplus
 
     try:
-        # Pass sunrise/sunset to forecast strategy
         if strategy_name == "forecast":
             plan = strategy_fn(snapshot, prices, pv_forecast, config,
                                sunrise_hour=sunrise_hour, sunset_hour=sunset_hour)
         else:
             plan = strategy_fn(snapshot, prices, pv_forecast, config)
 
-        # SOC Safety Net: enforce hard limits regardless of strategy
         _enforce_soc_limits(plan, config)
 
         logger.info("Plan created: strategy=%s, slots=%d",
                      plan.strategy, len(plan.slots))
         return plan
     except Exception as e:
-        logger.error("Strategy '%s' failed: %s – falling back to surplus",
-                      strategy_name, e, exc_info=True)
-        # Store error for visibility in status entity
-        plan = plan_surplus(snapshot, prices, pv_forecast, config)
-        plan.strategy_error = f"{strategy_name}: {e}"
+        logger.error("Strategy '%s' failed: %s", strategy_name, e, exc_info=True)
+        plan = _fallback_plan(snapshot, prices, pv_forecast, config,
+                              f"{strategy_name}: {e}")
         _enforce_soc_limits(plan, config)
         return plan
 

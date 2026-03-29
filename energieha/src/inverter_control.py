@@ -186,13 +186,30 @@ class InverterController:
             except (ValueError, TypeError):
                 state[key] = 0
 
-        # Battery voltage from attributes
+        # Battery details from BMS attributes
         try:
             batt_data = self._client.get_state(self._config.entity_battery_soc)
             if batt_data:
-                state["battery_voltage"] = float(batt_data.get("attributes", {}).get("BMS Voltage", 0))
+                attrs = batt_data.get("attributes", {})
+                state["battery_voltage"] = float(attrs.get("BMS Voltage", 0))
                 state["charge_power_w"] = state.get("battery_voltage", 0) * float(state.get("grid_charge_current", 0))
+                state["battery_temperature"] = attrs.get("BMS Temperature", None)
+                state["battery_cycles"] = attrs.get("Life Cycle Rating", None)
+                state["battery_soh"] = attrs.get("SOH", None)
+                state["bms_current"] = float(attrs.get("BMS Current", 0))
         except (ValueError, TypeError):
+            pass
+
+        # TOU reason from last plan
+        try:
+            from .state import AppState
+            app_state = AppState()
+            status = self._client.get_state("sensor.energieha_status")
+            if status:
+                state["tou_reason"] = status.get("attributes", {}).get("tou_reason", "")
+                state["strategy"] = status.get("attributes", {}).get("strategy", "")
+                state["strategy_error"] = status.get("attributes", {}).get("strategy_error", "")
+        except Exception:
             pass
 
         return state

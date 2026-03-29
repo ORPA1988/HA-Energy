@@ -320,6 +320,7 @@ def create_app() -> Flask:
 
             # Whitelist of settings adjustable via dashboard
             allowed = {
+                "strategy": str,
                 "price_threshold_eur": float,
                 "grid_charge_target_soc": int,
                 "max_grid_charge_soc": int,

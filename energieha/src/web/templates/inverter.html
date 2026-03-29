@@ -68,6 +68,44 @@
     </div>
 </div>
 
+<!-- TOU Reason + Battery Details -->
+{% if inverter.get('tou_reason') %}
+<div class="card card-wide" title="Begruendung fuer die aktuelle TOU-Programmierung">
+    <div class="card-body" style="padding:0.6rem 1rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+        <span style="font-size:1.1rem">&#9889;</span>
+        <span>{{ inverter.get('tou_reason', '') }}</span>
+        {% if inverter.get('strategy_error') %}
+        <span class="badge badge-warning" style="font-size:0.7rem">{{ inverter.get('strategy_error', '') }}</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if inverter.get('battery_voltage') %}
+<div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr))">
+    <div class="card" title="BMS Batteriespannung">
+        <div class="card-header">Spannung</div>
+        <div class="card-body"><div class="big-value">{{ "%.1f"|format(inverter.get('battery_voltage', 0)) }} V</div></div>
+    </div>
+    <div class="card" title="BMS Batteriestrom (positiv=Ladung)">
+        <div class="card-header">Strom</div>
+        <div class="card-body"><div class="big-value">{{ "%.0f"|format(inverter.get('bms_current', 0)) }} A</div></div>
+    </div>
+    {% if inverter.get('battery_temperature') is not none %}
+    <div class="card" title="BMS Batterietemperatur">
+        <div class="card-header">Temperatur</div>
+        <div class="card-body"><div class="big-value">{{ inverter.get('battery_temperature') }} °C</div></div>
+    </div>
+    {% endif %}
+    {% if inverter.get('battery_cycles') %}
+    <div class="card" title="Batterie Lebensdauer-Zyklen (Design)">
+        <div class="card-header">Zyklen</div>
+        <div class="card-body"><div class="big-value">{{ inverter.get('battery_cycles') }}</div></div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- TOU Programs -->
 <div class="card card-wide">
     <div class="card-header">TOU Programme (Time-of-Use)</div>

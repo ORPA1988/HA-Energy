@@ -21,13 +21,17 @@
             Allgemein <span x-text="open ? '&#9660;' : '&#9654;'"></span>
         </div>
         <div class="card-body" x-data="{open:true}" x-show="open">
-            <div class="form-group" title="Optimierungsstrategie: price=guenstigste Gesamtkosten (empfohlen), surplus=nur PV-Ueberschuss, forecast=Solcast-basiert, emhass=LP-Optimierung (benoetigt EMHASS Add-on)">
+            <div class="form-group" title="Optimierungsstrategie: price=guenstigste Gesamtkosten (empfohlen), surplus=nur PV-Ueberschuss, forecast=Solcast-basiert, emhass=LP-Optimierung (benoetigt EMHASS Add-on). Fallback: emhass/forecast → price → surplus.">
                 <label>Strategie</label>
-                <select name="strategy" class="input">
-                    {% for s in ['surplus', 'price', 'forecast', 'emhass'] %}
-                    <option value="{{ s }}" {% if raw.get('strategy') == s %}selected{% endif %}>{{ s }}</option>
-                    {% endfor %}
-                </select>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <select name="strategy" class="input" id="strategy-select">
+                        {% for s in ['surplus', 'price', 'forecast', 'emhass'] %}
+                        <option value="{{ s }}" {% if raw.get('strategy') == s %}selected{% endif %}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-small btn-primary" title="Strategie sofort wechseln + Replan"
+                            onclick="switchStrategy()">Sofort wechseln</button>
+                </div>
             </div>
             <div class="form-group" title="Planungszyklus in Sekunden. Alle X Sekunden wird ein neuer 24h Plan erstellt. Standard: 300 (5 Min)">
                 <label>Zyklus (Sekunden)</label>
@@ -264,6 +268,26 @@ async function validateEntities() {
         div.innerHTML = html;
         container.style.display = 'block';
     } catch(e) { showToast('Validierung fehlgeschlagen: ' + e.message, 'error'); }
+}
+
+async function switchStrategy() {
+    const val = document.getElementById('strategy-select').value;
+    try {
+        // Save strategy to config
+        const resp = await fetch('./api/settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({key: 'strategy', value: val})
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            // Trigger replan
+            await fetch('./api/replan', {method: 'POST'});
+            showToast('Strategie → ' + val + ' + Replan getriggert', 'success');
+        } else {
+            showToast('Fehler: ' + (data.error || '?'), 'error');
+        }
+    } catch(e) { showToast('Fehler: ' + e.message, 'error'); }
 }
 </script>
 {% endblock %}
