@@ -190,28 +190,6 @@ def create_app() -> Flask:
             logger.error("PHEV set: %s", e)
         return redirect(f"{request.headers.get('X-Ingress-Path', '')}/inverter")
 
-    @app.route("/logs")
-    def logs_page():
-        try:
-            state = AppState()
-            return render_template("logs.html", cycles=state.get_cycle_history(50),
-                                   errors=state.get_error_log(20), active_page="logs")
-        except Exception as e:
-            logger.error("Logs error: %s", e, exc_info=True)
-            return render_template("logs.html", cycles=[], errors=[], active_page="logs")
-
-    @app.route("/logs/stream")
-    def logs_stream():
-        def gen():
-            while True:
-                try:
-                    data = AppState().get_status_dict()
-                    yield f"data: {json.dumps(data)}\n\n"
-                except Exception:
-                    yield f"data: {{}}\n\n"
-                _time.sleep(5)
-        return Response(gen(), mimetype="text/event-stream")
-
     # ================================================================
     # API ROUTES - return JSON, never crash
     # ================================================================
