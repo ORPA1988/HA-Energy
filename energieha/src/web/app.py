@@ -73,14 +73,20 @@ def create_app() -> Flask:
             timeline = []
             if plan and plan.slots:
                 cumulative = 0.0
-                for s in plan.slots[:96]:
+                from datetime import datetime
+                now_date = datetime.now().strftime("%d.%m")
+                for s in plan.slots:
                     h = s.duration_min / 60.0
                     gi = max(0, s.planned_grid_w)
                     cost = round(gi / 1000 * h * s.price_eur_kwh, 4)
                     cumulative += cost
                     surplus = s.pv_forecast_w - s.load_estimate_w
                     is_grid = s.planned_battery_w > 50 and s.planned_battery_w > max(0, surplus)
-                    timeline.append({"time": s.start.strftime("%H:%M"), "mode": s.planned_battery_mode,
+                    slot_date = s.start.strftime("%d.%m")
+                    timeline.append({
+                        "time": s.start.strftime("%H:%M"),
+                        "date": slot_date if slot_date != now_date else "",
+                        "mode": s.planned_battery_mode,
                         "soc": round(s.projected_soc, 1), "battery_w": round(s.planned_battery_w),
                         "pv_w": round(s.pv_forecast_w), "load_w": round(s.load_estimate_w),
                         "grid_w": round(s.planned_grid_w), "grid_charge": is_grid,

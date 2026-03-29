@@ -16,8 +16,8 @@
 
 <!-- Combined Chart: SOC + Power + Price -->
 <div class="card card-wide">
-    <div class="card-header">SOC, Leistung &amp; Preis</div>
-    <div class="card-body" style="height:320px">
+    <div class="card-header">SOC, Leistung &amp; Preis (heute + morgen)</div>
+    <div class="card-body" style="height:380px">
         <canvas id="planChart"></canvas>
     </div>
 </div>
@@ -80,7 +80,7 @@
                 {% set now_hhmm = None %}
                 {% for slot in timeline %}
                 <tr {% if loop.index0 == 0 %}style="background:rgba(255,255,255,0.06)"{% endif %}>
-                    <td><strong>{{ slot.time }}</strong></td>
+                    <td><strong>{% if slot.date %}{{ slot.date }} {% endif %}{{ slot.time }}</strong></td>
                     <td>
                         <span class="mode-badge mode-{{ slot.mode }}">{{ slot.mode }}</span>
                         {% if slot.grid_charge %}<span class="badge badge-info" style="font-size:0.65rem;margin-left:2px">GRID</span>{% endif %}
@@ -115,15 +115,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const threshold = {{ threshold|tojson }};
     if (!timeline || !timeline.length) return;
 
-    const labels = timeline.map(s => s.time);
+    // Labels: show date for multi-day plans
+    const today = new Date().getDate();
+    const labels = timeline.map(s => {
+        // s.date is "DD.MM" if provided, otherwise derive from time wrapping
+        if (s.date) return s.date + ' ' + s.time;
+        return s.time;
+    });
     const socData = timeline.map(s => s.soc);
     const pvData = timeline.map(s => s.pv_w);
     const loadData = timeline.map(s => s.load_w);
     const battData = timeline.map(s => s.battery_w);
     const priceData = timeline.map(s => s.price * 100); // ct/kWh
-    const gridData = timeline.map(s => s.grid_w);
 
-    // Battery bar colors: green=charge, blue=grid-charge, red=discharge
+    // Battery bar colors
     const battColors = timeline.map(s => {
         if (s.grid_charge) return 'rgba(52,152,219,0.8)';
         if (s.mode === 'charge') return 'rgba(39,174,96,0.6)';
@@ -131,9 +136,17 @@ document.addEventListener('DOMContentLoaded', function() {
         return 'rgba(149,165,166,0.3)';
     });
 
+    // Dynamic axis ranges
+    const maxPower = Math.max(
+        Math.max(...pvData), Math.max(...loadData),
+        Math.max(...battData.map(Math.abs)), 1000
+    );
+    const powerMax = Math.ceil(maxPower / 1000) * 1000; // round up to nearest kW
+    const priceMax = Math.ceil(Math.max(...priceData) / 5) * 5; // round up to 5ct
+    const priceMin = Math.floor(Math.min(...priceData) / 5) * 5;
+
     // Find current time index
-    const nowHHMM = new Date().toLocaleTimeString('de', {hour:'2-digit',minute:'2-digit'});
-    const nowIdx = labels.indexOf(nowHHMM) >= 0 ? labels.indexOf(nowHHMM) : 0;
+    const nowIdx = 0; // first slot is always "now"
 
     // "Now" vertical line plugin
     const nowLinePlugin = {
@@ -250,16 +263,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             },
             scales: {
-                x: { ticks: { color: '#888', maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                x: {
+                    ticks: {
+                        color: '#888',
+                        maxTicksLimit: timeline.length > 30 ? 16 : 12,
+                        maxRotation: 45,
+                        font: { size: timeline.length > 30 ? 9 : 11 },
+                    },
+                    grid: { color: 'rgba(255,255,255,0.04)' }
+                },
                 y: { position: 'left', min: 0, max: 100,
                      title: { display: true, text: 'SOC %', color: '#3498db' },
-                     ticks: { color: '#3498db' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                     ticks: { color: '#3498db', stepSize: 20 },
+                     grid: { color: 'rgba(255,255,255,0.06)' } },
                 y1: { position: 'right',
+                      min: -powerMax, max: powerMax,
                       title: { display: true, text: 'Leistung W', color: '#888' },
-                      ticks: { color: '#888' }, grid: { drawOnChartArea: false } },
-                y2: { position: 'right', offset: true, min: 0,
+                      ticks: { color: '#888', callback: v => (v/1000).toFixed(1) + 'kW' },
+                      grid: { drawOnChartArea: false } },
+                y2: { position: 'right', offset: true,
+                      min: priceMin, max: priceMax,
                       title: { display: false },
-                      ticks: { color: '#e94560', callback: v => v.toFixed(0) + ' ct' },
+                      ticks: { color: '#e94560', callback: v => v.toFixed(0) + ' ct', stepSize: 5 },
                       grid: { drawOnChartArea: false } },
             }
         },
