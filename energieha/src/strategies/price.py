@@ -1,15 +1,16 @@
-"""Price-optimized strategy: charge at cheapest prices below threshold.
+"""Price-optimized strategy: charge at cheapest total grid cost.
 
 Algorithm:
 1. Read dynamic price threshold from HA (input_number.epex_preisschwelle_netzladung)
-2. Filter hours where price < threshold
-3. Calculate how many hours of grid charging are needed to reach target SOC
-   (using the actual inverter charge power: grid_charging_current × battery_voltage)
-4. Select the cheapest N hours for grid charging
-5. Remaining hours: discharge from battery or use PV surplus
+2. For each slot below threshold, calculate actual grid cost:
+   grid_cost = price × max(0, charge_power + load - pv) × hours
+   This accounts for PV offset: charging during sun costs less grid import.
+3. Calculate how many slots of grid charging are needed for target SOC
+4. Select the N slots with lowest actual grid cost
+5. PV surplus → battery charge (free)
+6. Expensive hours → discharge
 
 Battery charge power is determined by the inverter (not configurable here).
-PHEV charge power tracks PV surplus, clamped to min/max charge limits.
 """
 
 import logging
@@ -29,15 +30,7 @@ def plan_price_optimized(
     pv_forecast: list[ForecastPoint],
     config: Config,
 ) -> Plan:
-    """Create a 24h plan optimized for electricity cost.
-
-    1. Determine price threshold (from HA entity or config)
-    2. Find hours below threshold
-    3. Calculate needed charge hours for target SOC
-    4. Pick cheapest hours for grid charging
-    5. PV surplus → battery charge (free)
-    6. Expensive hours → discharge
-    """
+    """Create a 24h plan optimized for lowest total grid charging cost."""
     tz = ZoneInfo(config.timezone)
     now = datetime.now(tz)
     slot_minutes = config.slot_duration_min
@@ -62,12 +55,10 @@ def plan_price_optimized(
     if current_soc < target_soc:
         soc_delta = target_soc - current_soc
         energy_needed_wh = (soc_delta / 100.0) * config.battery_capacity_wh
-        # Account for charge efficiency loss
         eff_charge = config.round_trip_efficiency ** 0.5
         energy_from_grid_wh = energy_needed_wh / eff_charge
-        # How many slots at the inverter's charge power?
         energy_per_slot_wh = charge_power_w * (slot_minutes / 60.0)
-        slots_needed = max(1, int(energy_from_grid_wh / energy_per_slot_wh + 0.99))  # round up
+        slots_needed = max(1, int(energy_from_grid_wh / energy_per_slot_wh + 0.99))
     else:
         energy_from_grid_wh = 0
         slots_needed = 0
@@ -90,32 +81,50 @@ def plan_price_optimized(
             pv_forecast_w=pv_w, price_eur_kwh=price, load_estimate_w=load_w,
         ))
 
-    # --- Find slots below price threshold, sorted by price (cheapest first) ---
-    cheap_slots = [s for s in slots if s.price_eur_kwh < threshold]
-    cheap_slots.sort(key=lambda s: s.price_eur_kwh)
+    # --- Calculate actual grid cost per slot for charging ---
+    # grid_cost = price × max(0, charge_power + load - pv) × hours / 1000
+    # Slots with PV offset are cheaper because less grid import needed
+    hours = slot_minutes / 60.0
+    candidate_slots = []
+    for s in slots:
+        if s.price_eur_kwh >= threshold:
+            continue
+        grid_import_w = max(0, charge_power_w + s.load_estimate_w - s.pv_forecast_w)
+        grid_cost_eur = s.price_eur_kwh * (grid_import_w / 1000.0) * hours
+        candidate_slots.append((grid_cost_eur, grid_import_w, s))
 
-    # --- Assign grid charging to the N cheapest slots ---
+    # Sort by actual grid cost (cheapest total cost first)
+    candidate_slots.sort(key=lambda x: x[0])
+
+    # --- Assign grid charging to the N cheapest-cost slots ---
     charge_count = 0
-    for slot in cheap_slots:
+    for grid_cost, grid_import_w, slot in candidate_slots:
         if charge_count >= slots_needed:
             break
         slot.planned_battery_mode = "charge"
         slot.planned_battery_w = charge_power_w
         charge_count += 1
+        logger.debug("Grid charge slot %s: price=%.4f, PV=%.0fW, "
+                     "grid_import=%.0fW, cost=%.4f EUR",
+                     slot.start.strftime("%H:%M"), slot.price_eur_kwh,
+                     slot.pv_forecast_w, grid_import_w, grid_cost)
 
-    logger.info("Assigned %d/%d cheap slots for grid charging (threshold %.4f, "
-                "found %d slots below threshold)",
-                charge_count, slots_needed, threshold, len(cheap_slots))
+    if candidate_slots and charge_count > 0:
+        assigned = candidate_slots[:charge_count]
+        total_planned = sum(c[0] for c in assigned)
+        logger.info("Assigned %d/%d slots for grid charging "
+                    "(threshold %.4f, %d below threshold, est. cost %.2f EUR)",
+                    charge_count, slots_needed, threshold,
+                    len(candidate_slots), total_planned)
 
     # --- PV surplus → charge battery (free energy) ---
     for slot in slots:
         if slot.planned_battery_mode != "idle":
-            continue  # Already assigned (grid charge)
+            continue
         surplus_w = slot.pv_forecast_w - slot.load_estimate_w
-        # PHEV first, then battery
         slot.planned_phev_w = calc_phev_power(surplus_w, config, snapshot)
         remaining = surplus_w - slot.planned_phev_w
-        if remaining > 50:  # 50W minimum to avoid noise
+        if remaining > 50:
             slot.planned_battery_mode = "charge"
             slot.planned_battery_w = remaining
 
@@ -125,7 +134,6 @@ def plan_price_optimized(
         for slot in slots:
             if slot.planned_battery_mode != "idle":
                 continue
-            # Discharge when: price above median AND no PV surplus
             if slot.price_eur_kwh > median_price and slot.pv_forecast_w < slot.load_estimate_w:
                 deficit_w = slot.load_estimate_w - slot.pv_forecast_w
                 slot.planned_battery_mode = "discharge"
@@ -135,32 +143,27 @@ def plan_price_optimized(
     soc = snapshot.battery_soc
     total_charge_cost = 0.0
     for slot in slots:
-        # Grid-charge SOC limit: stop charging when target reached
         if (slot.planned_battery_mode == "charge"
                 and is_grid_charging(slot.pv_forecast_w, slot.load_estimate_w, slot.planned_battery_w)
                 and soc >= config.grid_charge_target_soc):
             slot.planned_battery_mode = "idle"
             slot.planned_battery_w = 0
 
-        # Max SOC limit
         if slot.planned_battery_w > 0 and soc >= config.max_soc_percent:
             slot.planned_battery_mode = "idle"
             slot.planned_battery_w = 0
 
-        # Min SOC limit
         if slot.planned_battery_w < 0 and soc <= config.min_soc_percent:
             slot.planned_battery_mode = "idle"
             slot.planned_battery_w = 0
 
         soc = update_soc(soc, slot.planned_battery_w, slot_minutes, config)
 
-        # Calculate grid balance and cost
         slot.planned_grid_w = calc_grid_balance(
             slot.pv_forecast_w, slot.load_estimate_w,
             slot.planned_phev_w, slot.planned_battery_w)
         slot.projected_soc = soc
 
-        # Track grid import cost
         if slot.planned_grid_w > 0:
             import_kwh = slot.planned_grid_w * (slot_minutes / 60.0) / 1000.0
             total_charge_cost += import_kwh * slot.price_eur_kwh

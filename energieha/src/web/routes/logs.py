@@ -11,7 +11,7 @@ bp = Blueprint("logs", __name__)
 logger = logging.getLogger(__name__)
 
 
-@bp.route("/")
+@bp.route("")
 def index():
     state = AppState()
     return render_template("logs.html",
