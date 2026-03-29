@@ -3,9 +3,7 @@
 import logging
 import os
 
-from flask import Flask, request
-
-from ..state import AppState
+from flask import Flask, request, jsonify
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +17,6 @@ def create_app() -> Flask:
     )
     app.url_map.strict_slashes = False
 
-    # HA ingress path handling
     @app.before_request
     def handle_ingress_path():
         ingress_path = request.headers.get("X-Ingress-Path", "")
@@ -31,90 +28,67 @@ def create_app() -> Flask:
         ingress_path = getattr(request, "ingress_path", "")
         return {"ingress_path": ingress_path, "version": __version__}
 
-    # Register blueprints WITHOUT url_prefix - routes have full paths
-    blueprint_errors = []
-    blueprints = [
-        ("dashboard", ".routes.dashboard"),
-        ("config", ".routes.config_routes"),
-        ("planning", ".routes.planning"),
-        ("inverter", ".routes.inverter"),
-        ("logs", ".routes.logs"),
-        ("api", ".routes.api"),
-    ]
-    for name, module_path in blueprints:
-        try:
-            import importlib
-            mod = importlib.import_module(module_path, package=__name__.rsplit(".", 1)[0] + ".web")
-            app.register_blueprint(mod.bp)
-            logger.info("Blueprint '%s' registered OK", name)
-        except Exception as e:
-            logger.error("Blueprint '%s' FAILED: %s", name, e, exc_info=True)
-            blueprint_errors.append(f"{name}: {e}")
+    # Import and register all blueprints directly
+    from .routes.dashboard import bp as dashboard_bp
+    from .routes.api import bp as api_bp
 
-    # Debug: log all registered routes
-    with app.app_context():
-        rules = [f"{r.rule} [{','.join(r.methods - {'OPTIONS','HEAD'})}]" for r in app.url_rules]
-        logger.info("Registered %d routes: %s", len(rules), "; ".join(rules))
+    app.register_blueprint(dashboard_bp)
+    app.register_blueprint(api_bp)
 
-    # Debug endpoint: shows routes + request info
+    # Register sub-page blueprints - each with try/except so one failure
+    # doesn't take down the whole app
+    try:
+        from .routes.planning import bp as planning_bp
+        app.register_blueprint(planning_bp)
+        logger.info("Planning blueprint registered")
+    except Exception as e:
+        logger.error("Planning blueprint failed: %s", e)
+
+    try:
+        from .routes.config_routes import bp as config_bp
+        app.register_blueprint(config_bp)
+        logger.info("Config blueprint registered")
+    except Exception as e:
+        logger.error("Config blueprint failed: %s", e)
+
+    try:
+        from .routes.inverter import bp as inverter_bp
+        app.register_blueprint(inverter_bp)
+        logger.info("Inverter blueprint registered")
+    except Exception as e:
+        logger.error("Inverter blueprint failed: %s", e)
+
+    try:
+        from .routes.logs import bp as logs_bp
+        app.register_blueprint(logs_bp)
+        logger.info("Logs blueprint registered")
+    except Exception as e:
+        logger.error("Logs blueprint failed: %s", e)
+
+    # Debug route
     @app.route("/debug")
-    def debug_routes():
-        from flask import jsonify
-        rules = []
-        for r in app.url_rules:
-            rules.append({"rule": r.rule, "endpoint": r.endpoint,
-                          "methods": list(r.methods - {"OPTIONS", "HEAD"})})
+    def debug_info():
+        rules = [{"rule": r.rule, "methods": list(r.methods - {"OPTIONS", "HEAD"})}
+                 for r in app.url_rules if not r.rule.startswith("/static")]
         return jsonify({
             "routes": rules,
-            "request_path": request.path,
-            "request_url": request.url,
-            "ingress_path": request.headers.get("X-Ingress-Path", ""),
-            "host": request.host,
-            "headers": {k: v for k, v in request.headers if k.startswith("X-")},
+            "path": request.path,
+            "ingress": request.headers.get("X-Ingress-Path", ""),
         })
 
-    # Log every request for debugging 404s
-    @app.after_request
-    def log_request(response):
-        if response.status_code >= 400:
-            logger.warning("HTTP %d: %s %s (ingress=%s)",
-                          response.status_code, request.method, request.path,
-                          request.headers.get("X-Ingress-Path", ""))
-        return response
-
-    # Publish route info to HA sensor on startup
-    try:
-        from ..ha_client import HaClient
-        ha = HaClient()
-        route_list = [r.rule for r in app.url_rules if r.rule != "/static/<path:filename>"]
-        ha.set_state("sensor.energieha_routes", str(len(route_list)), {
-            "friendly_name": "EnergieHA Routes",
-            "icon": "mdi:routes",
-            "routes": route_list,
-            "blueprint_errors": blueprint_errors,
-            "blueprints_ok": len(blueprints) - len(blueprint_errors),
-        })
-        logger.info("Published %d routes to HA sensor, %d blueprint errors",
-                    len(route_list), len(blueprint_errors))
-    except Exception as e:
-        logger.error("Failed to publish routes sensor: %s", e)
+    # Log 404s for debugging
+    @app.errorhandler(404)
+    def not_found(e):
+        logger.warning("404: %s %s", request.method, request.path)
+        return f"<h1>404 Not Found</h1><p>Path: {request.path}</p>", 404
 
     return app
 
 
 def start_server():
-    """Start the Flask web server (called from main entry point)."""
+    """Start the Flask web server."""
     from .. import __version__
-
     app = create_app()
-
     port = int(os.environ.get("INGRESS_PORT", 5050))
     logger.info("Starting EnergieHA web server v%s on port %d", __version__, port)
-
-    app.run(
-        host="0.0.0.0",
-        port=port,
-        debug=False,
-        use_reloader=False,
-        threaded=True,
-    )
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False, threaded=True)
