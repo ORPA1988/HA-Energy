@@ -1,5 +1,5 @@
 name: "EnergieHA"
-version: "3.1.0"
+version: "3.1.1"
 slug: "energieha"
 description: "Energy management with integrated EMHASS optimization for PV, battery, grid and consumers"
 url: "https://github.com/ORPA1988/HA-Energy"
@@ -24,9 +24,9 @@ options:
 
   # Hausbatterie (Leistung wird vom Wechselrichter vorgegeben)
   battery_capacity_kwh: 30.0
-  min_soc_percent: 15
+  min_soc_percent: 20
   max_soc_percent: 95
-  round_trip_efficiency: 0.85
+  round_trip_efficiency: 0.90
 
   # PHEV (Peugeot 308 SW Hybrid via go-eCharger)
   phev_enabled: false
@@ -57,7 +57,7 @@ options:
 
   # Guenstigster-Preis-Ladung (Price Strategy)
   entity_price_threshold: "input_number.epex_preisschwelle_netzladung"
-  grid_charge_target_soc: 80
+  grid_charge_target_soc: 90
   load_planning_reserve_pct: 10
 
   dry_run: true
