@@ -136,12 +136,10 @@ document.addEventListener('DOMContentLoaded', function() {
         return 'rgba(149,165,166,0.3)';
     });
 
-    // Dynamic axis ranges - separate for PV/Load and Battery
-    const maxPvLoad = Math.max(Math.max(...pvData), Math.max(...loadData), 500);
-    const pvLoadMax = Math.ceil(maxPvLoad / 500) * 500; // round to 500W steps
-
-    const maxBatt = Math.max(Math.max(...battData.map(Math.abs)), 500);
-    const battMax = Math.ceil(maxBatt / 1000) * 1000; // round to 1kW steps
+    // Dynamic axis ranges - one power axis for all (kW)
+    const allPowerValues = [...pvData, ...loadData, ...battData.map(Math.abs)];
+    const maxPowerW = Math.max(...allPowerValues, 500);
+    const powerMaxKw = Math.ceil(maxPowerW / 1000); // round up to whole kW
 
     const priceMax = Math.ceil(Math.max(...priceData) / 5) * 5;
     const priceMin = Math.floor(Math.min(...priceData) / 5) * 5;
@@ -232,17 +230,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 {
                     type: 'line', label: 'PV kW', data: pvData.map(v => v/1000),
-                    borderColor: '#f1c40f', borderWidth: 1.5,
-                    yAxisID: 'y1', tension: 0.3, pointRadius: 0, fill: false, order: 3
+                    borderColor: '#f1c40f', borderWidth: 2,
+                    yAxisID: 'y1', tension: 0.3, pointRadius: 0,
+                    fill: true, backgroundColor: 'rgba(241,196,15,0.08)', order: 3
                 },
                 {
                     type: 'line', label: 'Last kW', data: loadData.map(v => v/1000),
-                    borderColor: '#e67e22', borderWidth: 1, borderDash: [3,3],
+                    borderColor: '#e67e22', borderWidth: 1.5, borderDash: [3,3],
                     yAxisID: 'y1', tension: 0.3, pointRadius: 0, fill: false, order: 4
                 },
                 {
                     type: 'bar', label: 'Batterie kW', data: battData.map(v => v/1000),
-                    backgroundColor: battColors, yAxisID: 'y3', order: 5,
+                    backgroundColor: battColors, yAxisID: 'y1', order: 5,
                     barPercentage: 0.6,
                 },
             ]
@@ -279,18 +278,15 @@ document.addEventListener('DOMContentLoaded', function() {
                      ticks: { color: '#3498db', stepSize: 20 },
                      grid: { color: 'rgba(255,255,255,0.06)' } },
                 y1: { position: 'right',
-                      min: 0, max: pvLoadMax / 1000,
-                      title: { display: true, text: 'PV/Last kW', color: '#f1c40f' },
-                      ticks: { color: '#f1c40f', callback: v => v.toFixed(1) },
+                      min: -powerMaxKw, max: powerMaxKw,
+                      title: { display: true, text: 'kW', color: '#888' },
+                      ticks: { color: '#888', callback: v => v.toFixed(0) },
                       grid: { drawOnChartArea: false } },
                 y2: { position: 'right', offset: true,
                       min: priceMin, max: priceMax,
                       title: { display: false },
                       ticks: { color: '#e94560', callback: v => v.toFixed(0) + ' ct', stepSize: 5 },
                       grid: { drawOnChartArea: false } },
-                y3: { display: false,
-                      min: -battMax / 1000, max: battMax / 1000,
-                },
             }
         },
         plugins: [modeBgPlugin, thresholdPlugin, nowLinePlugin]
