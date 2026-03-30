@@ -205,11 +205,11 @@ def _run_cycle(collector, executor, publisher, config, cycle_num,
 
     # Update average load + hourly profile from history (once per hour)
     if cycle_num == 1 or cycle_num % 12 == 0:
-        avg_load = collector.get_average_load_w(days=7)
+        avg_load = collector.get_average_load_w(days=70)
         if avg_load > 0:
             config.estimated_daily_load_kwh = avg_load * 24 / 1000.0
             logger.info("Updated daily load: %.1f kWh (%.0f W avg)", config.estimated_daily_load_kwh, avg_load)
-        hourly_profile = collector.get_hourly_load_profile(days=7)
+        hourly_profile = collector.get_hourly_load_profile(days=70)
         if hourly_profile:
             snapshot.hourly_load_profile = hourly_profile
 
