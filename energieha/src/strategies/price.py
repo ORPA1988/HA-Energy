@@ -69,12 +69,21 @@ def plan_price_optimized(
                 slots_needed, charge_power_w)
 
     # --- Build slot structure (today + tomorrow) ---
+    hourly_profile = snapshot.hourly_load_profile
+    has_profile = len(hourly_profile) >= 12
+
     slots = []
     for i in range(num_slots):
         slot_start = now + timedelta(minutes=i * slot_minutes)
         pv_w = get_forecast_for_time(pv_forecast, slot_start)
         price = get_price_for_time(prices, slot_start)
-        load_w = snapshot.load_power_w if i == 0 else config.load_per_slot_w
+        # Load: real hourly profile from 7d history
+        if i == 0:
+            load_w = snapshot.load_power_w
+        elif has_profile:
+            load_w = hourly_profile.get(slot_start.hour, config.load_per_slot_w)
+        else:
+            load_w = config.load_per_slot_w
         slots.append(TimeSlot(
             start=slot_start, duration_min=slot_minutes,
             pv_forecast_w=pv_w, price_eur_kwh=price, load_estimate_w=load_w,

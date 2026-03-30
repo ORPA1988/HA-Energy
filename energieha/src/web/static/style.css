@@ -446,6 +446,9 @@ select.input { cursor: pointer; }
     border: 2px solid var(--bg-card);
 }
 
+/* Planning chart responsive */
+.plan-chart-container { height: 380px; min-height: 200px; }
+
 /* Collapsible sections */
 .section-toggle {
     cursor: pointer;
@@ -491,6 +494,9 @@ select.input { cursor: pointer; }
 
     /* Power flow SVG responsive */
     .power-flow-svg { max-height: 200px; }
+
+    /* Planning chart smaller on mobile */
+    .plan-chart-container { height: 220px; min-height: 150px; }
 
     /* Table: horizontal scroll + smaller font */
     .table { font-size: 0.75rem; }
